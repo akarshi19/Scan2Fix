@@ -1,16 +1,24 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Alert, Image, ScrollView, TouchableOpacity, Modal } from 'react-native';
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  Alert, 
+  Image, 
+  ScrollView, 
+  TouchableOpacity, 
+  Modal,
+  Share 
+} from 'react-native';
 import { Button } from 'react-native-paper';
 import { supabase } from '../../services/supabase';
-
-/**
- * JobDetails - View and update job status (Staff)
- */
 
 export default function JobDetails({ route, navigation }) {
   const { job } = route.params;
   const [loading, setLoading] = useState(false);
   const [showFullImage, setShowFullImage] = useState(false);
+  const [generatedOTP, setGeneratedOTP] = useState(null);
+  const [showOTPModal, setShowOTPModal] = useState(false);
 
   const updateStatus = async (newStatus) => {
     setLoading(true);
@@ -34,6 +42,42 @@ export default function JobDetails({ route, navigation }) {
       Alert.alert('Error', error.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const generateOTP = async () => {
+    setLoading(true);
+    try {
+      // Generate random 6-digit OTP
+      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+      
+      // Save OTP to database
+      const { error } = await supabase
+        .from('complaints')
+        .update({ 
+          otp: otp,
+          otp_created_at: new Date().toISOString()
+        })
+        .eq('id', job.id);
+
+      if (error) throw error;
+
+      setGeneratedOTP(otp);
+      setShowOTPModal(true);
+    } catch (error) {
+      Alert.alert('Error', error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const shareOTP = async () => {
+    try {
+      await Share.share({
+        message: `Your complaint verification OTP is: ${generatedOTP}\n\nThis OTP is valid for 5 minutes.\n\nComplaint: ${job.asset_id}`,
+      });
+    } catch (error) {
+      console.error('Share error:', error);
     }
   };
 
@@ -91,20 +135,31 @@ export default function JobDetails({ route, navigation }) {
         )}
 
         {job.status === 'IN_PROGRESS' && (
-          <Button 
-            mode="contained" 
-            onPress={() => updateStatus('CLOSED')}
-            loading={loading}
-            style={[styles.btn, { backgroundColor: '#4CAF50' }]}
-            icon="check"
-          >
-            Mark as Resolved
-          </Button>
+          <>
+            <Button 
+              mode="contained" 
+              onPress={generateOTP}
+              loading={loading}
+              style={[styles.btn, { backgroundColor: '#4CAF50' }]}
+              icon="key"
+            >
+              Generate OTP to Complete
+            </Button>
+
+            <Text style={styles.otpHint}>
+              ℹ️ Generate OTP and share with user to verify completion
+            </Text>
+          </>
         )}
 
         {job.status === 'CLOSED' && (
           <View style={styles.completedBanner}>
             <Text style={styles.completedText}>✅ This job has been completed</Text>
+            {job.verified_at && (
+              <Text style={styles.verifiedText}>
+                Verified: {new Date(job.verified_at).toLocaleDateString()}
+              </Text>
+            )}
           </View>
         )}
       </View>
@@ -128,6 +183,52 @@ export default function JobDetails({ route, navigation }) {
           />
           <Text style={styles.closeHint}>Tap anywhere to close</Text>
         </TouchableOpacity>
+      </Modal>
+
+      {/* OTP Display Modal */}
+      <Modal
+        visible={showOTPModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowOTPModal(false)}
+      >
+        <View style={styles.otpModalOverlay}>
+          <View style={styles.otpModalContent}>
+            <Text style={styles.otpModalTitle}>🔐 Verification OTP</Text>
+            <Text style={styles.otpModalSubtitle}>
+              Share this OTP with the user to verify completion
+            </Text>
+
+            <View style={styles.otpDisplay}>
+              <Text style={styles.otpText}>{generatedOTP}</Text>
+            </View>
+
+            <Text style={styles.otpValidity}>Valid for 5 minutes</Text>
+
+            <View style={styles.otpActions}>
+              <Button 
+                mode="contained"
+                onPress={shareOTP}
+                style={styles.shareBtn}
+                icon="share-variant"
+              >
+                Share OTP
+              </Button>
+
+              <Button 
+                mode="outlined"
+                onPress={() => setShowOTPModal(false)}
+                style={styles.closeBtn}
+              >
+                Close
+              </Button>
+            </View>
+
+            <Text style={styles.otpNote}>
+              📱 User will enter this OTP in their app to confirm the issue is resolved
+            </Text>
+          </View>
+        </View>
       </Modal>
     </ScrollView>
   );
@@ -186,7 +287,6 @@ const styles = StyleSheet.create({
     marginTop: 5,
   },
   
-  // Photo Section
   photoSection: {
     backgroundColor: 'white',
     marginHorizontal: 15,
@@ -211,13 +311,19 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   
-  // Actions
   actions: {
     padding: 15,
   },
   btn: {
     marginBottom: 10,
     borderRadius: 8,
+  },
+  otpHint: {
+    textAlign: 'center',
+    color: '#666',
+    fontSize: 13,
+    marginTop: 10,
+    lineHeight: 18,
   },
   completedBanner: {
     backgroundColor: '#E8F5E9',
@@ -229,8 +335,12 @@ const styles = StyleSheet.create({
     color: '#4CAF50',
     fontWeight: 'bold',
   },
+  verifiedText: {
+    color: '#666',
+    marginTop: 5,
+    fontSize: 12,
+  },
   
-  // Modal
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.9)',
@@ -244,5 +354,72 @@ const styles = StyleSheet.create({
   closeHint: {
     color: 'white',
     marginTop: 20,
+  },
+
+  // OTP Modal
+  otpModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  otpModalContent: {
+    backgroundColor: 'white',
+    borderRadius: 20,
+    padding: 30,
+    width: '100%',
+    maxWidth: 350,
+    alignItems: 'center',
+  },
+  otpModalTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 8,
+  },
+  otpModalSubtitle: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 25,
+  },
+  otpDisplay: {
+    backgroundColor: '#E3F2FD',
+    paddingVertical: 25,
+    paddingHorizontal: 40,
+    borderRadius: 15,
+    marginBottom: 15,
+    borderWidth: 2,
+    borderColor: '#2196F3',
+    borderStyle: 'dashed',
+  },
+  otpText: {
+    fontSize: 42,
+    fontWeight: 'bold',
+    color: '#2196F3',
+    letterSpacing: 8,
+  },
+  otpValidity: {
+    color: '#ff9800',
+    fontSize: 13,
+    marginBottom: 25,
+  },
+  otpActions: {
+    width: '100%',
+    gap: 10,
+  },
+  shareBtn: {
+    borderRadius: 10,
+  },
+  closeBtn: {
+    borderRadius: 10,
+  },
+  otpNote: {
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'center',
+    marginTop: 20,
+    lineHeight: 18,
   },
 });

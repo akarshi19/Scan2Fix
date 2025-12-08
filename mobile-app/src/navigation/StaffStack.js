@@ -3,23 +3,13 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { Text } from 'react-native';
 
-// Import Staff Screens
 import StaffDashboard from '../screens/staff/StaffDashboard';
 import JobDetails from '../screens/staff/JobDetails';
+import ProfileScreen from '../screens/shared/ProfileScreen';
+import ProfileAvatar from '../components/ProfileAvatar';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
-
-/**
- * StaffStack - Navigation for STAFF role
- * 
- * Bottom Tabs:
- * 1. My Jobs - List of assigned complaints
- * 2. Profile - Staff profile & settings
- * 
- * Stack Screens:
- * - JobDetails - View and update specific job
- */
 
 function JobsStack() {
   return (
@@ -58,10 +48,10 @@ export default function StaffStack() {
       />
       <Tab.Screen 
         name="Profile" 
-        component={StaffDashboard} // Temporary - will create ProfileScreen later
+        component={ProfileScreen}
         options={{
-          tabBarIcon: ({ color, size }) => (
-            <Text style={{ fontSize: size, color }}>👤</Text>
+          tabBarIcon: ({ focused }) => (
+            <ProfileAvatar size={focused ? 28 : 24} showBorder={focused} />
           ),
           headerShown: true,
           title: 'My Profile',

@@ -42,12 +42,32 @@ export const AuthProvider = ({ children }) => {
         .from('profiles')
         .select('role, full_name, email')
         .eq('id', userId)
-        .single();
+        .maybeSingle(); // ✅ CHANGED FROM .single() to .maybeSingle()
 
-      if (error) throw error;
-      setRole(data.role);
+      if (error) {
+        console.error('Error fetching role:', error);
+        setRole('USER'); // Default to USER if error
+      } else if (data) {
+        setRole(data.role);
+      } else {
+        // Profile doesn't exist - create one with default role
+        console.log('Profile not found, creating default profile...');
+        const { error: insertError } = await supabase
+          .from('profiles')
+          .insert({
+            id: userId,
+            email: user?.email,
+            role: 'USER'
+          });
+        
+        if (insertError) {
+          console.error('Error creating profile:', insertError);
+        }
+        setRole('USER');
+      }
     } catch (error) {
-      console.error('Error fetching role:', error);
+      console.error('Error in fetchUserRole:', error);
+      setRole('USER'); // Default to USER
     } finally {
       setLoading(false);
     }

@@ -6,19 +6,10 @@ import {
   FlatList, 
   RefreshControl, 
   TouchableOpacity,
-  TextInput 
+  TextInput,
+  Image 
 } from 'react-native';
 import { supabase } from '../../services/supabase';
-
-/**
- * AllComplaints - Admin view of all complaints with filters
- * 
- * FEATURES:
- * 1. View all complaints
- * 2. Filter by status
- * 3. Search by asset ID
- * 4. Tap to view details and assign staff
- */
 
 export default function AllComplaints({ navigation }) {
   const [complaints, setComplaints] = useState([]);
@@ -30,7 +21,6 @@ export default function AllComplaints({ navigation }) {
   useEffect(() => {
     fetchComplaints();
     
-    // Refresh when screen comes into focus
     const unsubscribe = navigation.addListener('focus', () => {
       fetchComplaints();
     });
@@ -46,7 +36,11 @@ export default function AllComplaints({ navigation }) {
     try {
       const { data, error } = await supabase
         .from('complaints')
-        .select('*, assets(location, type), profiles!complaints_assigned_staff_id_fkey(full_name, email)')
+        .select(`
+          *, 
+          assets(location, type), 
+          profiles!complaints_assigned_staff_id_fkey(full_name, email, photo_url)
+        `)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -61,12 +55,10 @@ export default function AllComplaints({ navigation }) {
   const filterComplaints = () => {
     let result = [...complaints];
 
-    // Filter by status
     if (activeFilter !== 'ALL') {
       result = result.filter(c => c.status === activeFilter);
     }
 
-    // Filter by search
     if (searchQuery) {
       result = result.filter(c => 
         c.asset_id.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -123,25 +115,43 @@ export default function AllComplaints({ navigation }) {
       <Text style={styles.location}>📍 {item.assets?.location}</Text>
       <Text style={styles.description} numberOfLines={2}>{item.description}</Text>
       
+      {/* Assigned Staff Section */}
+      {item.profiles ? (
+        <View style={styles.staffSection}>
+          <View style={styles.staffRow}>
+            {item.profiles.photo_url ? (
+              <Image source={{ uri: item.profiles.photo_url }} style={styles.staffPhoto} />
+            ) : (
+              <View style={styles.staffPhotoPlaceholder}>
+                <Text style={styles.staffInitial}>
+                  {item.profiles.full_name ? item.profiles.full_name.charAt(0) : 'S'}
+                </Text>
+              </View>
+            )}
+            <View style={styles.staffInfo}>
+              <Text style={styles.staffLabel}>Assigned to:</Text>
+              <Text style={styles.staffName}>
+                {item.profiles.full_name || item.profiles.email}
+              </Text>
+            </View>
+          </View>
+        </View>
+      ) : (
+        <View style={styles.unassignedSection}>
+          <Text style={styles.unassignedText}>⚠️ Not assigned yet</Text>
+        </View>
+      )}
+
       <View style={styles.cardFooter}>
         <Text style={styles.date}>
           {new Date(item.created_at).toLocaleDateString()}
         </Text>
-        {item.profiles && (
-          <Text style={styles.assignedTo}>
-            👷 {item.profiles.full_name || item.profiles.email}
-          </Text>
+        {item.photo_url && (
+          <Text style={styles.hasPhotoText}>📷 Has Photo</Text>
         )}
       </View>
 
-      {/* Has Photo Indicator */}
-      {item.photo_url && (
-        <View style={styles.hasPhoto}>
-          <Text style={styles.hasPhotoText}>📷 Has Photo</Text>
-        </View>
-      )}
-
-      <Text style={styles.tapHint}>Tap to view details →</Text>
+      <Text style={styles.tapHint}>Tap to view details & assign →</Text>
     </TouchableOpacity>
   );
 
@@ -313,6 +323,66 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     lineHeight: 20,
   },
+  
+  // Staff Section
+  staffSection: {
+    backgroundColor: '#e3f2fd',
+    padding: 10,
+    borderRadius: 8,
+    marginBottom: 10,
+  },
+  staffRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  staffPhoto: {
+    width: 35,
+    height: 35,
+    borderRadius: 17.5,
+    marginRight: 10,
+  },
+  staffPhotoPlaceholder: {
+    width: 35,
+    height: 35,
+    borderRadius: 17.5,
+    backgroundColor: '#2196F3',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  staffInitial: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 14,
+  },
+  staffInfo: {
+    flex: 1,
+  },
+  staffLabel: {
+    fontSize: 10,
+    color: '#666',
+  },
+  staffName: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#333',
+    marginTop: 2,
+  },
+  
+  // Unassigned
+  unassignedSection: {
+    backgroundColor: '#fff3e0',
+    padding: 10,
+    borderRadius: 8,
+    marginBottom: 10,
+    alignItems: 'center',
+  },
+  unassignedText: {
+    color: '#e65100',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  
   cardFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -321,13 +391,6 @@ const styles = StyleSheet.create({
   date: {
     color: '#999',
     fontSize: 12,
-  },
-  assignedTo: {
-    color: '#2196F3',
-    fontSize: 12,
-  },
-  hasPhoto: {
-    marginTop: 10,
   },
   hasPhotoText: {
     color: '#666',

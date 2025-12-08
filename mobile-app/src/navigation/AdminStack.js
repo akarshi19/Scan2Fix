@@ -3,22 +3,17 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { Text } from 'react-native';
 
-// Import Admin Screens
 import AdminDashboard from '../screens/admin/AdminDashboard';
 import AllComplaints from '../screens/admin/AllComplaints';
 import ComplaintDetail from '../screens/admin/ComplaintDetail';
+import ManageUsers from '../screens/admin/ManageUsers';
+import AddUser from '../screens/admin/AddUser';
+import UserDetail from '../screens/admin/UserDetail'; // ✅ ADD THIS
+import ProfileScreen from '../screens/shared/ProfileScreen';
+import ProfileAvatar from '../components/ProfileAvatar';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
-
-/**
- * AdminStack - Navigation for ADMIN role
- * 
- * Bottom Tabs:
- * 1. Dashboard - Stats overview
- * 2. Complaints - All complaints (with detail screen)
- * 3. Staff - Manage staff (future)
- */
 
 function DashboardStack() {
   return (
@@ -44,6 +39,28 @@ function ComplaintsStack() {
         name="ComplaintDetail" 
         component={ComplaintDetail}
         options={{ title: 'Complaint Details' }}
+      />
+    </Stack.Navigator>
+  );
+}
+
+function UsersStack() {
+  return (
+    <Stack.Navigator>
+      <Stack.Screen 
+        name="UsersList" 
+        component={ManageUsers}
+        options={{ title: 'Manage Users' }}
+      />
+      <Stack.Screen 
+        name="AddUser" 
+        component={AddUser}
+        options={{ title: 'Add New User' }}
+      />
+      <Stack.Screen 
+        name="UserDetail" 
+        component={UserDetail}
+        options={{ title: 'User Details' }}
       />
     </Stack.Navigator>
   );
@@ -77,12 +94,23 @@ export default function AdminStack() {
         }}
       />
       <Tab.Screen 
-        name="Staff" 
-        component={DashboardStack}
+        name="Users" 
+        component={UsersStack}
         options={{
           tabBarIcon: ({ color, size }) => (
             <Text style={{ fontSize: size, color }}>👥</Text>
           ),
+        }}
+      />
+      <Tab.Screen 
+        name="Profile" 
+        component={ProfileScreen}
+        options={{
+          tabBarIcon: ({ focused }) => (
+            <ProfileAvatar size={focused ? 28 : 24} showBorder={focused} />
+          ),
+          headerShown: true,
+          title: 'My Profile',
         }}
       />
     </Tab.Navigator>

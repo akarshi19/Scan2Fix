@@ -13,16 +13,6 @@ import { Button } from 'react-native-paper';
 import { Picker } from '@react-native-picker/picker';
 import { supabase } from '../../services/supabase';
 
-/**
- * ComplaintDetail - Admin view to see complaint details and assign staff
- * 
- * FEATURES:
- * 1. View full complaint details
- * 2. See attached photo
- * 3. Select staff member from dropdown
- * 4. Assign staff to complaint
- */
-
 export default function ComplaintDetail({ route, navigation }) {
   const { complaint } = route.params;
   
@@ -35,14 +25,11 @@ export default function ComplaintDetail({ route, navigation }) {
     fetchStaffMembers();
   }, []);
 
-  /**
-   * Fetch all staff members for assignment dropdown
-   */
   const fetchStaffMembers = async () => {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, email, full_name')
+        .select('id, email, full_name, photo_url, is_on_leave, is_available')
         .eq('role', 'STAFF');
 
       if (error) throw error;
@@ -52,15 +39,29 @@ export default function ComplaintDetail({ route, navigation }) {
     }
   };
 
-  /**
-   * Assign selected staff to this complaint
-   */
   const handleAssign = async () => {
     if (!selectedStaff) {
       Alert.alert('Error', 'Please select a staff member');
       return;
     }
 
+    const staffMember = staffList.find(s => s.id === selectedStaff);
+    
+    // ✅ CHECK IF STAFF IS ON LEAVE - BLOCK ASSIGNMENT
+    if (staffMember?.is_on_leave) {
+      Alert.alert(
+        '⚠️ Cannot Assign',
+        `${staffMember.full_name || staffMember.email} is currently on leave and cannot be assigned new tasks.\n\nPlease select another staff member or wait until they are available.`,
+        [{ text: 'OK' }]
+      );
+      return; // ✅ STOP HERE - DON'T ALLOW ASSIGNMENT
+    }
+
+    // Proceed with assignment
+    performAssignment(staffMember);
+  };
+
+  const performAssignment = async (staffMember) => {
     setLoading(true);
     try {
       const { error } = await supabase
@@ -72,9 +73,6 @@ export default function ComplaintDetail({ route, navigation }) {
         .eq('id', complaint.id);
 
       if (error) throw error;
-
-      // Find staff name for message
-      const staffMember = staffList.find(s => s.id === selectedStaff);
 
       Alert.alert(
         'Staff Assigned! ✅',
@@ -88,9 +86,6 @@ export default function ComplaintDetail({ route, navigation }) {
     }
   };
 
-  /**
-   * Get status color
-   */
   const getStatusColor = (status) => {
     switch (status) {
       case 'OPEN': return '#ff9800';
@@ -100,6 +95,10 @@ export default function ComplaintDetail({ route, navigation }) {
       default: return '#666';
     }
   };
+
+  // Get available staff count
+  const availableStaffCount = staffList.filter(s => !s.is_on_leave).length;
+  const onLeaveStaffCount = staffList.filter(s => s.is_on_leave).length;
 
   return (
     <ScrollView style={styles.container}>
@@ -171,6 +170,18 @@ export default function ComplaintDetail({ route, navigation }) {
           </View>
         ) : (
           <>
+            {/* Staff Availability Info */}
+            <View style={styles.staffStats}>
+              <View style={styles.staffStatItem}>
+                <Text style={styles.staffStatNumber}>{availableStaffCount}</Text>
+                <Text style={styles.staffStatLabel}>Available</Text>
+              </View>
+              <View style={[styles.staffStatItem, { backgroundColor: '#fff3e0' }]}>
+                <Text style={[styles.staffStatNumber, { color: '#e65100' }]}>{onLeaveStaffCount}</Text>
+                <Text style={styles.staffStatLabel}>On Leave</Text>
+              </View>
+            </View>
+
             <Text style={styles.pickerLabel}>Select Staff Member:</Text>
             <View style={styles.pickerContainer}>
               <Picker
@@ -182,12 +193,23 @@ export default function ComplaintDetail({ route, navigation }) {
                 {staffList.map((staff) => (
                   <Picker.Item 
                     key={staff.id} 
-                    label={staff.full_name || staff.email} 
-                    value={staff.id} 
+                    label={`${staff.full_name || staff.email}${staff.is_on_leave ? ' 🚫 (On Leave)' : ' ✅'}`}
+                    value={staff.id}
+                    color={staff.is_on_leave ? '#999' : '#333'}
+                    enabled={!staff.is_on_leave} // ✅ DISABLE ON-LEAVE STAFF
                   />
                 ))}
               </Picker>
             </View>
+
+            {/* Warning if selected staff is on leave */}
+            {selectedStaff && staffList.find(s => s.id === selectedStaff)?.is_on_leave && (
+              <View style={styles.warningBanner}>
+                <Text style={styles.warningText}>
+                  ⚠️ This staff member is on leave and cannot be assigned
+                </Text>
+              </View>
+            )}
 
             {staffList.length === 0 && (
               <Text style={styles.noStaffText}>
@@ -195,11 +217,19 @@ export default function ComplaintDetail({ route, navigation }) {
               </Text>
             )}
 
+            {availableStaffCount === 0 && staffList.length > 0 && (
+              <View style={styles.warningBanner}>
+                <Text style={styles.warningText}>
+                  ⚠️ All staff members are currently on leave
+                </Text>
+              </View>
+            )}
+
             <Button
               mode="contained"
               onPress={handleAssign}
               loading={loading}
-              disabled={loading || !selectedStaff}
+              disabled={loading || !selectedStaff || staffList.find(s => s.id === selectedStaff)?.is_on_leave}
               style={styles.assignButton}
               icon="account-check"
             >
@@ -248,7 +278,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#f5f5f5',
   },
   
-  // Status Banner
   statusBanner: {
     padding: 12,
     alignItems: 'center',
@@ -259,7 +288,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   
-  // Card
   card: {
     backgroundColor: 'white',
     margin: 15,
@@ -275,7 +303,6 @@ const styles = StyleSheet.create({
     marginBottom: 15,
   },
   
-  // Info Rows
   infoRow: {
     flexDirection: 'row',
     marginBottom: 10,
@@ -302,7 +329,6 @@ const styles = StyleSheet.create({
     marginTop: 5,
   },
   
-  // Photo
   photo: {
     width: '100%',
     height: 200,
@@ -315,7 +341,30 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   
-  // Picker
+  // Staff Stats
+  staffStats: {
+    flexDirection: 'row',
+    marginBottom: 15,
+  },
+  staffStatItem: {
+    flex: 1,
+    backgroundColor: '#e8f5e9',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  staffStatNumber: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#4CAF50',
+  },
+  staffStatLabel: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 2,
+  },
+  
   pickerLabel: {
     fontSize: 14,
     color: '#666',
@@ -337,6 +386,17 @@ const styles = StyleSheet.create({
     marginBottom: 15,
     textAlign: 'center',
   },
+  warningBanner: {
+    backgroundColor: '#fff3e0',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 15,
+  },
+  warningText: {
+    color: '#e65100',
+    fontSize: 13,
+    textAlign: 'center',
+  },
   assignButton: {
     borderRadius: 8,
   },
@@ -347,7 +407,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   
-  // Closed Banner
   closedBanner: {
     backgroundColor: '#E8F5E9',
     padding: 15,
@@ -364,7 +423,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   
-  // Modal
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.9)',
