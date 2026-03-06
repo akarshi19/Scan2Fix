@@ -1,18 +1,15 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  FlatList, 
-  TouchableOpacity, 
-  RefreshControl,
-  Image,
-  Alert
+import React, { useState, useCallback } from 'react';
+import {
+  View, Text, StyleSheet, FlatList, TouchableOpacity,
+  RefreshControl, Alert,
 } from 'react-native';
-import { Button } from 'react-native-paper';
 import { useFocusEffect } from '@react-navigation/native';
-import { supabase } from '../../services/supabase';
+import { complaintsAPI, usersAPI } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
+
+// ============================================
+// StaffDashboard — REWRITTEN for MongoDB
+// ============================================
 
 export default function StaffDashboard({ navigation }) {
   const { user, signOut } = useAuth();
@@ -22,7 +19,6 @@ export default function StaffDashboard({ navigation }) {
   const [isOnLeave, setIsOnLeave] = useState(false);
   const [leaveLoading, setLeaveLoading] = useState(false);
 
-  // Tabs configuration
   const tabs = [
     { key: 'ASSIGNED', label: 'Not Started', icon: '📋', color: '#2196F3' },
     { key: 'IN_PROGRESS', label: 'In Progress', icon: '🔧', color: '#9C27B0' },
@@ -39,15 +35,10 @@ export default function StaffDashboard({ navigation }) {
   const fetchJobs = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('complaints')
-        .select('*, assets(location, type)')
-        .eq('assigned_staff_id', user.id)
-        .eq('status', activeTab)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setJobs(data || []);
+      const response = await complaintsAPI.getStaffJobs(activeTab);
+      if (response.data.success) {
+        setJobs(response.data.data || []);
+      }
     } catch (error) {
       console.error('Error fetching jobs:', error);
     } finally {
@@ -57,97 +48,49 @@ export default function StaffDashboard({ navigation }) {
 
   const fetchLeaveStatus = async () => {
     try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('is_on_leave, leave_reason, leave_until')
-        .eq('id', user.id)
-        .single();
-
-      if (error) throw error;
-      setIsOnLeave(data?.is_on_leave || false);
+      const response = await usersAPI.getLeaveStatus();
+      if (response.data.success) {
+        setIsOnLeave(response.data.data?.is_on_leave || false);
+      }
     } catch (error) {
       console.error('Error fetching leave status:', error);
     }
   };
 
-const toggleLeaveStatus = async () => {
-  setLeaveLoading(true);
-  
-  if (!isOnLeave) {
-    // Mark as on leave
+  const toggleLeaveStatus = async () => {
+    setLeaveLoading(true);
+    const actionText = !isOnLeave ? 'Mark as On Leave' : 'Mark as Available';
+    const message = !isOnLeave
+      ? 'You will not receive new task assignments while on leave. Continue?'
+      : 'You will start receiving new task assignments. Continue?';
+
     Alert.alert(
-      '🏠 Mark as On Leave',
-      'You will not receive new task assignments while on leave. Continue?',
+      !isOnLeave ? '🏠 Mark as On Leave' : '✅ Mark as Available',
+      message,
       [
         { text: 'Cancel', style: 'cancel', onPress: () => setLeaveLoading(false) },
-        { 
-          text: 'Yes, Mark On Leave', 
+        {
+          text: `Yes, ${actionText}`,
           onPress: async () => {
             try {
-              const { error } = await supabase
-                .from('profiles')
-                .update({ 
-                  is_on_leave: true,
-                  leave_reason: 'Self-marked'
-                })
-                .eq('id', user.id);
-
-              if (error) throw error;
-              setIsOnLeave(true);
-              Alert.alert('Success', 'You are now marked as On Leave. Admin has been notified.');
+              const response = await usersAPI.toggleSelfLeave();
+              if (response.data.success) {
+                setIsOnLeave(!isOnLeave);
+                Alert.alert('Success', response.data.message);
+              }
             } catch (error) {
               Alert.alert('Error', error.message);
             } finally {
               setLeaveLoading(false);
             }
-          }
+          },
         },
       ]
     );
-  } else {
-    // Mark as available
-    Alert.alert(
-      '✅ Mark as Available',
-      'You will start receiving new task assignments. Continue?',
-      [
-        { text: 'Cancel', style: 'cancel', onPress: () => setLeaveLoading(false) },
-        { 
-          text: 'Yes, I\'m Available', 
-          onPress: async () => {
-            try {
-              const { error } = await supabase
-                .from('profiles')
-                .update({ 
-                  is_on_leave: false,
-                  leave_reason: null
-                })
-                .eq('id', user.id);
-
-              if (error) throw error;
-              setIsOnLeave(false);
-              Alert.alert('Success', 'You are now marked as Available');
-            } catch (error) {
-              Alert.alert('Error', error.message);
-            } finally {
-              setLeaveLoading(false);
-            }
-          }
-        },
-      ]
-    );
-  }
-};
-
-  const getJobCounts = () => {
-    return {
-      ASSIGNED: jobs.filter(j => j.status === 'ASSIGNED').length,
-      IN_PROGRESS: jobs.filter(j => j.status === 'IN_PROGRESS').length,
-      CLOSED: jobs.filter(j => j.status === 'CLOSED').length,
-    };
   };
 
   const renderJob = ({ item }) => (
-    <TouchableOpacity 
+    <TouchableOpacity
       style={styles.card}
       onPress={() => navigation.navigate('JobDetails', { job: item })}
     >
@@ -157,16 +100,9 @@ const toggleLeaveStatus = async () => {
       </View>
       <Text style={styles.location}>📍 {item.assets?.location}</Text>
       <Text style={styles.description} numberOfLines={2}>{item.description}</Text>
-      
-      {/* Photo indicator */}
-      {item.photo_url && (
-        <Text style={styles.photoIndicator}>📷 Has attached photo</Text>
-      )}
-      
+      {item.photo_url && <Text style={styles.photoIndicator}>📷 Has attached photo</Text>}
       <View style={styles.cardFooter}>
-        <Text style={styles.date}>
-          {new Date(item.created_at).toLocaleDateString()}
-        </Text>
+        <Text style={styles.date}>{new Date(item.created_at).toLocaleDateString()}</Text>
         <Text style={styles.tapHint}>Tap to view →</Text>
       </View>
     </TouchableOpacity>
@@ -174,53 +110,34 @@ const toggleLeaveStatus = async () => {
 
   return (
     <View style={styles.container}>
-      {/* Header with Leave Status */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <Text style={styles.greeting}>My Jobs 🔧</Text>
           <Text style={styles.subtitle}>{user?.email}</Text>
         </View>
-        <TouchableOpacity 
-          style={[
-            styles.leaveButton,
-            isOnLeave ? styles.leaveButtonActive : styles.leaveButtonInactive
-          ]}
-          onPress={toggleLeaveStatus}
-          disabled={leaveLoading}
+        <TouchableOpacity
+          style={[styles.leaveButton, isOnLeave ? styles.leaveButtonActive : styles.leaveButtonInactive]}
+          onPress={toggleLeaveStatus} disabled={leaveLoading}
         >
-          <Text style={styles.leaveButtonText}>
-            {isOnLeave ? '🏠 On Leave' : '✅ Available'}
-          </Text>
+          <Text style={styles.leaveButtonText}>{isOnLeave ? '🏠 On Leave' : '✅ Available'}</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Leave Banner */}
       {isOnLeave && (
         <View style={styles.leaveBanner}>
-          <Text style={styles.leaveBannerText}>
-            ⚠️ You are currently marked as On Leave. New tasks won't be assigned to you.
-          </Text>
+          <Text style={styles.leaveBannerText}>⚠️ You are currently marked as On Leave. New tasks won't be assigned to you.</Text>
         </View>
       )}
 
-      {/* Tabs */}
       <View style={styles.tabContainer}>
         {tabs.map((tab) => (
           <TouchableOpacity
             key={tab.key}
-            style={[
-              styles.tab,
-              activeTab === tab.key && { borderBottomColor: tab.color, borderBottomWidth: 3 }
-            ]}
+            style={[styles.tab, activeTab === tab.key && { borderBottomColor: tab.color, borderBottomWidth: 3 }]}
             onPress={() => setActiveTab(tab.key)}
           >
             <Text style={styles.tabIcon}>{tab.icon}</Text>
-            <Text style={[
-              styles.tabLabel,
-              activeTab === tab.key && { color: tab.color, fontWeight: 'bold' }
-            ]}>
-              {tab.label}
-            </Text>
+            <Text style={[styles.tabLabel, activeTab === tab.key && { color: tab.color, fontWeight: 'bold' }]}>{tab.label}</Text>
             <View style={[styles.tabBadge, { backgroundColor: tab.color }]}>
               <Text style={styles.tabBadgeText}>{jobs.length}</Text>
             </View>
@@ -228,20 +145,15 @@ const toggleLeaveStatus = async () => {
         ))}
       </View>
 
-      {/* Jobs List */}
       <FlatList
         data={jobs}
-        keyExtractor={(item) => item.id.toString()}
+        keyExtractor={(item) => item.id?.toString() || item._id?.toString()}
         renderItem={renderJob}
-        refreshControl={
-          <RefreshControl refreshing={loading} onRefresh={fetchJobs} />
-        }
+        refreshControl={<RefreshControl refreshing={loading} onRefresh={fetchJobs} />}
         contentContainerStyle={jobs.length === 0 && styles.emptyContainer}
         ListEmptyComponent={
           <View style={styles.empty}>
-            <Text style={styles.emptyIcon}>
-              {activeTab === 'ASSIGNED' ? '📋' : activeTab === 'IN_PROGRESS' ? '🔧' : '🎉'}
-            </Text>
+            <Text style={styles.emptyIcon}>{activeTab === 'ASSIGNED' ? '📋' : activeTab === 'IN_PROGRESS' ? '🔧' : '🎉'}</Text>
             <Text style={styles.emptyTitle}>
               {activeTab === 'ASSIGNED' && 'No new tasks'}
               {activeTab === 'IN_PROGRESS' && 'No tasks in progress'}
@@ -249,7 +161,7 @@ const toggleLeaveStatus = async () => {
             </Text>
             <Text style={styles.emptySubtitle}>
               {activeTab === 'ASSIGNED' && 'New assigned tasks will appear here'}
-              {activeTab === 'IN_PROGRESS' && 'Tasks you\'re working on will appear here'}
+              {activeTab === 'IN_PROGRESS' && "Tasks you're working on will appear here"}
               {activeTab === 'CLOSED' && 'Completed tasks will appear here'}
             </Text>
           </View>
@@ -260,178 +172,36 @@ const toggleLeaveStatus = async () => {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
-  
-  // Header
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 15,
-    backgroundColor: '#4CAF50',
-  },
-  headerLeft: {
-    flex: 1,
-  },
-  greeting: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: 'white',
-  },
-  subtitle: {
-    color: 'rgba(255,255,255,0.8)',
-    fontSize: 12,
-    marginTop: 2,
-  },
-  leaveButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-  },
-  leaveButtonActive: {
-    backgroundColor: '#ff9800',
-  },
-  leaveButtonInactive: {
-    backgroundColor: 'rgba(255,255,255,0.3)',
-  },
-  leaveButtonText: {
-    color: 'white',
-    fontWeight: 'bold',
-    fontSize: 12,
-  },
-  
-  // Leave Banner
-  leaveBanner: {
-    backgroundColor: '#fff3e0',
-    padding: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#ffe0b2',
-  },
-  leaveBannerText: {
-    color: '#e65100',
-    fontSize: 13,
-    textAlign: 'center',
-  },
-  
-  // Tabs
-  tabContainer: {
-    flexDirection: 'row',
-    backgroundColor: 'white',
-    elevation: 2,
-  },
-  tab: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 3,
-    borderBottomColor: 'transparent',
-  },
-  tabIcon: {
-    fontSize: 20,
-    marginBottom: 4,
-  },
-  tabLabel: {
-    fontSize: 11,
-    color: '#666',
-  },
-  tabBadge: {
-    position: 'absolute',
-    top: 5,
-    right: 15,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 10,
-    minWidth: 18,
-    alignItems: 'center',
-  },
-  tabBadgeText: {
-    color: 'white',
-    fontSize: 10,
-    fontWeight: 'bold',
-  },
-  
-  // Card
-  card: {
-    backgroundColor: 'white',
-    margin: 10,
-    padding: 15,
-    borderRadius: 12,
-    elevation: 2,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  assetId: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  assetType: {
-    color: '#2196F3',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  location: {
-    color: '#666',
-    fontSize: 13,
-    marginBottom: 5,
-  },
-  description: {
-    color: '#333',
-    lineHeight: 20,
-    marginBottom: 8,
-  },
-  photoIndicator: {
-    color: '#666',
-    fontSize: 12,
-    marginBottom: 8,
-  },
-  cardFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
-    paddingTop: 10,
-  },
-  date: {
-    color: '#999',
-    fontSize: 12,
-  },
-  tapHint: {
-    color: '#2196F3',
-    fontSize: 12,
-  },
-  
-  // Empty
-  emptyContainer: {
-    flex: 1,
-  },
-  empty: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 40,
-    minHeight: 300,
-  },
-  emptyIcon: {
-    fontSize: 50,
-    marginBottom: 15,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 5,
-  },
-  emptySubtitle: {
-    fontSize: 13,
-    color: '#666',
-    textAlign: 'center',
-  },
+  container: { flex: 1, backgroundColor: '#f5f5f5' },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 15, backgroundColor: '#4CAF50' },
+  headerLeft: { flex: 1 },
+  greeting: { fontSize: 20, fontWeight: 'bold', color: 'white' },
+  subtitle: { color: 'rgba(255,255,255,0.8)', fontSize: 12, marginTop: 2 },
+  leaveButton: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20 },
+  leaveButtonActive: { backgroundColor: '#ff9800' },
+  leaveButtonInactive: { backgroundColor: 'rgba(255,255,255,0.3)' },
+  leaveButtonText: { color: 'white', fontWeight: 'bold', fontSize: 12 },
+  leaveBanner: { backgroundColor: '#fff3e0', padding: 12, borderBottomWidth: 1, borderBottomColor: '#ffe0b2' },
+  leaveBannerText: { color: '#e65100', fontSize: 13, textAlign: 'center' },
+  tabContainer: { flexDirection: 'row', backgroundColor: 'white', elevation: 2 },
+  tab: { flex: 1, alignItems: 'center', paddingVertical: 12, borderBottomWidth: 3, borderBottomColor: 'transparent' },
+  tabIcon: { fontSize: 20, marginBottom: 4 },
+  tabLabel: { fontSize: 11, color: '#666' },
+  tabBadge: { position: 'absolute', top: 5, right: 15, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 10, minWidth: 18, alignItems: 'center' },
+  tabBadgeText: { color: 'white', fontSize: 10, fontWeight: 'bold' },
+  card: { backgroundColor: 'white', margin: 10, padding: 15, borderRadius: 12, elevation: 2 },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
+  assetId: { fontSize: 18, fontWeight: 'bold', color: '#333' },
+  assetType: { color: '#2196F3', fontSize: 12, fontWeight: '600' },
+  location: { color: '#666', fontSize: 13, marginBottom: 5 },
+  description: { color: '#333', lineHeight: 20, marginBottom: 8 },
+  photoIndicator: { color: '#666', fontSize: 12, marginBottom: 8 },
+  cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, borderTopColor: '#f0f0f0', paddingTop: 10 },
+  date: { color: '#999', fontSize: 12 },
+  tapHint: { color: '#2196F3', fontSize: 12 },
+  emptyContainer: { flex: 1 },
+  empty: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40, minHeight: 300 },
+  emptyIcon: { fontSize: 50, marginBottom: 15 },
+  emptyTitle: { fontSize: 18, fontWeight: 'bold', color: '#333', marginBottom: 5 },
+  emptySubtitle: { fontSize: 13, color: '#666', textAlign: 'center' },
 });

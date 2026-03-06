@@ -1,26 +1,29 @@
 import React, { useState } from 'react';
-import { 
-  View, 
-  StyleSheet, 
-  Alert, 
-  KeyboardAvoidingView, 
+import {
+  View,
+  StyleSheet,
+  Alert,
+  KeyboardAvoidingView,
   Platform,
   ScrollView,
   TouchableOpacity,
-  Text
+  Text,
 } from 'react-native';
 import { TextInput, Button, Title } from 'react-native-paper';
-import { supabase } from '../../services/supabase';
+import { authAPI, saveToken, saveUserData } from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
 
-/**
- * SignupScreen - Register new users
- * 
- * FLOW:
- * 1. User enters email, password, name
- * 2. Creates auth user in Supabase
- * 3. Creates profile with USER role
- * 4. Auto-login after signup
- */
+// ============================================
+// SignupScreen — REWRITTEN for MongoDB/JWT
+// ============================================
+// BEFORE:
+//   1. supabase.auth.signUp({ email, password })
+//   2. supabase.from('profiles').insert({ id, email, full_name, role: 'USER' })
+//
+// AFTER:
+//   1. api.post('/auth/signup', { email, password, full_name })
+//   That's it! One call creates both auth + profile.
+// ============================================
 
 export default function SignupScreen({ navigation }) {
   const [fullName, setFullName] = useState('');
@@ -28,6 +31,7 @@ export default function SignupScreen({ navigation }) {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const { signIn } = useAuth();
 
   const handleSignup = async () => {
     // Validation
@@ -55,38 +59,36 @@ export default function SignupScreen({ navigation }) {
     setLoading(true);
 
     try {
-      // 1. Create auth user
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: email.trim(),
-        password: password,
-      });
+      // Single API call creates auth + profile
+      const response = await authAPI.signup(
+        email.trim(),
+        password,
+        fullName.trim()
+      );
 
-      if (authError) throw authError;
-
-      if (authData.user) {
-        // 2. Create profile
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .insert({
-            id: authData.user.id,
-            email: email.trim(),
-            full_name: fullName.trim(),
-            role: 'USER', // Default role
-          });
-
-        if (profileError) throw profileError;
+      if (response.data.success) {
+        // Save token and auto-login
+        const { token, user } = response.data.data;
+        await saveToken(token);
+        await saveUserData(user);
 
         Alert.alert(
           'Account Created! ✅',
           'Welcome to Scan2Fix! You can now start reporting issues.',
-          [{ text: 'OK' }]
+          [
+            {
+              text: 'OK',
+              onPress: async () => {
+                // Login to update AuthContext state
+                await signIn(email.trim(), password);
+              },
+            },
+          ]
         );
-        
-        // Auth state will auto-update and navigate to dashboard
       }
     } catch (error) {
       console.error('Signup error:', error);
-      Alert.alert('Signup Failed', error.message);
+      Alert.alert('Signup Failed', error.message || 'Please try again');
     } finally {
       setLoading(false);
     }

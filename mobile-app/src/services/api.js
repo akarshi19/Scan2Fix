@@ -1,0 +1,349 @@
+// ============================================
+// API Service — Replaces supabase.js
+// ============================================
+// This file is the ONLY place that talks to your server.
+// Every screen imports from here instead of supabase.
+//
+// BEFORE (supabase.js):
+//   import { supabase } from '../services/supabase';
+//   const { data, error } = await supabase.from('complaints').select('*');
+//
+// AFTER (api.js):
+//   import api from '../services/api';
+//   const { data } = await api.get('/complaints');
+//
+// Authentication:
+//   BEFORE: Supabase auto-attached session token
+//   AFTER:  We store JWT in SecureStore, axios interceptor attaches it
+// ============================================
+
+import axios from 'axios';
+import * as SecureStore from 'expo-secure-store';
+import Constants from 'expo-constants';
+
+// ════════════════════════════════════════
+// Base URL from app.config.js
+// ════════════════════════════════════════
+const API_URL = Constants.expoConfig?.extra?.apiUrl || 'http://localhost:5000/api';
+
+console.log('🌐 API URL:', API_URL);
+
+// ════════════════════════════════════════
+// Create Axios Instance
+// ════════════════════════════════════════
+const api = axios.create({
+  baseURL: API_URL,
+  timeout: 15000, // 15 seconds
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+// ════════════════════════════════════════
+// REQUEST INTERCEPTOR
+// Automatically attach JWT token to every request
+// ════════════════════════════════════════
+// This replaces Supabase's automatic session management.
+// Supabase stored the session in AsyncStorage and auto-refreshed it.
+// We now store the JWT in SecureStore (encrypted) and attach it manually.
+// ════════════════════════════════════════
+api.interceptors.request.use(
+  async (config) => {
+    try {
+      const token = await SecureStore.getItemAsync('authToken');
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+    } catch (error) {
+      console.log('Error reading token:', error);
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
+// ════════════════════════════════════════
+// RESPONSE INTERCEPTOR
+// Handle common errors globally
+// ════════════════════════════════════════
+api.interceptors.response.use(
+  (response) => {
+    // Return the response data directly
+    return response;
+  },
+  async (error) => {
+    const originalRequest = error.config;
+
+    // If 401 (unauthorized) — token expired or invalid
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true;
+      // Clear stored token — user needs to login again
+      await SecureStore.deleteItemAsync('authToken');
+      await SecureStore.deleteItemAsync('userData');
+    }
+
+    // Create a standardized error object
+    const errorMessage =
+      error.response?.data?.message ||
+      error.message ||
+      'Something went wrong';
+
+    return Promise.reject({
+      message: errorMessage,
+      status: error.response?.status,
+      data: error.response?.data,
+    });
+  }
+);
+
+// ════════════════════════════════════════
+// TOKEN MANAGEMENT
+// ════════════════════════════════════════
+export const saveToken = async (token) => {
+  await SecureStore.setItemAsync('authToken', token);
+};
+
+export const getToken = async () => {
+  return await SecureStore.getItemAsync('authToken');
+};
+
+export const removeToken = async () => {
+  await SecureStore.deleteItemAsync('authToken');
+};
+
+export const saveUserData = async (userData) => {
+  await SecureStore.setItemAsync('userData', JSON.stringify(userData));
+};
+
+export const getUserData = async () => {
+  const data = await SecureStore.getItemAsync('userData');
+  return data ? JSON.parse(data) : null;
+};
+
+export const removeUserData = async () => {
+  await SecureStore.deleteItemAsync('userData');
+};
+
+// ════════════════════════════════════════
+// AUTH API
+// ════════════════════════════════════════
+// Replaces:
+//   supabase.auth.signInWithPassword()
+//   supabase.auth.signUp()
+//   supabase.auth.signOut()
+//   supabase.auth.getSession()
+// ════════════════════════════════════════
+
+export const authAPI = {
+  login: (email, password) =>
+    api.post('/auth/login', { email, password }),
+
+  signup: (email, password, full_name) =>
+    api.post('/auth/signup', { email, password, full_name }),
+
+  getMe: () =>
+    api.get('/auth/me'),
+
+  updateProfile: (data) =>
+    api.put('/auth/profile', data),
+};
+
+// ════════════════════════════════════════
+// COMPLAINTS API
+// ════════════════════════════════════════
+// Replaces all supabase.from('complaints').* calls
+// ════════════════════════════════════════
+
+export const complaintsAPI = {
+  // Create complaint (LodgeComplaint.js)
+  create: (data) =>
+    api.post('/complaints', data),
+
+  // Get my complaints (MyComplaints.js)
+  getMine: () =>
+    api.get('/complaints/mine'),
+
+  // Get all complaints — admin (AllComplaints.js, AdminDashboard.js)
+  getAll: (params) =>
+    api.get('/complaints', { params }),
+
+  // Get single complaint
+  getById: (id) =>
+    api.get(`/complaints/${id}`),
+
+  // Get staff jobs (StaffDashboard.js)
+  getStaffJobs: (status) =>
+    api.get('/complaints/staff-jobs', { params: { status } }),
+
+  // Assign staff — admin (ComplaintDetail.js)
+  assignStaff: (complaintId, staffId) =>
+    api.put(`/complaints/${complaintId}/assign`, { staffId }),
+
+  // Update status — staff (JobDetails.js)
+  updateStatus: (complaintId, status) =>
+    api.put(`/complaints/${complaintId}/status`, { status }),
+
+  // Generate OTP — staff (JobDetails.js)
+  generateOTP: (complaintId) =>
+    api.post(`/complaints/${complaintId}/generate-otp`),
+
+  // Verify OTP — user (VerifyOTPScreen.js)
+  verifyOTP: (complaintId, otp) =>
+    api.post(`/complaints/${complaintId}/verify-otp`, { otp }),
+};
+
+// ════════════════════════════════════════
+// ASSETS API
+// ════════════════════════════════════════
+// Replaces supabase.from('assets').* calls
+// ════════════════════════════════════════
+
+export const assetsAPI = {
+  // QR lookup (ScanQR.js)
+  getByQR: (assetId) =>
+    api.get(`/assets/qr/${assetId}`),
+
+  // Get all assets — admin
+  getAll: (params) =>
+    api.get('/assets', { params }),
+
+  // Create asset — admin
+  create: (data) =>
+    api.post('/assets', data),
+
+  // Update asset — admin
+  update: (id, data) =>
+    api.put(`/assets/${id}`, data),
+};
+
+// ════════════════════════════════════════
+// USERS API
+// ════════════════════════════════════════
+// Replaces supabase.from('profiles').* calls
+// ════════════════════════════════════════
+
+export const usersAPI = {
+  // Get all users — admin (ManageUsers.js)
+  getAll: (params) =>
+    api.get('/users', { params }),
+
+  // Get staff list — admin (ComplaintDetail.js dropdown)
+  getStaff: () =>
+    api.get('/users/staff'),
+
+  // Get single user — admin (UserDetail.js)
+  getById: (id) =>
+    api.get(`/users/${id}`),
+
+  // Create user — admin (AddUser.js)
+  create: (data) =>
+    api.post('/users', data),
+
+  // Update user — admin (UserDetail.js)
+  update: (id, data) =>
+    api.put(`/users/${id}`, data),
+
+  // Toggle leave — admin (ManageUsers.js, UserDetail.js)
+  toggleLeave: (id, reason) =>
+    api.put(`/users/${id}/toggle-leave`, { leave_reason: reason }),
+
+  // Self leave status — staff (StaffDashboard.js)
+  getLeaveStatus: () =>
+    api.get('/users/self/leave-status'),
+
+  // Self toggle leave — staff (StaffDashboard.js)
+  toggleSelfLeave: () =>
+    api.put('/users/self/toggle-leave'),
+};
+
+// ════════════════════════════════════════
+// UPLOAD API
+// ════════════════════════════════════════
+// Replaces supabase.storage.from('complaint-photos').*
+// ════════════════════════════════════════
+
+export const uploadAPI = {
+  // Upload profile photo (PhotoPicker.js)
+  profilePhoto: async (photoUri) => {
+    const formData = new FormData();
+    const filename = photoUri.split('/').pop();
+    const ext = filename.split('.').pop();
+
+    formData.append('photo', {
+      uri: photoUri,
+      name: filename,
+      type: `image/${ext}`,
+    });
+
+    return api.post('/upload/profile-photo', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+
+  // Upload complaint photo (LodgeComplaint.js)
+  complaintPhoto: async (photoUri) => {
+    const formData = new FormData();
+    const filename = photoUri.split('/').pop();
+    const ext = filename.split('.').pop();
+
+    formData.append('photo', {
+      uri: photoUri,
+      name: filename,
+      type: `image/${ext}`,
+    });
+
+    return api.post('/upload/complaint-photo', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+};
+
+// ════════════════════════════════════════
+// REPORTS API
+// ════════════════════════════════════════
+// New server-side reports (admin only)
+// ════════════════════════════════════════
+
+export const reportsAPI = {
+  overview: () =>
+    api.get('/reports/overview'),
+
+  monthly: (year) =>
+    api.get('/reports/monthly', { params: { year } }),
+
+  yearly: () =>
+    api.get('/reports/yearly'),
+
+  staff: () =>
+    api.get('/reports/staff'),
+};
+
+// ════════════════════════════════════════
+// HELPER: Get full URL for uploaded files
+// ════════════════════════════════════════
+// Photos are stored on your server at /uploads/...
+// This converts relative path to full URL
+//
+// BEFORE (Supabase):
+//   photo_url was already a full URL like:
+//   https://tdylzqwl.supabase.co/storage/v1/object/public/complaint-photos/...
+//
+// AFTER (Your server):
+//   photo_url is a relative path like: /uploads/complaints/abc.jpg
+//   We need to prepend the server base URL
+// ════════════════════════════════════════
+export const getFileUrl = (relativePath) => {
+  if (!relativePath) return null;
+
+  // If it's already a full URL (e.g., old Supabase URLs), return as-is
+  if (relativePath.startsWith('http')) return relativePath;
+
+  // Remove /api from the base URL to get server root
+  const serverRoot = API_URL.replace('/api', '');
+  return `${serverRoot}${relativePath}`;
+};
+
+// Export the axios instance as default
+export default api;

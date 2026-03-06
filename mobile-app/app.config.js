@@ -2,12 +2,12 @@ import 'dotenv/config';
 
 export default {
   expo: {
-    name: "mobile-app",
-    slug: "mobile-app",
+    name: "Scan2Fix",
+    slug: "scan2fix",
     version: "1.0.0",
     orientation: "portrait",
     icon: "./assets/images/icon.png",
-    scheme: "mobileapp",
+    scheme: "scan2fix",
     userInterfaceStyle: "automatic",
     newArchEnabled: true,
 
@@ -46,6 +46,7 @@ export default {
         },
       ],
       "expo-barcode-scanner",
+      "expo-secure-store",
     ],
 
     experiments: {
@@ -53,9 +54,9 @@ export default {
       reactCompiler: true,
     },
 
+    // ── CHANGED: Supabase keys → API URL ──
     extra: {
-      supabaseUrl: process.env.SUPABASE_URL,
-      supabaseAnonKey: process.env.SUPABASE_ANON_KEY,
+      apiUrl: process.env.API_URL,
     },
   },
 };

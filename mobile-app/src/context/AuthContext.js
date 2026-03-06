@@ -1,5 +1,30 @@
+// ============================================
+// Auth Context — REWRITTEN for MongoDB/JWT
+// ============================================
+// BEFORE (Supabase):
+//   - Used supabase.auth.getSession() to check login
+//   - Used supabase.auth.onAuthStateChange() to listen for changes
+//   - Fetched role from profiles table separately
+//   - Session stored in AsyncStorage by Supabase SDK
+//
+// AFTER (JWT):
+//   - Token stored in SecureStore (encrypted)
+//   - On app start, check SecureStore for saved token
+//   - If token exists, call GET /api/auth/me to verify & get role
+//   - No more onAuthStateChange listener needed
+//   - signIn/signOut manage the token manually
+// ============================================
+
 import React, { createContext, useState, useEffect, useContext } from 'react';
-import { supabase } from '../services/supabase';
+import {
+  authAPI,
+  saveToken,
+  removeToken,
+  getToken,
+  saveUserData,
+  getUserData,
+  removeUserData,
+} from '../services/api';
 
 const AuthContext = createContext({});
 
@@ -8,85 +33,151 @@ export const AuthProvider = ({ children }) => {
   const [role, setRole] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // ════════════════════════════════════════
+  // CHECK AUTH ON APP START
+  // ════════════════════════════════════════
+  // Replaces:
+  //   supabase.auth.getSession()
+  //   supabase.auth.onAuthStateChange()
+  //   fetchUserRole(userId)
+  // ════════════════════════════════════════
   useEffect(() => {
-    // Check active session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        setUser(session.user);
-        fetchUserRole(session.user.id);
-      } else {
-        setLoading(false);
-      }
-    });
-
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
-        if (session) {
-          setUser(session.user);
-          fetchUserRole(session.user.id);
-        } else {
-          setUser(null);
-          setRole(null);
-          setLoading(false);
-        }
-      }
-    );
-
-    return () => subscription.unsubscribe();
+    checkAuthStatus();
   }, []);
 
-  const fetchUserRole = async (userId) => {
+  const checkAuthStatus = async () => {
     try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('role, full_name, email')
-        .eq('id', userId)
-        .maybeSingle(); // ✅ CHANGED FROM .single() to .maybeSingle()
+      // Check if we have a saved token
+      const token = await getToken();
 
-      if (error) {
-        console.error('Error fetching role:', error);
-        setRole('USER'); // Default to USER if error
-      } else if (data) {
-        setRole(data.role);
+      if (!token) {
+        // No token — user is not logged in
+        setLoading(false);
+        return;
+      }
+
+      // Token exists — verify it's still valid by calling /auth/me
+      // This also gets the user's current role and profile data
+      const response = await authAPI.getMe();
+
+      if (response.data.success) {
+        const userData = response.data.data.user;
+        setUser(userData);
+        setRole(userData.role);
+        await saveUserData(userData);
       } else {
-        // Profile doesn't exist - create one with default role
-        console.log('Profile not found, creating default profile...');
-        const { error: insertError } = await supabase
-          .from('profiles')
-          .insert({
-            id: userId,
-            email: user?.email,
-            role: 'USER'
-          });
-        
-        if (insertError) {
-          console.error('Error creating profile:', insertError);
-        }
-        setRole('USER');
+        // Token is invalid — clear everything
+        await clearAuth();
       }
     } catch (error) {
-      console.error('Error in fetchUserRole:', error);
-      setRole('USER'); // Default to USER
+      console.log('Auth check failed (token may be expired):', error.message);
+      // Token expired or server unreachable
+      // Try to use cached user data for offline capability
+      const cachedUser = await getUserData();
+      if (cachedUser) {
+        setUser(cachedUser);
+        setRole(cachedUser.role);
+        console.log('Using cached user data');
+      } else {
+        await clearAuth();
+      }
     } finally {
       setLoading(false);
     }
   };
 
+  // ════════════════════════════════════════
+  // SIGN IN
+  // ════════════════════════════════════════
+  // Replaces:
+  //   const { error } = await supabase.auth.signInWithPassword({
+  //     email, password
+  //   });
+  //
+  // Returns { error } to match existing screen code pattern
+  // ════════════════════════════════════════
   const signIn = async (email, password) => {
-    const { error } = await supabase.auth.signInWithPassword({ 
-      email, 
-      password 
-    });
-    return { error };
+    try {
+      const response = await authAPI.login(email, password);
+
+      if (response.data.success) {
+        const { token, user: userData } = response.data.data;
+
+        // Save token and user data
+        await saveToken(token);
+        await saveUserData(userData);
+
+        // Update state
+        setUser(userData);
+        setRole(userData.role);
+
+        return { error: null };
+      } else {
+        return { error: { message: response.data.message } };
+      }
+    } catch (error) {
+      console.error('Sign in error:', error);
+      return {
+        error: {
+          message: error.message || 'Login failed. Please try again.',
+        },
+      };
+    }
   };
 
+  // ════════════════════════════════════════
+  // SIGN OUT
+  // ════════════════════════════════════════
+  // Replaces:
+  //   await supabase.auth.signOut();
+  //
+  // Supabase had a server-side signOut that invalidated the session.
+  // With JWT, we just delete the token locally.
+  // The token will expire naturally (30 days from .env JWT_EXPIRE).
+  // ════════════════════════════════════════
   const signOut = async () => {
-    await supabase.auth.signOut();
+    await clearAuth();
+  };
+
+  // ════════════════════════════════════════
+  // CLEAR AUTH STATE
+  // ════════════════════════════════════════
+  const clearAuth = async () => {
+    await removeToken();
+    await removeUserData();
+    setUser(null);
+    setRole(null);
+  };
+
+  // ════════════════════════════════════════
+  // REFRESH USER DATA
+  // ════════════════════════════════════════
+  // Call this after profile updates to refresh the context
+  const refreshUser = async () => {
+    try {
+      const response = await authAPI.getMe();
+      if (response.data.success) {
+        const userData = response.data.data.user;
+        setUser(userData);
+        setRole(userData.role);
+        await saveUserData(userData);
+      }
+    } catch (error) {
+      console.error('Refresh user error:', error);
+    }
   };
 
   return (
-    <AuthContext.Provider value={{ user, role, loading, signIn, signOut }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        role,
+        loading,
+        signIn,
+        signOut,
+        refreshUser,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

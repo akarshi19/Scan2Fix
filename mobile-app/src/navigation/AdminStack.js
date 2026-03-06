@@ -8,7 +8,7 @@ import AllComplaints from '../screens/admin/AllComplaints';
 import ComplaintDetail from '../screens/admin/ComplaintDetail';
 import ManageUsers from '../screens/admin/ManageUsers';
 import AddUser from '../screens/admin/AddUser';
-import UserDetail from '../screens/admin/UserDetail'; // ✅ ADD THIS
+import UserDetail from '../screens/admin/UserDetail';
 import ProfileScreen from '../screens/shared/ProfileScreen';
 import ProfileAvatar from '../components/ProfileAvatar';
 
