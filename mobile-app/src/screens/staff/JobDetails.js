@@ -5,10 +5,8 @@ import {
 } from 'react-native';
 import { Button } from 'react-native-paper';
 import { complaintsAPI, getFileUrl } from '../../services/api';
+import ProfileMenu from '../../components/ProfileMenu';
 
-// ============================================
-// JobDetails — REWRITTEN for MongoDB
-// ============================================
 
 export default function JobDetails({ route, navigation }) {
   const { job } = route.params;
@@ -67,6 +65,7 @@ export default function JobDetails({ route, navigation }) {
 
   return (
     <ScrollView style={styles.container}>
+      <ProfileMenu/>
       <View style={styles.card}>
         <Text style={styles.assetId}>{job.asset_id}</Text>
         <Text style={styles.assetType}>{job.assets?.type}</Text>

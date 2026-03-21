@@ -2,19 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Alert, TextInput as RNTextInput, Image } from 'react-native';
 import { Button } from 'react-native-paper';
 import { complaintsAPI, usersAPI, getFileUrl } from '../../services/api';
+import ProfileMenu from '../../components/ProfileMenu';
 
-// ============================================
-// VerifyOTPScreen — REWRITTEN for MongoDB
-// ============================================
-// BEFORE:
-//   supabase.from('profiles').select(...).eq('id', staffId)
-//   supabase.from('complaints').select('otp, otp_created_at')
-//   supabase.from('complaints').update({ status: 'CLOSED', ... })
-//
-// AFTER:
-//   complaintsAPI.verifyOTP(complaintId, otp)
-//   Server handles all validation and closes complaint
-// ============================================
 
 export default function VerifyOTPScreen({ route, navigation }) {
   const { complaint } = route.params;
@@ -68,13 +57,12 @@ export default function VerifyOTPScreen({ route, navigation }) {
 
     setLoading(true);
     try {
-      // ── CHANGED: One API call handles everything ──
       const complaintId = complaint.id || complaint._id;
       const response = await complaintsAPI.verifyOTP(complaintId, otp);
 
       if (response.data.success) {
         Alert.alert(
-          'Verified! ✅',
+          'Verified!',
           'Complaint has been closed successfully. Thank you!',
           [{ text: 'OK', onPress: () => navigation.goBack() }]
         );
@@ -88,6 +76,7 @@ export default function VerifyOTPScreen({ route, navigation }) {
 
   return (
     <View style={styles.container}>
+      <ProfileMenu/>
       <View style={styles.card}>
         <Text style={styles.icon}>🔐</Text>
         <Text style={styles.title}>Verify Completion</Text>

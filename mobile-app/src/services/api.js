@@ -1,19 +1,13 @@
 // ============================================
-// API Service — Replaces supabase.js
+// API Service — 
 // ============================================
 // This file is the ONLY place that talks to your server.
-// Every screen imports from here instead of supabase.
-//
-// BEFORE (supabase.js):
-//   import { supabase } from '../services/supabase';
-//   const { data, error } = await supabase.from('complaints').select('*');
 //
 // AFTER (api.js):
 //   import api from '../services/api';
 //   const { data } = await api.get('/complaints');
 //
 // Authentication:
-//   BEFORE: Supabase auto-attached session token
 //   AFTER:  We store JWT in SecureStore, axios interceptor attaches it
 // ============================================
 
@@ -36,6 +30,7 @@ const api = axios.create({
   timeout: 15000, // 15 seconds
   headers: {
     'Content-Type': 'application/json',
+    'ngrok-skip-browser-warning': 'true',
   },
 });
 
@@ -43,8 +38,6 @@ const api = axios.create({
 // REQUEST INTERCEPTOR
 // Automatically attach JWT token to every request
 // ════════════════════════════════════════
-// This replaces Supabase's automatic session management.
-// Supabase stored the session in AsyncStorage and auto-refreshed it.
 // We now store the JWT in SecureStore (encrypted) and attach it manually.
 // ════════════════════════════════════════
 api.interceptors.request.use(
@@ -129,12 +122,6 @@ export const removeUserData = async () => {
 // ════════════════════════════════════════
 // AUTH API
 // ════════════════════════════════════════
-// Replaces:
-//   supabase.auth.signInWithPassword()
-//   supabase.auth.signUp()
-//   supabase.auth.signOut()
-//   supabase.auth.getSession()
-// ════════════════════════════════════════
 
 export const authAPI = {
   login: (email, password) =>
@@ -148,12 +135,29 @@ export const authAPI = {
 
   updateProfile: (data) =>
     api.put('/auth/profile', data),
+
+  forgotPassword: (email) =>
+    api.post('/auth/forgot-password', { email }),
+
+  resetPassword: (email, reset_code, new_password) =>
+    api.post('/auth/reset-password', { email, reset_code, new_password }),
+
+  changePassword: (current_password, new_password) =>
+    api.put('/auth/change-password', { current_password, new_password }),
+
+  // Social login — ADD THESE
+  googleLogin: (access_token) =>
+    api.post('/auth/google', { access_token }),
+
+  microsoftLogin: (access_token) =>
+    api.post('/auth/microsoft', { access_token }),
+
+  appleLogin: (email, full_name, identity_token) =>
+    api.post('/auth/apple', { email, full_name, identity_token }),
 };
 
 // ════════════════════════════════════════
 // COMPLAINTS API
-// ════════════════════════════════════════
-// Replaces all supabase.from('complaints').* calls
 // ════════════════════════════════════════
 
 export const complaintsAPI = {
@@ -197,8 +201,6 @@ export const complaintsAPI = {
 // ════════════════════════════════════════
 // ASSETS API
 // ════════════════════════════════════════
-// Replaces supabase.from('assets').* calls
-// ════════════════════════════════════════
 
 export const assetsAPI = {
   // QR lookup (ScanQR.js)
@@ -220,8 +222,6 @@ export const assetsAPI = {
 
 // ════════════════════════════════════════
 // USERS API
-// ════════════════════════════════════════
-// Replaces supabase.from('profiles').* calls
 // ════════════════════════════════════════
 
 export const usersAPI = {
@@ -260,8 +260,6 @@ export const usersAPI = {
 
 // ════════════════════════════════════════
 // UPLOAD API
-// ════════════════════════════════════════
-// Replaces supabase.storage.from('complaint-photos').*
 // ════════════════════════════════════════
 
 export const uploadAPI = {
@@ -325,10 +323,7 @@ export const reportsAPI = {
 // ════════════════════════════════════════
 // Photos are stored on your server at /uploads/...
 // This converts relative path to full URL
-//
-// BEFORE (Supabase):
-//   photo_url was already a full URL like:
-//   https://tdylzqwl.supabase.co/storage/v1/object/public/complaint-photos/...
+//.
 //
 // AFTER (Your server):
 //   photo_url is a relative path like: /uploads/complaints/abc.jpg
@@ -337,7 +332,7 @@ export const reportsAPI = {
 export const getFileUrl = (relativePath) => {
   if (!relativePath) return null;
 
-  // If it's already a full URL (e.g., old Supabase URLs), return as-is
+  // If it's already a full URL, return as-is
   if (relativePath.startsWith('http')) return relativePath;
 
   // Remove /api from the base URL to get server root

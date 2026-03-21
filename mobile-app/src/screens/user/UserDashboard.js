@@ -1,122 +1,75 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
-
-/**
- * UserDashboard - Main screen for USER role
- * 
- * Features:
- * - Welcome message
- * - Big "Scan QR" button to report issues
- * - Quick stats (optional)
- */
+import { useTheme } from '../../context/ThemeContext';
+import { useLanguage } from '../../context/LanguageContext';
+import ScreenLayout from '../../components/ScreenLayout';
 
 export default function UserDashboard({ navigation }) {
-  const { user, signOut } = useAuth();
+  const { user } = useAuth();
+  const { colors } = useTheme();
+  const { t } = useLanguage();
 
   return (
-    <View style={styles.container}>
+    <ScreenLayout>
       {/* Welcome Section */}
-      <View style={styles.header}>
-        <Text style={styles.greeting}>Hello! 👋</Text>
-        <Text style={styles.email}>{user?.email}</Text>
+      <View style={{ marginBottom: 30, marginTop: 8 }}>
+        <Text style={[s.greeting, { color: colors.textPri }]}>{t('welcome')}! 👋</Text>
+        <Text style={[s.email, { color: colors.textSec }]}>{user?.email}</Text>
       </View>
 
       {/* Main Action - Scan QR */}
-      <TouchableOpacity 
-        style={styles.scanButton}
+      <TouchableOpacity
+        style={[s.scanButton, { backgroundColor: colors.active }]}
         onPress={() => navigation.navigate('ScanQR')}
+        activeOpacity={0.85}
       >
-        <Text style={styles.scanIcon}>📷</Text>
-        <Text style={styles.scanTitle}>Scan QR Code</Text>
-        <Text style={styles.scanSubtitle}>Report an issue with AC/Cooler</Text>
+        <Ionicons name="qr-code-outline" size={50} color="#fff" />
+        <Text style={s.scanTitle}>{t('scanQR')}</Text>
+        <Text style={s.scanSubtitle}>{t('reportIssue')}</Text>
       </TouchableOpacity>
 
       {/* Info Card */}
-      <View style={styles.infoCard}>
-        <Text style={styles.infoTitle}>How it works:</Text>
-        <Text style={styles.infoStep}>1. 📷 Scan QR code on the machine</Text>
-        <Text style={styles.infoStep}>2. 📝 Describe the problem</Text>
-        <Text style={styles.infoStep}>3. 📸 Take a photo (optional)</Text>
-        <Text style={styles.infoStep}>4. ✅ Submit and track status</Text>
+      <View style={[s.infoCard, { backgroundColor: colors.cardBg }]}>
+        <Text style={[s.infoTitle, { color: colors.textPri }]}>{t('howItWorks')}</Text>
+        <InfoStep icon="qr-code-outline" text={t('step1')} colors={colors} />
+        <InfoStep icon="create-outline" text={t('step2')} colors={colors} />
+        <InfoStep icon="camera-outline" text={t('step3')} colors={colors} />
+        <InfoStep icon="checkmark-circle-outline" text={t('step4')} colors={colors} last />
       </View>
+    </ScreenLayout>
+  );
+}
 
-      {/* Logout Button */}
-      <TouchableOpacity style={styles.logoutBtn} onPress={signOut}>
-        <Text style={styles.logoutText}>Logout</Text>
-      </TouchableOpacity>
+function InfoStep({ icon, text, colors, last }) {
+  return (
+    <View style={[s.stepRow, !last && { borderBottomWidth: 1, borderBottomColor: colors.divider }]}>
+      <View style={[s.stepIconWrap, { backgroundColor: `${colors.active}15` }]}>
+        <Ionicons name={icon} size={18} color={colors.active} />
+      </View>
+      <Text style={[s.stepText, { color: colors.textSec }]}>{text}</Text>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
-    padding: 20,
-  },
-  header: {
-    marginBottom: 30,
-  },
-  greeting: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  email: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 5,
-  },
+const s = StyleSheet.create({
+  greeting: { fontSize: 28, fontWeight: '800' },
+  email: { fontSize: 14, marginTop: 5 },
   scanButton: {
-    backgroundColor: '#2196F3',
-    padding: 30,
-    borderRadius: 15,
-    alignItems: 'center',
-    marginBottom: 20,
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 5,
+    padding: 30, borderRadius: 18, alignItems: 'center', marginBottom: 24,
+    shadowColor: '#5BA8D4', shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.3, shadowRadius: 12, elevation: 8,
   },
-  scanIcon: {
-    fontSize: 50,
-    marginBottom: 10,
-  },
-  scanTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: 'white',
-  },
-  scanSubtitle: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.8)',
-    marginTop: 5,
-  },
+  scanTitle: { fontSize: 22, fontWeight: '700', color: 'white', marginTop: 12 },
+  scanSubtitle: { fontSize: 14, color: 'rgba(255,255,255,0.8)', marginTop: 5 },
   infoCard: {
-    backgroundColor: 'white',
-    padding: 20,
-    borderRadius: 10,
-    marginBottom: 20,
+    padding: 20, borderRadius: 16,
+    shadowColor: '#A0BDD0', shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.1, shadowRadius: 8, elevation: 3,
   },
-  infoTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 15,
-    color: '#333',
-  },
-  infoStep: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 8,
-  },
-  logoutBtn: {
-    padding: 15,
-    alignItems: 'center',
-  },
-  logoutText: {
-    color: '#ff6b6b',
-    fontSize: 16,
-  },
+  infoTitle: { fontSize: 16, fontWeight: '700', marginBottom: 16 },
+  stepRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14 },
+  stepIconWrap: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginRight: 14 },
+  stepText: { flex: 1, fontSize: 14, fontWeight: '500' },
 });

@@ -13,9 +13,12 @@ export default {
 
     ios: {
       supportsTablet: true,
+      bundleIdentifier: "com.scan2fix.app",
     },
 
     android: {
+      package: "com.scan2fix.app",
+      versionCode: 1,
       adaptiveIcon: {
         backgroundColor: "#E6F4FE",
         foregroundImage: "./assets/images/android-icon-foreground.png",
@@ -24,6 +27,11 @@ export default {
       },
       edgeToEdgeEnabled: true,
       predictiveBackGestureEnabled: false,
+      permissions: [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ],
     },
 
     web: {
@@ -45,8 +53,28 @@ export default {
           },
         },
       ],
-      "expo-barcode-scanner",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Scan2Fix to access your camera to scan QR codes"
+        }
+      ],
+       "expo-secure-store",
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Allow Scan2Fix to save QR codes to your gallery",
+          "savePhotosPermission": "Allow Scan2Fix to save QR codes to your gallery",
+          "isAccessMediaLocationEnabled": true
+        }
+      ],
+      ["expo-barcode-scanner",
+        {
+          newArchEnabled: false,
+        }
+      ],
       "expo-secure-store",
+      "expo-web-browser",
     ],
 
     experiments: {
@@ -54,9 +82,11 @@ export default {
       reactCompiler: true,
     },
 
-    // ── CHANGED: Supabase keys → API URL ──
     extra: {
       apiUrl: process.env.API_URL,
+      eas: {
+        projectId: "1c62fd97-803b-4a76-a8b6-9dd36862e989",
+      },
     },
   },
 };

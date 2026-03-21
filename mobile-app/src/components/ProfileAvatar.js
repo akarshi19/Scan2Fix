@@ -6,8 +6,6 @@ import { useAuth } from '../context/AuthContext';
 // ============================================
 // ProfileAvatar — REWRITTEN for MongoDB
 // ============================================
-// BEFORE:
-//   supabase.from('profiles').select('photo_url, full_name').eq('id', user.id)
 //
 // AFTER:
 //   Uses user data from AuthContext (already fetched on login)

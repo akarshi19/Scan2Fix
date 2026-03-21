@@ -38,7 +38,7 @@ app.use(cors({
 // Rate limiting — prevent abuse
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100,                  // max 100 requests per window per IP
+  max: 1000000,                  // max 1000000 requests per window per IP
   message: { 
     success: false, 
     message: 'Too many requests, please try again after 15 minutes' 
@@ -68,10 +68,6 @@ if (process.env.NODE_ENV === 'development') {
 // Serve uploaded files as static
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// ============================================
-// ROUTES (will be added in Tasks 3-6)
-// ============================================
-
 // Health check endpoint
 app.get('/api/health', (req, res) => {
   res.json({
@@ -83,23 +79,29 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Auth routes (Task 3)
+// Auth routes
 app.use('/api/auth', authLimiter, require('./routes/authRoutes'));
 
-// Asset routes (Task 5)
+// Social auth routes
+app.use('/api/auth', authLimiter, require('./routes/socialAuthRoutes'));
+
+// Asset routes
 app.use('/api/assets', require('./routes/assetRoutes'));
 
-// Complaint routes (Task 5)
+// Complaint routes
 app.use('/api/complaints', require('./routes/complaintRoutes'));
 
-// User management routes (Task 6)
+// User management routes 
 app.use('/api/users', require('./routes/userRoutes'));
 
-// Report routes (Task 6)
+// Report routes
 app.use('/api/reports', require('./routes/reportRoutes'));
 
-// Upload routes (Task 4)
+// Upload routes 
 app.use('/api/upload', require('./routes/uploadRoutes'));
+
+// OAuth callback (for Google/Microsoft redirect)
+app.use('/auth', require('./routes/oauthCallbackRoutes'));
 
 // ============================================
 // ERROR HANDLING

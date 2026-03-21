@@ -1,11 +1,6 @@
 // ============================================
 // Auth Context — REWRITTEN for MongoDB/JWT
 // ============================================
-// BEFORE (Supabase):
-//   - Used supabase.auth.getSession() to check login
-//   - Used supabase.auth.onAuthStateChange() to listen for changes
-//   - Fetched role from profiles table separately
-//   - Session stored in AsyncStorage by Supabase SDK
 //
 // AFTER (JWT):
 //   - Token stored in SecureStore (encrypted)
@@ -35,11 +30,6 @@ export const AuthProvider = ({ children }) => {
 
   // ════════════════════════════════════════
   // CHECK AUTH ON APP START
-  // ════════════════════════════════════════
-  // Replaces:
-  //   supabase.auth.getSession()
-  //   supabase.auth.onAuthStateChange()
-  //   fetchUserRole(userId)
   // ════════════════════════════════════════
   useEffect(() => {
     checkAuthStatus();
@@ -89,11 +79,7 @@ export const AuthProvider = ({ children }) => {
   // ════════════════════════════════════════
   // SIGN IN
   // ════════════════════════════════════════
-  // Replaces:
-  //   const { error } = await supabase.auth.signInWithPassword({
-  //     email, password
-  //   });
-  //
+   //
   // Returns { error } to match existing screen code pattern
   // ════════════════════════════════════════
   const signIn = async (email, password) => {
@@ -128,10 +114,6 @@ export const AuthProvider = ({ children }) => {
   // ════════════════════════════════════════
   // SIGN OUT
   // ════════════════════════════════════════
-  // Replaces:
-  //   await supabase.auth.signOut();
-  //
-  // Supabase had a server-side signOut that invalidated the session.
   // With JWT, we just delete the token locally.
   // The token will expire naturally (30 days from .env JWT_EXPIRE).
   // ════════════════════════════════════════

@@ -1,170 +1,181 @@
 import React, { useState, useEffect } from 'react';
-import {
-  View, Text, StyleSheet, ScrollView, RefreshControl,
-  TouchableOpacity, Dimensions,
-} from 'react-native';
-import { complaintsAPI, reportsAPI } from '../../services/api';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { Ionicons, AntDesign } from '@expo/vector-icons';
+import { complaintsAPI, reportsAPI, assetsAPI } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
+import { useTheme } from '../../context/ThemeContext';
+import { useLanguage } from '../../context/LanguageContext';
+import ScreenLayout from '../../components/ScreenLayout';
 
-const screenWidth = Dimensions.get('window').width;
-
-// ============================================
-// AdminDashboard — REWRITTEN for MongoDB
-// ============================================
-// BEFORE:
-//   supabase.from('complaints').select('status, created_at, asset_id, assets(location)')
-//   Then computed stats client-side
-//
-// AFTER:
-//   reportsAPI.overview() — server computes stats
-//   complaintsAPI.getAll() — for recent list
-// ============================================
 
 export default function AdminDashboard({ navigation }) {
-  const { user, signOut } = useAuth();
+  const { user } = useAuth();
+  const { colors } = useTheme();
+  const { t } = useLanguage();
   const [stats, setStats] = useState({
     total: 0, open: 0, assigned: 0, inProgress: 0, closed: 0,
+    staffOnDuty: 0, staffUnavailable: 0, totalAssets: 0,
   });
   const [recentComplaints, setRecentComplaints] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  const ACTIVE = colors.active;
+  const CARD_BG = colors.cardBg;
+  const TEXT_PRI = colors.textPri;
+  const TEXT_SEC = colors.textSec
+  const TEXT_MUT = colors.textMut;
+  const SLATE = colors.slate;
+  const DIVIDER =  colors.divider;
+  const OPEN = colors.open;
+  const ASSIGNED = colors.assigned;
+  const INPROGRESS = colors.inProgress;
+  const STAFFONDUTY = colors.staffOnDuty;
+  const STAFFUNAVAILABLE =  colors.staffUnavailable;
+  const TOTALASSETS = colors.totalAssets;
+  const CLOSED = colors.closed;
   useEffect(() => {
     fetchData();
-    const unsubscribe = navigation.addListener('focus', () => { fetchData(); });
-    return unsubscribe;
+    const unsub = navigation.addListener('focus', fetchData);
+    return unsub;
   }, [navigation]);
 
   const fetchData = async () => {
     try {
-      // Fetch overview stats from server
-      const overviewResponse = await reportsAPI.overview();
-      if (overviewResponse.data.success) {
-        const s = overviewResponse.data.data.complaints;
+      const ov = await reportsAPI.overview();
+      if (ov.data.success) {
+        const c = ov.data.data.complaints;
+        const u = ov.data.data.users;
+        let ac = 0;
+        try { const ar = await assetsAPI.getAll(); if (ar.data.success) ac = ar.data.data.length; } catch {}
         setStats({
-          total: s.total, open: s.open, assigned: s.assigned,
-          inProgress: s.inProgress, closed: s.closed,
+          total: c.total, open: c.open, assigned: c.assigned,
+          inProgress: c.inProgress, closed: c.closed,
+          staffOnDuty: u.staffAvailable || 0, staffUnavailable: u.staffOnLeave || 0, totalAssets: ac,
         });
       }
-
-      // Fetch recent complaints
-      const complaintsResponse = await complaintsAPI.getAll();
-      if (complaintsResponse.data.success) {
-        setRecentComplaints(complaintsResponse.data.data.slice(0, 5));
-      }
-    } catch (error) {
-      console.error('Error:', error);
-    } finally {
-      setLoading(false);
-    }
+      const cr = await complaintsAPI.getAll();
+      if (cr.data.success) setRecentComplaints(cr.data.data.slice(0, 5));
+    } catch (e) { console.error(e); }
+    finally { setLoading(false); }
   };
+
+  const STAT_ROWS = [
+    { key: 'total',           value: stats.total,           label: t('totalComplaints'),      icon: 'list-outline',               color: ACTIVE },
+    { key: 'open',            value: stats.open,            label: t('openComplaints'),       icon: 'folder-open-outline',        color: OPEN },
+    { key: 'assigned',        value: stats.assigned,        label: t('assignedComplaints'),   icon: 'person-circle-outline',      color: ASSIGNED },
+    { key: 'inProgress',      value: stats.inProgress,      label: t('inProgressComplaints'), icon: 'sync-outline',               color: INPROGRESS },
+    { key: 'staffOnDuty',     value: stats.staffOnDuty,     label: t('staffOnDuty'),          icon: 'person-outline',             color: STAFFONDUTY },
+    { key: 'staffUnavailable',value: stats.staffUnavailable,label: t('staffUnavailable'),     icon: 'person-remove-outline',      color: STAFFUNAVAILABLE },
+    { key: 'totalAssets',     value: stats.totalAssets,     label: t('totalAssets'),          icon: 'cube-outline',               color: TOTALASSETS },
+    { key: 'closed',          value: stats.closed,          label: t('closedComplaints'),     icon: 'checkmark-circle-outline',   color: CLOSED },
+  ];
 
   const getStatusColor = (status) => {
     switch (status) {
-      case 'OPEN': return '#ff9800';
-      case 'ASSIGNED': return '#2196F3';
-      case 'IN_PROGRESS': return '#9C27B0';
-      case 'CLOSED': return '#4CAF50';
-      default: return '#666';
+      case 'OPEN': return OPEN; 
+      case 'ASSIGNED': return ASSIGNED;
+      case 'IN_PROGRESS': return INPROGRESS;
+      case 'CLOSED': return CLOSED;
+      default: return TOTALASSETS;
     }
   };
 
+  const s = StyleSheet.create({
+  subtitle: { fontSize: 13, color: TEXT_SEC, fontWeight: '500' },
+  statRow: { flexDirection: 'row', alignItems: 'center', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 14, shadowColor: '#A0BDD0', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 6, elevation: 2 },
+  statIconWrap: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  statLabel: { flex: 1, fontSize: 14, marginLeft: 12, fontWeight: '500', color: TEXT_SEC },
+  statValueWrap: { minWidth: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8 },
+  statValue: { fontSize: 16, fontWeight: '800' },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, marginTop: 4 },
+  sectionTitle: { fontSize: 18, fontWeight: '800', color: TEXT_PRI },
+  actionsRow: { flexDirection: 'row', gap: 10, marginBottom: 24 },
+  actionBtn: { flex: 1, height: 70, borderRadius: 14, alignItems: 'center', justifyContent: 'center', gap: 6, shadowColor: ACTIVE, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 8, elevation: 5 },
+  actionBtnText: { color: '#fff', fontSize: 11, fontWeight: '600', textAlign: 'center', lineHeight: 15 },
+  recentSection: { borderRadius: 14, padding: 6, shadowColor: '#A0BDD0', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 6, elevation: 2 },
+  recentRow: { flexDirection: 'row', alignItems: 'center', padding: 12, borderBottomWidth: 1, borderBottomColor: DIVIDER },
+  statusDot: { width: 8, height: 8, borderRadius: 4, marginRight: 10 },
+  recentAsset: { fontWeight: '700', fontSize: 14 },
+});
+
   return (
-    <ScrollView
-      style={styles.container}
-      refreshControl={<RefreshControl refreshing={loading} onRefresh={fetchData} />}
+    <ScreenLayout
+       title={`${t('welcome')}, ${user?.full_name || 'Admin'}!`}
+      refreshing={loading}
+      onRefresh={fetchData}
     >
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.greeting}>Welcome, Admin! 👑</Text>
-          <Text style={styles.subtitle}>{user?.email}</Text>
-        </View>
-        <TouchableOpacity onPress={signOut} style={styles.logoutBtn}>
-          <Text style={styles.logoutText}>Logout</Text>
-        </TouchableOpacity>
-      </View>
+      <Text style={s.subtitle}>{t('trackManage')}</Text>
 
-      <Text style={styles.sectionTitle}>📊 Overview</Text>
-      <View style={styles.statsGrid}>
-        <View style={[styles.statCard, styles.statTotal]}>
-          <Text style={styles.statNumber}>{stats.total}</Text>
-          <Text style={styles.statLabel}>Total</Text>
-        </View>
-        <View style={[styles.statCard, { backgroundColor: '#ff9800' }]}>
-          <Text style={styles.statNumber}>{stats.open}</Text>
-          <Text style={styles.statLabel}>Open</Text>
-        </View>
-        <View style={[styles.statCard, { backgroundColor: '#2196F3' }]}>
-          <Text style={styles.statNumber}>{stats.assigned}</Text>
-          <Text style={styles.statLabel}>Assigned</Text>
-        </View>
-        <View style={[styles.statCard, { backgroundColor: '#9C27B0' }]}>
-          <Text style={styles.statNumber}>{stats.inProgress}</Text>
-          <Text style={styles.statLabel}>In Progress</Text>
-        </View>
-        <View style={[styles.statCard, { backgroundColor: '#4CAF50' }]}>
-          <Text style={styles.statNumber}>{stats.closed}</Text>
-          <Text style={styles.statLabel}>Closed</Text>
-        </View>
-      </View>
-
-      <Text style={styles.sectionTitle}>⚡ Quick Actions</Text>
-      <View style={styles.actionsRow}>
-        <TouchableOpacity style={styles.actionCard} onPress={() => navigation.navigate('Complaints')}>
-          <Text style={styles.actionIcon}>📋</Text>
-          <Text style={styles.actionText}>View All Complaints</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={[styles.actionCard, { backgroundColor: '#fff3e0' }]} onPress={() => navigation.navigate('Complaints')}>
-          <Text style={styles.actionIcon}>🔔</Text>
-          <Text style={styles.actionText}>{stats.open} Need Assignment</Text>
-        </TouchableOpacity>
-      </View>
-
-      <Text style={styles.sectionTitle}>🕐 Recent Complaints</Text>
-      <View style={styles.recentList}>
-        {recentComplaints.map((item, index) => (
-          <View key={item._id || index} style={styles.recentItem}>
-            <View style={[styles.statusDot, { backgroundColor: getStatusColor(item.status) }]} />
-            <View style={styles.recentInfo}>
-              <Text style={styles.recentAsset}>{item.asset_id}</Text>
-              <Text style={styles.recentLocation}>{item.assets?.location}</Text>
+      {/* Stat rows */}
+      <View style={{ gap: 8, marginBottom: 20, marginTop: 16 }}>
+        {STAT_ROWS.map(({ key, value, label, icon, color }) => (
+          <View key={key} style={[s.statRow, { backgroundColor: CARD_BG }]}>
+            <View style={[s.statIconWrap, { backgroundColor: `${color}15` }]}>
+              <Ionicons name={icon} size={20} color={color} />
             </View>
-            <Text style={styles.recentTime}>{new Date(item.created_at).toLocaleDateString()}</Text>
+            <Text style={s.statLabel}>{label}</Text>
+            <View style={[s.statValueWrap, { backgroundColor: `${color}15` }]}>
+              <Text style={[s.statValue, { color }]}>{value}</Text>
+            </View>
           </View>
         ))}
-        {recentComplaints.length === 0 && (
-          <Text style={styles.noDataText}>No complaints yet</Text>
-        )}
       </View>
 
-      <View style={styles.spacer} />
-    </ScrollView>
+      {/* Quick Actions */}
+      <View style={s.sectionHeader}>
+        <AntDesign name="appstore" size={18} color={TEXT_PRI} />
+        <Text style={s.sectionTitle}>  {t('quickActions')}</Text>
+      </View>
+      <View style={s.actionsRow}>
+        <TouchableOpacity style={[s.actionBtn, { backgroundColor: ACTIVE }]} onPress={() => navigation.navigate('Complaints')} activeOpacity={0.85}>
+          <Ionicons name="clipboard-outline" size={22} color="#fff" />
+          <Text style={s.actionBtnText}>{t('viewAllComplaints')}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[s.actionBtn, { backgroundColor: stats.open > 0 ? SLATE : ACTIVE }]}
+          onPress={() => navigation.navigate('Complaints', { screen: 'ComplaintsList', params: { initialFilter: 'OPEN' } })}
+          activeOpacity={0.85}
+        >
+          <Ionicons name="notifications-outline" size={22} color="#fff" />
+          <Text style={s.actionBtnText}>{stats.open} {t('needAssignment')}</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Recent Complaints */}
+      <View style={s.sectionHeader}>
+        <Ionicons name="time-outline" size={18} color={TEXT_PRI} />
+        <Text style={s.sectionTitle}>  {t('recentComplaints')}</Text>
+      </View>
+      <View style={[s.recentSection, { backgroundColor: CARD_BG }]}>
+        {recentComplaints.length === 0 ? (
+          <View style={{ alignItems: 'center', padding: 30 }}>
+            <Ionicons name="document-text-outline" size={40} color={TEXT_MUT} />
+            <Text style={{ color: TEXT_MUT, marginTop: 10 }}>{t('noComplaints')}</Text>
+          </View>
+        ) : (
+          recentComplaints.map((item, idx) => (
+            <TouchableOpacity
+              key={item._id || idx}
+              style={[s.recentRow, idx === recentComplaints.length - 1 && { borderBottomWidth: 0 }]}
+               onPress={() => navigation.navigate('Complaints', { 
+                screen: 'ComplaintDetail', 
+                params: { complaint: item } 
+              })}
+              activeOpacity={0.7}
+            >
+              <View style={[s.statusDot, { backgroundColor: getStatusColor(item.status) }]} />
+              <View style={{ flex: 1 }}>
+                <Text style={[s.recentAsset, { color: TEXT_PRI }]}>{item.asset_id}</Text>
+                <Text style={{ color: TEXT_MUT, fontSize: 12, marginTop: 2 }}>{item.assets?.location}</Text>
+              </View>
+              <Text style={{ color: TEXT_MUT, fontSize: 10 }}>
+                {new Date(item.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
+              </Text>
+            </TouchableOpacity>
+          ))
+        )}
+      </View>
+    </ScreenLayout>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f5f5f5' },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, backgroundColor: '#9C27B0' },
-  greeting: { fontSize: 22, fontWeight: 'bold', color: 'white' },
-  subtitle: { color: 'rgba(255,255,255,0.8)', marginTop: 3, fontSize: 13 },
-  logoutBtn: { backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 15, paddingVertical: 8, borderRadius: 20 },
-  logoutText: { color: 'white', fontSize: 13 },
-  sectionTitle: { fontSize: 16, fontWeight: 'bold', color: '#333', marginHorizontal: 15, marginTop: 20, marginBottom: 10 },
-  statsGrid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 10 },
-  statCard: { width: (screenWidth - 45) / 3, margin: 5, padding: 15, borderRadius: 12, alignItems: 'center' },
-  statTotal: { backgroundColor: '#333', width: (screenWidth - 35) / 2 - 5 },
-  statNumber: { fontSize: 28, fontWeight: 'bold', color: 'white' },
-  statLabel: { color: 'rgba(255,255,255,0.9)', marginTop: 5, fontSize: 12 },
-  actionsRow: { flexDirection: 'row', paddingHorizontal: 10 },
-  actionCard: { flex: 1, margin: 5, padding: 20, backgroundColor: '#e3f2fd', borderRadius: 12, alignItems: 'center' },
-  actionIcon: { fontSize: 30, marginBottom: 8 },
-  actionText: { fontSize: 13, color: '#333', textAlign: 'center' },
-  recentList: { backgroundColor: 'white', marginHorizontal: 15, borderRadius: 12, padding: 10 },
-  recentItem: { flexDirection: 'row', alignItems: 'center', padding: 10, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
-  statusDot: { width: 10, height: 10, borderRadius: 5, marginRight: 12 },
-  recentInfo: { flex: 1 },
-  recentAsset: { fontWeight: 'bold', color: '#333' },
-  recentLocation: { color: '#666', fontSize: 12, marginTop: 2 },
-  recentTime: { color: '#999', fontSize: 12 },
-  noDataText: { textAlign: 'center', color: '#999', padding: 20 },
-  spacer: { height: 30 },
-});

@@ -6,6 +6,7 @@ import {
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { complaintsAPI, getFileUrl } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
+import ProfileMenu from '../../components/ProfileMenu';
 
 // ============================================
 // MyComplaints — REWRITTEN for MongoDB
@@ -151,6 +152,7 @@ export default function MyComplaints() {
 
   return (
     <View style={styles.container}>
+      <ProfileMenu />
       <View style={styles.tabContainer}>
         <FlatList
           horizontal showsHorizontalScrollIndicator={false}

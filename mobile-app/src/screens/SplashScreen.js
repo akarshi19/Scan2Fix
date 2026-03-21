@@ -47,7 +47,7 @@ export default function SplashScreen({ onFinish }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,                        // Take full screen
-    backgroundColor: '#2196F3',     // Nice blue background
+    backgroundColor: '#7DD3F0',     
     justifyContent: 'center',       // Center content vertically
     alignItems: 'center',           // Center content horizontally
   },

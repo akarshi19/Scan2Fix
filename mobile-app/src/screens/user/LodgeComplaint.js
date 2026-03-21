@@ -7,6 +7,7 @@ import { TextInput, Button } from 'react-native-paper';
 import * as ImagePicker from 'expo-image-picker';
 import { complaintsAPI, uploadAPI } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
+import ProfileMenu from '../../components/ProfileMenu';
 
 // ============================================
 // LodgeComplaint — REWRITTEN for MongoDB
@@ -151,7 +152,9 @@ export default function LodgeComplaint({ route, navigation }) {
   };
 
   return (
+    
     <ScrollView style={styles.container} keyboardShouldPersistTaps="handled">
+      <ProfileMenu/>
       <View style={styles.assetCard}>
         <View style={styles.assetHeader}>
           <Text style={styles.assetIcon}>{getAssetIcon(assetType)}</Text>

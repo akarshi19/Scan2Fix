@@ -29,15 +29,6 @@ const generateOTP = require('../utils/generateOTP');
 // POST /api/complaints
 // ────────────────────────────────────────
 // Create a new complaint (USER role)
-//
-// Replaces (LodgeComplaint.js):
-//   const { data, error } = await supabase.from('complaints').insert({
-//     asset_id: assetId,
-//     user_id: user.id,
-//     description: description.trim(),
-//     photo_url: photoUrl,
-//     status: 'OPEN',
-//   }).select();
 // ────────────────────────────────────────
 exports.createComplaint = async (req, res) => {
   try {
@@ -111,7 +102,7 @@ exports.getMyComplaints = async (req, res) => {
   try {
     const complaints = await Complaint.find({ user_id: req.user._id })
       .populate('asset', 'type location')
-      .populate('assigned_staff_id', 'full_name email photo_url')
+      .populate('assigned_staff_id', 'full_name email photo_url is_on_leave')
       .sort({ created_at: -1 });
 
     // Transform to match Supabase response shape
@@ -130,6 +121,7 @@ exports.getMyComplaints = async (req, res) => {
               full_name: obj.assigned_staff_id.full_name,
               email: obj.assigned_staff_id.email,
               photo_url: obj.assigned_staff_id.photo_url,
+              is_on_leave: obj.assigned_staff_id.is_on_leave, 
             }
           : null,
         // Keep assigned_staff_id as just the ID string for compatibility
@@ -176,7 +168,7 @@ exports.getAllComplaints = async (req, res) => {
 
     const complaints = await Complaint.find(filter)
       .populate('asset', 'type location')
-      .populate('assigned_staff_id', 'full_name email photo_url')
+      .populate('assigned_staff_id', 'full_name email photo_url is_on_leave')
       .populate('user_id', 'full_name email')
       .sort({ created_at: -1 });
 
@@ -194,6 +186,7 @@ exports.getAllComplaints = async (req, res) => {
               full_name: obj.assigned_staff_id.full_name,
               email: obj.assigned_staff_id.email,
               photo_url: obj.assigned_staff_id.photo_url,
+              is_on_leave: obj.assigned_staff_id.is_on_leave, 
             }
           : null,
         reporter: obj.user_id
@@ -305,6 +298,7 @@ exports.getComplaintById = async (req, res) => {
             full_name: obj.assigned_staff_id.full_name,
             email: obj.assigned_staff_id.email,
             photo_url: obj.assigned_staff_id.photo_url,
+            is_on_leave: obj.assigned_staff_id.is_on_leave, 
           }
         : null,
       reporter: obj.user_id

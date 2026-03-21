@@ -109,6 +109,7 @@ const seedData = async () => {
       { asset_id: 'AC-1F-102', type: 'AC', location: '1st Floor, Room 102', brand: 'Daikin', model: 'FTL50TV16' },
       { asset_id: 'AC-2F-201', type: 'AC', location: '2nd Floor, Room 201', brand: 'LG', model: 'MS-Q18' },
       { asset_id: 'AC-3F-301', type: 'AC', location: '3rd Floor, Conference Room', brand: 'Blue Star', model: 'IC318' },
+      { asset_id: 'AC-3F-302', type: 'AC', location: '4th Floor, Conference Room', brand: 'Blue Star', model: 'IC319' },
 
       // Water Coolers
       { asset_id: 'WC-1F-001', type: 'WATER_COOLER', location: '1st Floor, Lobby', brand: 'Voltas', model: 'WC-40' },
@@ -189,6 +190,22 @@ const seedData = async () => {
       status: 'OPEN',
     });
     console.log('   ✅ Complaint 5: OPEN (Water cooler leaking)');
+    await Complaint.create({
+      user_id: user1._id,
+      asset: assets[6]._id,
+      asset_id: assets[6].asset_id,
+      description: 'Water cooler is leaking from the bottom. Water pooling on the floor near the pantry.',
+      status: 'OPEN',
+    });
+    console.log('   ✅ Complaint 6: OPEN (Water cooler leaking)');
+    await Complaint.create({
+      user_id: user1._id,
+      asset: assets[7]._id,
+      asset_id: assets[7].asset_id,
+      description: 'Desert cooler is not cooling properly. Room temperature stays above 30 degrees even after running for 2 hours.',
+      status: 'OPEN',
+    });
+    console.log('   ✅ Complaint 7: OPEN (Desert cooler not cooling)');
 
     // ════════════════════════════════════════
     // SUMMARY

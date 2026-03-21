@@ -102,6 +102,23 @@ const userSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    auth_provider: {
+      type: String,
+      enum: ['local', 'google', 'microsoft', 'apple'],
+      default: 'local',
+    },
+    google_id: {
+      type: String,
+      default: null,
+    },
+     reset_code: {
+      type: String,
+      default: null,
+    },
+    reset_code_expires: {
+      type: Date,
+      default: null,
+    },
   },
   {
     // ── Schema Options ──
