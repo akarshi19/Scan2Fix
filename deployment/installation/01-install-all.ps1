@@ -1,12 +1,6 @@
 # ============================================
 # SCAN2FIX — Master Installation Script
 # ============================================
-# Run this on a FRESH machine to install everything
-# Run as Administrator!
-#
-# Usage: Right-click → Run with PowerShell (as Admin)
-# Or:    powershell -ExecutionPolicy Bypass -File 01-install-all.ps1
-# ============================================
 
 Write-Host ""
 Write-Host "═══════════════════════════════════════════════" -ForegroundColor Cyan
@@ -41,7 +35,9 @@ function Show-Step {
 Show-Step "Checking Node.js..."
 
 $nodeVersion = $null
-try { $nodeVersion = node --version 2>$null } catch {}
+try { 
+    $nodeVersion = node --version 2>$null 
+} catch {}
 
 if ($nodeVersion) {
     Write-Host "  ✅ Node.js already installed: $nodeVersion" -ForegroundColor Green
@@ -102,7 +98,9 @@ if ($mongoRunning) {
 Show-Step "Checking ngrok..."
 
 $ngrokVersion = $null
-try { $ngrokVersion = ngrok version 2>$null } catch {}
+try { 
+    $ngrokVersion = ngrok version 2>$null 
+} catch {}
 
 if ($ngrokVersion) {
     Write-Host "  ✅ ngrok already installed: $ngrokVersion" -ForegroundColor Green
@@ -128,7 +126,9 @@ if ($ngrokVersion) {
 Show-Step "Checking PM2..."
 
 $pm2Version = $null
-try { $pm2Version = pm2 --version 2>$null } catch {}
+try { 
+    $pm2Version = pm2 --version 2>$null 
+} catch {}
 
 if ($pm2Version) {
     Write-Host "  ✅ PM2 already installed: $pm2Version" -ForegroundColor Green
@@ -143,14 +143,14 @@ if ($pm2Version) {
 # ────────────────────────────────────────
 Show-Step "Installing server dependencies..."
 
-$serverPath = "C:\Projects\Scan2Fix\server"
+$serverPath = Join-Path $PSScriptRoot "..\..\server"
 if (Test-Path $serverPath) {
     Set-Location $serverPath
     npm install
     Write-Host "  ✅ Server dependencies installed" -ForegroundColor Green
 } else {
     Write-Host "  ❌ Server folder not found at $serverPath" -ForegroundColor Red
-    Write-Host "  Please make sure the project is at C:\Projects\Scan2Fix\" -ForegroundColor Yellow
+    Write-Host "  Current location: $PSScriptRoot" -ForegroundColor Yellow
 }
 
 # ────────────────────────────────────────
@@ -158,13 +158,13 @@ if (Test-Path $serverPath) {
 # ────────────────────────────────────────
 Show-Step "Installing mobile app dependencies..."
 
-$mobilePath = "C:\Projects\Scan2Fix\mobile-app"
+$mobilePath = Join-Path $PSScriptRoot "..\..\mobile-app"
 if (Test-Path $mobilePath) {
     Set-Location $mobilePath
     npm install
     Write-Host "  ✅ Mobile app dependencies installed" -ForegroundColor Green
 } else {
-    Write-Host "  ❌ Mobile app folder not found at $mobilePath" -ForegroundColor Yellow
+    Write-Host "  ⚠️ Mobile app folder not found at $mobilePath" -ForegroundColor Yellow
 }
 
 # ────────────────────────────────────────
@@ -172,13 +172,13 @@ if (Test-Path $mobilePath) {
 # ────────────────────────────────────────
 Show-Step "Configuring server environment..."
 
-$envPath = "C:\Projects\Scan2Fix\server\.env"
+$envPath = Join-Path $PSScriptRoot "..\..\server\.env"
 if (Test-Path $envPath) {
     $envContent = Get-Content $envPath -Raw
     
     if ($envContent -match "your_super_secret") {
         Write-Host "  🔑 Generating strong JWT secret..." -ForegroundColor Cyan
-        $secret = node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
+        $secret = -join ((48..57) + (65..90) + (97..122) | Get-Random -Count 64 | ForEach-Object {[char]$_})
         $envContent = $envContent -replace "your_super_secret_jwt_key_change_this_in_production_2025", $secret
         $envContent | Out-File -FilePath $envPath -Encoding UTF8 -NoNewline
         Write-Host "  ✅ JWT secret updated" -ForegroundColor Green
@@ -186,7 +186,7 @@ if (Test-Path $envPath) {
         Write-Host "  ✅ JWT secret already configured" -ForegroundColor Green
     }
 } else {
-    Write-Host "  ❌ .env file not found. Please create it." -ForegroundColor Red
+    Write-Host "  ⚠️ .env file not found. Please create it." -ForegroundColor Yellow
 }
 
 # ────────────────────────────────────────
@@ -194,10 +194,11 @@ if (Test-Path $envPath) {
 # ────────────────────────────────────────
 Show-Step "Creating required folders..."
 
+$projectRoot = Join-Path $PSScriptRoot "..\.."
 $folders = @(
-    "C:\Projects\Scan2Fix\server\uploads\profiles",
-    "C:\Projects\Scan2Fix\server\uploads\complaints",
-    "C:\Projects\Scan2Fix\server\logs",
+    (Join-Path $projectRoot "server\uploads\profiles"),
+    (Join-Path $projectRoot "server\uploads\complaints"),
+    (Join-Path $projectRoot "server\logs"),
     "C:\Backups\scan2fix"
 )
 
@@ -226,9 +227,9 @@ Write-Host "  ✅ Server dependencies" -ForegroundColor Gray
 Write-Host "  ✅ Mobile app dependencies" -ForegroundColor Gray
 Write-Host ""
 Write-Host "  NEXT STEPS:" -ForegroundColor Yellow
-Write-Host "  1. Run: 02-setup-mongodb.ps1  (if MongoDB needs config)" -ForegroundColor White
-Write-Host "  2. Run: 03-setup-ngrok.ps1    (configure ngrok + domain)" -ForegroundColor White
-Write-Host "  3. Run: 04-setup-pm2.ps1      (configure auto-start)" -ForegroundColor White
-Write-Host "  4. Run: 05-seed-database.ps1  (create test data)" -ForegroundColor White
+Write-Host "  1. Run: .\deployment\installation\02-setup-mongodb.ps1" -ForegroundColor White
+Write-Host "  2. Run: .\deployment\installation\03-setup-ngrok.ps1" -ForegroundColor White
+Write-Host "  3. Run: .\deployment\installation\04-setup-pm2.ps1" -ForegroundColor White
+Write-Host "  4. Run: .\deployment\installation\05-seed-database.ps1" -ForegroundColor White
 Write-Host ""
 pause
