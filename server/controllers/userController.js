@@ -1,38 +1,22 @@
-// ============================================
 // User Management Controller
-// ============================================
-// Admin manages all users — create, edit, toggle leave
-//
-// SUPABASE CALLS THIS REPLACES:
-// ─────────────────────────────
-// P2.  SELECT * FROM profiles WHERE role='STAFF'             → getStaffList
-// P4.  SELECT * FROM profiles ORDER BY created_at DESC       → getAllUsers
-// P10. INSERT profiles {id,email,full_name,role,phone,...}   → createUser (AddUser.js)
-// P11. UPDATE {is_on_leave,leave_reason} WHERE id            → toggleLeave (ManageUsers.js)
-// P15. UPDATE {full_name,phone,designation,employee_id}      → updateUser (UserDetail.js)
-// P16. UPDATE {is_on_leave} WHERE id                         → toggleLeave (UserDetail.js)
-// P17. UPDATE {photo_url} WHERE id                           → (handled by upload route)
-//
-// ALSO REPLACES (AddUser.js):
-//   supabase.auth.signUp({ email, password })  ← was creating auth user
-//   supabase.from('profiles').insert({...})    ← was creating profile
-//   Now ONE call creates both (User model has auth+profile)
-// ============================================
+// Admin manages all users — create, edit, toggle leave, delete
 
 const User = require('../models/User');
 const generateToken = require('../utils/generateToken');
+const dns = require('dns').promises;
 
-// ────────────────────────────────────────
+// Email verification helper
+const verifyEmailDomain = async (email) => {
+  try {
+    const domain = email.split('@')[1];
+    const addresses = await dns.resolveMx(domain);
+    return addresses && addresses.length > 0;
+  } catch (error) {
+    return false;
+  }
+};
+
 // GET /api/users
-// ────────────────────────────────────────
-// Get all users (ADMIN only)
-//
-// Replaces (ManageUsers.js):
-//   const { data, error } = await supabase
-//     .from('profiles')
-//     .select('*')
-//     .order('created_at', { ascending: false });
-// ────────────────────────────────────────
 exports.getAllUsers = async (req, res) => {
   try {
     const { role, search } = req.query;
@@ -71,17 +55,7 @@ exports.getAllUsers = async (req, res) => {
   }
 };
 
-// ────────────────────────────────────────
 // GET /api/users/staff
-// ────────────────────────────────────────
-// Get only STAFF members (used in assignment dropdown)
-//
-// Replaces (ComplaintDetail.js):
-//   const { data, error } = await supabase
-//     .from('profiles')
-//     .select('id, email, full_name, photo_url, is_on_leave, is_available')
-//     .eq('role', 'STAFF');
-// ────────────────────────────────────────
 exports.getStaffList = async (req, res) => {
   try {
     const staff = await User.find({ role: 'STAFF' }).sort({ full_name: 1 });
@@ -102,15 +76,7 @@ exports.getStaffList = async (req, res) => {
   }
 };
 
-// ────────────────────────────────────────
 // GET /api/users/:id
-// ────────────────────────────────────────
-// Get single user details (ADMIN only)
-//
-// Replaces: Direct supabase query in UserDetail.js
-// (UserDetail.js received user data via navigation params,
-//  but this endpoint is useful for refreshing)
-// ────────────────────────────────────────
 exports.getUserById = async (req, res) => {
   try {
     const user = await User.findById(req.params.id);
@@ -135,25 +101,7 @@ exports.getUserById = async (req, res) => {
   }
 };
 
-// ────────────────────────────────────────
 // POST /api/users
-// ────────────────────────────────────────
-// Create a new user (ADMIN only)
-//
-// Replaces (AddUser.js):
-//   // Step 1: Create auth user
-//   const { data: authData, error: authError } = await supabase.auth.signUp({
-//     email, password
-//   });
-//   // Step 2: Create profile
-//   const { error: profileError } = await supabase.from('profiles').insert({
-//     id: authData.user.id,
-//     email, full_name, role, phone, designation, employee_id,
-//     is_available: true, is_on_leave: false,
-//   });
-//
-// NOW: One single API call creates both auth + profile
-// ────────────────────────────────────────
 exports.createUser = async (req, res) => {
   try {
     const {
@@ -164,6 +112,7 @@ exports.createUser = async (req, res) => {
       phone,
       designation,
       employee_id,
+      photo_url,
     } = req.body;
 
     // Validate required fields
@@ -174,11 +123,58 @@ exports.createUser = async (req, res) => {
       });
     }
 
+    // Email validation
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please enter a valid email address',
+      });
+    }
+
+    // Verify email domain exists
+    const dns = require('dns').promises;
+    try {
+      const domain = email.split('@')[1];
+      const addresses = await dns.resolveMx(domain);
+      if (!addresses || addresses.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Email domain does not exist',
+          requiresManualVerification: true,
+        });
+      }
+    } catch (dnsError) {
+      // Domain doesn't exist - require verification code
+      return res.status(400).json({
+        success: false,
+        message: 'Unable to verify email domain. Verification code required.',
+        requiresManualVerification: true,
+      });
+    }
+
     if (password.length < 6) {
       return res.status(400).json({
         success: false,
         message: 'Password must be at least 6 characters',
       });
+    }
+
+    // Indian phone validation
+    if (phone) {
+      const phoneDigits = phone.replace(/\D/g, '');
+      if (phoneDigits.length !== 10) {
+        return res.status(400).json({
+          success: false,
+          message: 'Phone number must be exactly 10 digits',
+        });
+      }
+      if (!/^[6-9]/.test(phoneDigits)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid Indian phone number. Must start with 6, 7, 8, or 9',
+        });
+      }
     }
 
     if (!phone) {
@@ -198,12 +194,20 @@ exports.createUser = async (req, res) => {
       });
     }
 
-    // Staff must have employee_id
-    if (userRole === 'STAFF' && !employee_id) {
-      return res.status(400).json({
-        success: false,
-        message: 'Employee ID is required for staff members',
-      });
+    // Staff must have employee_id and photo
+    if (userRole === 'STAFF') {
+      if (!employee_id) {
+        return res.status(400).json({
+          success: false,
+          message: 'Employee ID is required for staff members',
+        });
+      }
+      if (!photo_url) {
+        return res.status(400).json({
+          success: false,
+          message: 'Photo is required for staff members',
+        });
+      }
     }
 
     // Check if email already exists
@@ -221,9 +225,10 @@ exports.createUser = async (req, res) => {
       password,
       full_name: full_name.trim(),
       role: userRole,
-      phone: phone.trim(),
+      phone: phone.replace(/\D/g, ''),
       designation: userRole === 'STAFF' ? designation || 'JUNIOR' : null,
       employee_id: userRole === 'STAFF' ? employee_id.trim() : null,
+      photo_url: photo_url || '',
       is_available: true,
       is_on_leave: false,
     });
@@ -250,28 +255,58 @@ exports.createUser = async (req, res) => {
   }
 };
 
-// ────────────────────────────────────────
 // PUT /api/users/:id
-// ────────────────────────────────────────
-// Update user details (ADMIN only)
-//
-// Replaces (UserDetail.js):
-//   const { error } = await supabase
-//     .from('profiles')
-//     .update({
-//       full_name, phone, designation, employee_id,
-//     })
-//     .eq('id', user.id);
-// ────────────────────────────────────────
 exports.updateUser = async (req, res) => {
   try {
-    const { full_name, phone, designation, employee_id } = req.body;
+    const { full_name, phone, designation, employee_id, email } = req.body;
 
     const updateFields = {};
     if (full_name !== undefined) updateFields.full_name = full_name.trim();
-    if (phone !== undefined) updateFields.phone = phone.trim();
+    
+    // Phone validation
+    if (phone !== undefined) {
+      const phoneDigits = phone.replace(/\D/g, '');
+      if (phone && phoneDigits.length !== 10) {
+        return res.status(400).json({
+          success: false,
+          message: 'Phone number must be exactly 10 digits',
+        });
+      }
+      updateFields.phone = phoneDigits;
+    }
+
     if (designation !== undefined) updateFields.designation = designation;
     if (employee_id !== undefined) updateFields.employee_id = employee_id;
+
+    // Email update with verification
+    if (email !== undefined) {
+      const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+      if (!emailRegex.test(email)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Please enter a valid email address',
+        });
+      }
+
+      const domainExists = await verifyEmailDomain(email);
+      if (!domainExists) {
+        return res.status(400).json({
+          success: false,
+          message: 'Email domain does not exist. Please check the email address.',
+          requiresVerification: true,
+        });
+      }
+
+      const existingUser = await User.findOne({ email: email.toLowerCase() });
+      if (existingUser && existingUser._id.toString() !== req.params.id) {
+        return res.status(400).json({
+          success: false,
+          message: 'This email is already in use by another account',
+        });
+      }
+
+      updateFields.email = email.toLowerCase();
+    }
 
     const user = await User.findByIdAndUpdate(req.params.id, updateFields, {
       new: true,
@@ -299,20 +334,55 @@ exports.updateUser = async (req, res) => {
   }
 };
 
-// ────────────────────────────────────────
+// DELETE /api/users/:id
+exports.deleteUser = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found',
+      });
+    }
+
+    const MASTER_ADMIN_EMAIL = 'adminscan2fix@gmail.com';
+    const MASTER_ADMIN_USERNAME = 'Scan2fix_Admin';
+
+    // Check if target user is master admin
+    if (user.email === MASTER_ADMIN_EMAIL || user.full_name === MASTER_ADMIN_USERNAME) {
+      return res.status(403).json({
+        success: false,
+        message: 'Master admin account cannot be deleted',
+      });
+    }
+
+    // Only master admin can delete other admins
+    if (user.role === 'ADMIN') {
+      if (req.user.email !== MASTER_ADMIN_EMAIL) {
+        return res.status(403).json({
+          success: false,
+          message: 'Only the master admin can delete admin accounts',
+        });
+      }
+    }
+
+    await User.findByIdAndDelete(req.params.id);
+
+    res.status(200).json({
+      success: true,
+      message: `User ${user.full_name || user.email} has been deleted`,
+    });
+  } catch (error) {
+    console.error('Delete user error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error deleting user',
+    });
+  }
+};
+
 // PUT /api/users/:id/toggle-leave
-// ────────────────────────────────────────
-// Toggle staff leave status
-//
-// Replaces (ManageUsers.js + UserDetail.js + StaffDashboard.js):
-//   const { error } = await supabase
-//     .from('profiles')
-//     .update({
-//       is_on_leave: newStatus,
-//       leave_reason: newStatus ? 'Marked by Admin' : null
-//     })
-//     .eq('id', userId);
-// ────────────────────────────────────────
 exports.toggleLeave = async (req, res) => {
   try {
     const { leave_reason } = req.body;
@@ -353,17 +423,7 @@ exports.toggleLeave = async (req, res) => {
   }
 };
 
-// ────────────────────────────────────────
 // PUT /api/users/self/toggle-leave
-// ────────────────────────────────────────
-// Staff toggles their OWN leave status
-//
-// Replaces (StaffDashboard.js):
-//   const { error } = await supabase
-//     .from('profiles')
-//     .update({ is_on_leave: true, leave_reason: 'Self-marked' })
-//     .eq('id', user.id);
-// ────────────────────────────────────────
 exports.toggleSelfLeave = async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
@@ -399,18 +459,7 @@ exports.toggleSelfLeave = async (req, res) => {
   }
 };
 
-// ────────────────────────────────────────
 // GET /api/users/self/leave-status
-// ────────────────────────────────────────
-// Get own leave status (STAFF)
-//
-// Replaces (StaffDashboard.js):
-//   const { data, error } = await supabase
-//     .from('profiles')
-//     .select('is_on_leave, leave_reason, leave_until')
-//     .eq('id', user.id)
-//     .single();
-// ────────────────────────────────────────
 exports.getLeaveStatus = async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
@@ -428,6 +477,25 @@ exports.getLeaveStatus = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Server error',
+    });
+  }
+};
+
+// GET /api/users/designations
+exports.getDesignations = async (req, res) => {
+  try {
+    const designations = await User.distinct('designation', {
+      designation: { $ne: null, $ne: '' },
+    });
+    res.status(200).json({
+      success: true,
+      data: designations.filter(Boolean).sort(),
+    });
+  } catch (error) {
+    console.error('Get designations error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error fetching designations',
     });
   }
 };

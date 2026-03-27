@@ -1,6 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity, Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
@@ -15,7 +16,6 @@ export default function StaffDashboard({ navigation, route }) {
   const { colors } = useTheme();
   const { t } = useLanguage();
 
-  // Get status filter from route params (set by StaffStack tabs)
   const statusFilter = route?.params?.statusFilter || 'ASSIGNED';
 
   const [jobs, setJobs] = useState([]);
@@ -52,40 +52,41 @@ export default function StaffDashboard({ navigation, route }) {
   };
 
   const toggleLeaveStatus = async () => {
-    setLeaveLoading(true);
+    const title = !isOnLeave ? '🏖️ Go On Leave?' : 'Come Back?';
     const message = !isOnLeave
-      ? 'You will not receive new task assignments while on leave. Continue?'
-      : 'You will start receiving new task assignments. Continue?';
+      ? 'You will NOT receive new task assignments while on leave.\n\nYour existing tasks will remain assigned to you until reassigned by Admin.'
+      : 'You will start receiving new task assignments again.';
 
-    Alert.alert(
-      !isOnLeave ? t('markOnLeave') : t('markAvailable'),
-      message,
-      [
-        { text: t('cancel'), style: 'cancel', onPress: () => setLeaveLoading(false) },
-        {
-          text: 'Yes',
-          onPress: async () => {
-            try {
-              const response = await usersAPI.toggleSelfLeave();
-              if (response.data.success) {
-                setIsOnLeave(!isOnLeave);
-                Alert.alert(t('success'), response.data.message);
-              }
-            } catch (error) {
-              Alert.alert(t('error'), error.message);
-            } finally {
-              setLeaveLoading(false);
+    Alert.alert(title, message, [
+      { text: t('cancel'), style: 'cancel' },
+      {
+        text: !isOnLeave ? 'Yes, Go On Leave' : 'Yes, I\'m Available',
+        style: !isOnLeave ? 'destructive' : 'default',
+        onPress: async () => {
+          setLeaveLoading(true);
+          try {
+            const response = await usersAPI.toggleSelfLeave();
+            if (response.data.success) {
+              setIsOnLeave(!isOnLeave);
+              Alert.alert(
+                !isOnLeave ? '🏖️ On Leave' : 'Welcome Back!',
+                response.data.message
+              );
             }
-          },
+          } catch (error) {
+            Alert.alert(t('error'), error.response?.data?.message || error.message);
+          } finally {
+            setLeaveLoading(false);
+          }
         },
-      ]
-    );
+      },
+    ]);
   };
 
-  // Determine which JobDetails screen to navigate to based on current tab
   const getJobDetailsScreen = () => {
     if (statusFilter === 'IN_PROGRESS') return 'JobDetailsIP';
     if (statusFilter === 'CLOSED') return 'JobDetailsC';
+    if (statusFilter === 'FINISHING') return 'JobDetailsF';
     return 'JobDetails';
   };
 
@@ -105,7 +106,9 @@ export default function StaffDashboard({ navigation, route }) {
         <Ionicons name="location-outline" size={14} color={colors.textMut} />
         <Text style={[s.location, { color: colors.textSec }]}> {item.assets?.location}</Text>
       </View>
-      <Text style={[s.description, { color: colors.textSec }]} numberOfLines={2}>{item.description}</Text>
+      <Text style={[s.description, { color: colors.textSec }]} numberOfLines={2}>
+        {item.description}
+      </Text>
       {item.photo_url && (
         <View style={s.photoIndicator}>
           <Ionicons name="image-outline" size={14} color={colors.textMut} />
@@ -114,7 +117,9 @@ export default function StaffDashboard({ navigation, route }) {
       )}
       <View style={[s.cardFooter, { borderTopColor: colors.divider }]}>
         <Text style={[s.date, { color: colors.textMut }]}>
-          {new Date(item.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+          {new Date(item.created_at).toLocaleDateString('en-GB', {
+            day: '2-digit', month: 'short', year: 'numeric',
+          })}
         </Text>
         <View style={s.tapHintRow}>
           <Text style={[s.tapHint, { color: colors.active }]}>View details</Text>
@@ -124,81 +129,137 @@ export default function StaffDashboard({ navigation, route }) {
     </TouchableOpacity>
   );
 
-  const getTitle = () => {
-    switch (statusFilter) {
-      case 'ASSIGNED': return t('notStarted');
-      case 'IN_PROGRESS': return t('inProgress');
-      case 'CLOSED': return t('completed');
-      default: return t('myJobs');
-    }
-  };
+  // ═══════════════════════════════════════
+  // List Header — rendered inside FlatList
+  // ═══════════════════════════════════════
+  const ListHeader = () => (
+    <View>
+      {/* ════════════════════════════════════════ */}
+      {/* Status Card — Leave Toggle               */}
+      {/* ════════════════════════════════════════ */}
+      <View style={[s.statusCard, { backgroundColor: colors.cardBg }]}>
+        <View style={s.statusCardRow}>
+          {/* Left — status info */}
+          <View style={s.statusInfo}>
+            <View style={[
+              s.statusIndicator,
+              { backgroundColor: isOnLeave ? '#FFF3E0' : '#E8F5E9' },
+            ]}>
+              <View style={[
+                s.statusDot,
+                { backgroundColor: isOnLeave ? '#FF9800' : '#4CAF50' },
+              ]} />
+            </View>
+            <View style={s.statusTextWrap}>
+              <Text style={[s.statusTitle, { color: colors.textPri }]}>
+                {isOnLeave ? 'On Leave' : 'Available'}
+              </Text>
+              <Text style={[s.statusSubtext, { color: colors.textMut }]}>
+                {isOnLeave
+                  ? 'Not receiving new tasks'
+                  : 'Receiving task assignments'
+                }
+              </Text>
+            </View>
+          </View>
 
-  return (
-    <ScreenLayout scroll={false}>
-      {/* Header */}
-      <View style={s.headerRow}>
-        <View>
-          <Text style={[s.pageTitle, { color: colors.textPri }]}>{getTitle()}</Text>
-          <Text style={[s.subtitle, { color: colors.textSec }]}>{user?.email}</Text>
+          {/* Right — toggle button */}
+          <TouchableOpacity
+            style={[
+              s.leaveToggle,
+              isOnLeave ? s.leaveToggleOn : s.leaveToggleOff,
+            ]}
+            onPress={toggleLeaveStatus}
+            disabled={leaveLoading}
+            activeOpacity={0.8}
+          >
+            {leaveLoading ? (
+              <ActivityIndicator size="small" color={isOnLeave ? '#FFF' : '#5BA8D4'} />
+            ) : (
+              <>
+                <Ionicons
+                  name={isOnLeave ? 'return-down-back-outline' : 'airplane-outline'}
+                  size={14}
+                  color={isOnLeave ? '#FFF' : '#5BA8D4'}
+                />
+                <Text style={[
+                  s.leaveToggleText,
+                  { color: isOnLeave ? '#FFF' : '#5BA8D4' },
+                ]}>
+                  {isOnLeave ? ' Come Back' : ' Go On Leave'}
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
         </View>
-        <TouchableOpacity
-          style={[s.leaveButton, { backgroundColor: isOnLeave ? '#FF9800' : `${colors.active}20` }]}
-          onPress={toggleLeaveStatus}
-          disabled={leaveLoading}
-          activeOpacity={0.8}
-        >
-          <Ionicons
-            name={isOnLeave ? 'home' : 'checkmark-circle'}
-            size={14}
-            color={isOnLeave ? '#FFF' : colors.active}
-          />
-          <Text style={[s.leaveButtonText, { color: isOnLeave ? '#FFF' : colors.active }]}>
-            {' '}{isOnLeave ? t('onLeave') : t('available')}
-          </Text>
-        </TouchableOpacity>
       </View>
 
-      {/* Leave Banner */}
-      {isOnLeave && (
-        <View style={s.leaveBanner}>
-          <Ionicons name="warning-outline" size={16} color="#E65100" />
-          <Text style={s.leaveBannerText}>
-            {' '}You are on leave. New tasks won't be assigned.
-          </Text>
-        </View>
-      )}
+      {/* ════════════════════════════════════════ */}
+      {/* Jobs Count                               */}
+      {/* ════════════════════════════════════════ */}
+      <View style={s.countRow}>
+        <Text style={[s.countText, { color: colors.textMut }]}>
+          {loading ? 'Loading...' : `${jobs.length} ${jobs.length === 1 ? 'job' : 'jobs'}`}
+        </Text>
+        <TouchableOpacity onPress={fetchJobs} style={s.refreshBtn} activeOpacity={0.7}>
+          <Ionicons name="refresh-outline" size={16} color={colors.active} />
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
 
-      {/* Jobs count */}
-      <Text style={[s.countText, { color: colors.textMut }]}>
-        {jobs.length} {jobs.length === 1 ? 'job' : 'jobs'}
-      </Text>
+  return (
+    <ScreenLayout
+      title={`${t('welcome')}, ${user?.full_name || 'Staff'}!`}
+      showDecor
+      scroll={false}
+      padBottom={40}
+    >
+      {/* 🔹 Fixed Header */}
+      <View style={{ paddingHorizontal: 16 }}>
+        <ListHeader />
+      </View>
 
-      {/* Jobs List */}
+      {/* 🔹 Only jobs scroll */}
       <FlatList
         data={jobs}
         keyExtractor={(item) => item.id?.toString() || item._id?.toString()}
         renderItem={renderJob}
-        contentContainerStyle={[s.listContent, jobs.length === 0 && { flex: 1 }]}
+        style={{ flex: 1 }}
+        contentContainerStyle={[
+          s.listContent,
+          jobs.length === 0 && { flex: 1 },
+        ]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        refreshing={loading}
+        onRefresh={fetchJobs}
         ListEmptyComponent={
-          <View style={s.empty}>
-            <Ionicons
-              name={statusFilter === 'ASSIGNED' ? 'clipboard-outline' : statusFilter === 'IN_PROGRESS' ? 'construct-outline' : 'trophy-outline'}
-              size={50}
-              color={colors.textMut}
-            />
-            <Text style={[s.emptyTitle, { color: colors.textPri }]}>
-              {statusFilter === 'ASSIGNED' && 'No new tasks'}
-              {statusFilter === 'IN_PROGRESS' && 'No tasks in progress'}
-              {statusFilter === 'CLOSED' && 'No completed tasks yet'}
-            </Text>
-            <Text style={[s.emptySubtitle, { color: colors.textMut }]}>
-              {statusFilter === 'ASSIGNED' && 'New assigned tasks will appear here'}
-              {statusFilter === 'IN_PROGRESS' && "Tasks you're working on will appear here"}
-              {statusFilter === 'CLOSED' && 'Completed tasks will appear here'}
-            </Text>
-          </View>
+          !loading && (
+            <View style={s.empty}>
+              <Ionicons
+                name={
+                  statusFilter === 'ASSIGNED'
+                    ? 'clipboard-outline'
+                    : statusFilter === 'IN_PROGRESS'
+                      ? 'construct-outline'
+                      : 'trophy-outline'
+                }
+                size={50}
+                color={colors.textMut}
+              />
+              <Text style={[s.emptyTitle, { color: colors.textPri }]}>
+                {statusFilter === 'ASSIGNED' && 'No new tasks'}
+                {statusFilter === 'IN_PROGRESS' && 'No tasks in progress'}
+                {statusFilter === 'CLOSED' && 'No completed tasks yet'}
+              </Text>
+              <Text style={[s.emptySubtitle, { color: colors.textMut }]}>
+                {statusFilter === 'ASSIGNED' && 'New assigned tasks will appear here'}
+                {statusFilter === 'IN_PROGRESS' && "Tasks you're working on will appear here"}
+                {statusFilter === 'CLOSED' && 'Completed tasks will appear here'}
+              </Text>
+            </View>
+          )
         }
       />
     </ScreenLayout>
@@ -206,21 +267,126 @@ export default function StaffDashboard({ navigation, route }) {
 }
 
 const s = StyleSheet.create({
-  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  pageTitle: { fontSize: 24, fontWeight: '800' },
-  subtitle: { fontSize: 12, marginTop: 2 },
-  leaveButton: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20 },
-  leaveButtonText: { fontSize: 12, fontWeight: '600' },
-  leaveBanner: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF3E0', padding: 12, borderRadius: 10, marginBottom: 12 },
-  leaveBannerText: { color: '#E65100', fontSize: 12, flex: 1 },
-  countText: { fontSize: 12, fontWeight: '500', marginBottom: 12 },
+  // ════════════════════════════════════════
+  // Status Card — Leave Toggle
+  // ════════════════════════════════════════
+  statusCard: {
+    borderRadius: 14,
+    padding: 16,
+    shadowColor: '#A0BDD0',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+    width: 365,
+    marginLeft: -16,
+    marginBottom: 7,
+  },
+  statusCardRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  statusInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  statusIndicator: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  statusDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+  },
+  statusTextWrap: {
+    flex: 1,
+  },
+  statusTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  statusSubtext: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+
+  // Leave toggle button
+  leaveToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    minWidth: 120,
+    justifyContent: 'center',
+  },
+  leaveToggleOff: {
+    backgroundColor: '#EEF6FB',
+    borderWidth: 1,
+    borderColor: '#D0E8F2',
+  },
+  leaveToggleOn: {
+    backgroundColor: '#FF9800',
+    shadowColor: '#FF9800',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  leaveToggleText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+
+  // ════════════════════════════════════════
+  // Count Row
+  // ════════════════════════════════════════
+  countRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 5,
+  },
+  countText: {
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  refreshBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+    backgroundColor: '#EEF6FB',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  // ════════════════════════════════════════
+  // List & Cards
+  // ════════════════════════════════════════
   listContent: { paddingBottom: 140 },
   card: {
-    borderRadius: 14, marginBottom: 12, padding: 16,
-    shadowColor: '#A0BDD0', shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.1, shadowRadius: 8, elevation: 3,
+    borderRadius: 14,
+    marginBottom: 12,
+    padding: 16,
+    shadowColor: '#A0BDD0',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
   },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
   assetId: { fontSize: 18, fontWeight: '700' },
   typeBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
   assetType: { fontSize: 11, fontWeight: '600' },
@@ -229,11 +395,27 @@ const s = StyleSheet.create({
   description: { lineHeight: 20, marginBottom: 8, fontSize: 13 },
   photoIndicator: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
   photoText: { fontSize: 12 },
-  cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, paddingTop: 10 },
+  cardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderTopWidth: 1,
+    paddingTop: 10,
+  },
   date: { fontSize: 12 },
   tapHintRow: { flexDirection: 'row', alignItems: 'center' },
   tapHint: { fontSize: 12, fontWeight: '500' },
-  empty: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40, gap: 10 },
+
+  // ════════════════════════════════════════
+  // Empty State
+  // ════════════════════════════════════════
+  empty: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+    gap: 10,
+  },
   emptyTitle: { fontSize: 18, fontWeight: '700' },
   emptySubtitle: { fontSize: 13, textAlign: 'center' },
 });

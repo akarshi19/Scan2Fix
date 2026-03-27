@@ -1,41 +1,48 @@
 import React, { useState } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, Alert,
-  TouchableOpacity, Image, ActivityIndicator,
+  View, Text, StyleSheet, Alert,
+  TouchableOpacity, Image, ActivityIndicator, TextInput,
 } from 'react-native';
-import { TextInput, Button } from 'react-native-paper';
 import * as ImagePicker from 'expo-image-picker';
+import { Ionicons } from '@expo/vector-icons';
 import { complaintsAPI, uploadAPI } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
-import ProfileMenu from '../../components/ProfileMenu';
+import { useTheme } from '../../context/ThemeContext';
+import { useLanguage } from '../../context/LanguageContext';
+import ScreenLayout from '../../components/ScreenLayout';
 
-// ============================================
-// LodgeComplaint — REWRITTEN for MongoDB
-// ============================================
-// BEFORE:
-//   1. supabase.storage.from('complaint-photos').upload(...)
-//   2. supabase.storage.from('complaint-photos').getPublicUrl(...)
-//   3. supabase.from('complaints').insert({...})
-//
-// AFTER:
-//   1. uploadAPI.complaintPhoto(photo.uri) → get URL
-//   2. complaintsAPI.create({...}) → create complaint with URL
-// ============================================
+const ACTIVE = '#5BA8D4';
+const SKY = '#7DD3F0';
+const CARD_BG = '#FFFFFF';
+const TEXT_PRI = '#1A1A2E';
+const TEXT_SEC = '#5A7A8A';
+const TEXT_MUT = '#9DB5C0';
 
 export default function LodgeComplaint({ route, navigation }) {
-  const { assetId, assetType, assetLocation } = route.params || {};
+  const {
+    assetId,
+    assetType,
+    assetLocation,
+    assetBrand,
+    assetModel,
+    assetInstallDate,
+  } = route.params || {};
+
   const { user } = useAuth();
+  const { colors } = useTheme();
+  const { t } = useLanguage();
   const [description, setDescription] = useState('');
   const [loading, setLoading] = useState(false);
   const [photo, setPhoto] = useState(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [descFocused, setDescFocused] = useState(false);
 
   const getAssetIcon = (type) => {
     switch (type) {
-      case 'AC': return '❄️';
-      case 'WATER_COOLER': return '💧';
-      case 'DESERT_COOLER': return '🌀';
-      default: return '🔧';
+      case 'AC': return 'snow-outline';
+      case 'WATER_COOLER': return 'water-outline';
+      case 'DESERT_COOLER': return 'thunderstorm-outline';
+      default: return 'build-outline';
     }
   };
 
@@ -49,231 +56,325 @@ export default function LodgeComplaint({ route, navigation }) {
   };
 
   const takePhoto = async () => {
-    try {
-      const { status } = await ImagePicker.requestCameraPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission Needed', 'Camera access is required to take photos.');
-        return;
-      }
-      const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true, aspect: [4, 3], quality: 0.7,
-      });
-      if (!result.canceled && result.assets[0]) {
-        setPhoto(result.assets[0]);
-      }
-    } catch (error) {
-      Alert.alert('Error', 'Failed to open camera');
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission Needed', 'Camera access is required.');
+      return;
     }
+    const result = await ImagePicker.launchCameraAsync({
+      allowsEditing: true, aspect: [4, 3], quality: 0.7,
+    });
+    if (!result.canceled && result.assets[0]) setPhoto(result.assets[0]);
   };
 
   const pickFromGallery = async () => {
-    try {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission Needed', 'Gallery access is required.');
-        return;
-      }
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true, aspect: [4, 3], quality: 0.7,
-      });
-      if (!result.canceled && result.assets[0]) {
-        setPhoto(result.assets[0]);
-      }
-    } catch (error) {
-      Alert.alert('Error', 'Failed to open gallery');
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission Needed', 'Gallery access is required.');
+      return;
     }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      allowsEditing: true, aspect: [4, 3], quality: 0.7,
+    });
+    if (!result.canceled && result.assets[0]) setPhoto(result.assets[0]);
   };
 
-  const handleAddPhoto = () => {
-    Alert.alert('Add Photo', 'Choose how to add a photo of the issue', [
-      { text: '📷 Take Photo', onPress: takePhoto },
-      { text: '🖼️ Choose from Gallery', onPress: pickFromGallery },
-      { text: 'Cancel', style: 'cancel' },
-    ]);
-  };
-
-  // ── CHANGED: Upload to server instead of Supabase Storage ──
   const uploadPhoto = async () => {
     if (!photo) return null;
     try {
       setUploadingPhoto(true);
       const response = await uploadAPI.complaintPhoto(photo.uri);
-      if (response.data.success) {
-        console.log('✅ Photo uploaded:', response.data.data.photo_url);
-        return response.data.data.photo_url;
-      }
-      return null;
-    } catch (error) {
-      console.error('Upload error:', error);
-      throw error;
-    } finally {
-      setUploadingPhoto(false);
-    }
+      return response.data.data.photo_url;
+    } catch (error) { throw error; }
+    finally { setUploadingPhoto(false); }
   };
 
-  // ── CHANGED: Create complaint via API instead of Supabase ──
   const handleSubmit = async () => {
     if (!description.trim()) {
       Alert.alert('Error', 'Please describe the issue');
       return;
     }
-    if (description.trim().length < 10) {
-      Alert.alert('Error', 'Please provide more details (at least 10 characters)');
-      return;
-    }
-
     setLoading(true);
     try {
       let photoUrl = null;
-      if (photo) {
-        photoUrl = await uploadPhoto();
-      }
-
+      if (photo) photoUrl = await uploadPhoto();
       const response = await complaintsAPI.create({
         asset_id: assetId,
         description: description.trim(),
         photo_url: photoUrl,
       });
-
       if (response.data.success) {
-        Alert.alert(
-          'Complaint Submitted! ✅',
-          `Your complaint for ${assetId} has been submitted successfully.\n\nWe will resolve it as soon as possible.`,
+        Alert.alert('Success', 'Complaint submitted successfully',
           [{ text: 'OK', onPress: () => navigation.navigate('UserHome') }]
         );
       }
-    } catch (error) {
-      Alert.alert('Error', error.message || 'Failed to submit complaint');
-    } finally {
-      setLoading(false);
-    }
+    } catch (error) { Alert.alert('Error', error.message); }
+    finally { setLoading(false); }
   };
 
   return (
-    
-    <ScrollView style={styles.container} keyboardShouldPersistTaps="handled">
-      <ProfileMenu/>
-      <View style={styles.assetCard}>
-        <View style={styles.assetHeader}>
-          <Text style={styles.assetIcon}>{getAssetIcon(assetType)}</Text>
-          <View style={styles.assetInfo}>
-            <Text style={styles.assetId}>{assetId || 'Unknown'}</Text>
-            <Text style={styles.assetType}>{getAssetTypeName(assetType)}</Text>
+    <ScreenLayout title="Lodge Complaint" showDecor showBack padBottom={100}>
+      <View style={s.mainCard}>
+
+        {/* ════════════════════════════════════════ */}
+        {/* Asset Info Header                        */}
+        {/* ════════════════════════════════════════ */}
+        <View style={s.assetHeader}>
+          <View style={s.assetInfo}>
+            <Text style={s.assetId}>{assetId}</Text>
+            <Text style={s.assetType}>{getAssetTypeName(assetType)}</Text>
           </View>
         </View>
-        <View style={styles.locationRow}>
-          <Text style={styles.locationIcon}>📍</Text>
-          <Text style={styles.assetLocation}>{assetLocation || 'Unknown'}</Text>
-        </View>
-      </View>
 
-      <View style={styles.form}>
-        <Text style={styles.formTitle}>What's the problem?</Text>
-        <Text style={styles.formSubtitle}>Describe the issue in detail so our team can fix it quickly.</Text>
-
-        <TextInput
-          mode="outlined"
-          placeholder="E.g., AC is not cooling properly, making loud noise..."
-          value={description}
-          onChangeText={setDescription}
-          multiline numberOfLines={4}
-          style={styles.textArea}
-          outlineColor="#e0e0e0" activeOutlineColor="#2196F3"
-        />
-
-        <View style={styles.quickIssues}>
-          {['Not cooling', 'Making noise', 'Water leaking', 'Not turning on'].map((issue) => (
-            <TouchableOpacity
-              key={issue}
-              style={[styles.quickIssueChip, description.includes(issue) && styles.quickIssueChipActive]}
-              onPress={() => {
-                if (description.includes(issue)) {
-                  setDescription(description.replace(issue + '. ', ''));
-                } else {
-                  setDescription(prev => prev ? `${prev} ${issue}.` : `${issue}.`);
-                }
-              }}
-            >
-              <Text style={[styles.quickIssueText, description.includes(issue) && styles.quickIssueTextActive]}>
-                {issue}
-              </Text>
-            </TouchableOpacity>
-          ))}
+        {/* ════════════════════════════════════════ */}
+        {/* Full Asset Details                       */}
+        {/* ════════════════════════════════════════ */}
+        <View style={s.detailsGrid}>
+          <DetailRow icon="location-outline" label="Location:" value={assetLocation} iconColor={TEXT_MUT} />
+          {assetBrand ? (
+            <DetailRow icon="pricetag-outline" label="Brand:" value={assetBrand} />
+          ) : null}
+          {assetModel ? (
+            <DetailRow icon="hardware-chip-outline" label="Model:" value={assetModel} />
+          ) : null}
+          {assetInstallDate ? (
+            <DetailRow
+              icon="construct-outline"
+              label="Installed On:"
+              value={new Date(assetInstallDate).toLocaleDateString('en-GB', {
+                day: 'numeric', month: 'short', year: 'numeric',
+              })}
+              last
+            />
+          ) : null}
         </View>
 
-        <Text style={styles.sectionTitle}>📷 Add Photo (Optional)</Text>
-        <Text style={styles.sectionSubtitle}>A photo helps our team understand the issue better</Text>
+        <View style={s.divider} />
 
+        {/* ════════════════════════════════════════ */}
+        {/* Description                              */}
+        {/* ════════════════════════════════════════ */}
+        <Text style={s.sectionLabel}>Describe the Issue</Text>
+        <View style={[s.inputWrap, descFocused && s.inputWrapFocused]}>
+          <TextInput
+            style={s.input}
+            placeholder="What's the problem? Be as detailed as possible..."
+            placeholderTextColor={TEXT_MUT}
+            multiline
+            value={description}
+            onChangeText={setDescription}
+            onFocus={() => setDescFocused(true)}
+            onBlur={() => setDescFocused(false)}
+          />
+          <View style={s.charCount}>
+            <Text style={[s.charCountText, description.length > 0 && { color: ACTIVE }]}>
+              {description.length} characters
+            </Text>
+          </View>
+        </View>
+
+        {/* ════════════════════════════════════════ */}
+        {/* Photo Section                            */}
+        {/* ════════════════════════════════════════ */}
+        <Text style={s.sectionLabel}>Attach Photo (Optional)</Text>
         {!photo ? (
-          <TouchableOpacity style={styles.addPhotoButton} onPress={handleAddPhoto}>
-            <Text style={styles.addPhotoIcon}>📷</Text>
-            <Text style={styles.addPhotoText}>Add Photo</Text>
-          </TouchableOpacity>
+          <View style={s.photoPickerRow}>
+            <TouchableOpacity style={s.photoOption} onPress={takePhoto} activeOpacity={0.8}>
+              <View style={s.photoOptionIcon}>
+                <Ionicons name="camera-outline" size={24} color={ACTIVE} />
+              </View>
+              <Text style={s.photoOptionLabel}>Camera</Text>
+              <Text style={s.photoOptionHint}>Take a photo</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={s.photoOption} onPress={pickFromGallery} activeOpacity={0.8}>
+              <View style={s.photoOptionIcon}>
+                <Ionicons name="images-outline" size={24} color={ACTIVE} />
+              </View>
+              <Text style={s.photoOptionLabel}>Gallery</Text>
+              <Text style={s.photoOptionHint}>Choose existing</Text>
+            </TouchableOpacity>
+          </View>
         ) : (
-          <View style={styles.photoPreview}>
-            <Image source={{ uri: photo.uri }} style={styles.previewImage} />
-            <View style={styles.photoActions}>
-              <TouchableOpacity style={styles.changePhotoBtn} onPress={handleAddPhoto}>
-                <Text style={styles.changePhotoText}>🔄 Change</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.removePhotoBtn} onPress={() => setPhoto(null)}>
-                <Text style={styles.removePhotoText}>🗑️ Remove</Text>
-              </TouchableOpacity>
+          <View style={s.previewWrap}>
+            <Image source={{ uri: photo.uri }} style={s.preview} />
+            <TouchableOpacity style={s.removePhotoBtn} onPress={() => setPhoto(null)} activeOpacity={0.8}>
+              <Ionicons name="close-circle" size={28} color="#E53935" />
+            </TouchableOpacity>
+            <View style={s.previewOverlay}>
+              <Ionicons name="checkmark-circle" size={16} color="#4CAF50" />
+              <Text style={s.previewText}> Photo attached</Text>
             </View>
           </View>
         )}
 
-        <Button
-          mode="contained" onPress={handleSubmit}
-          loading={loading} disabled={loading || uploadingPhoto}
-          style={styles.submitBtn} contentStyle={styles.submitBtnContent}
-        >
-          {uploadingPhoto ? 'Uploading Photo...' : loading ? 'Submitting...' : 'Submit Complaint'}
-        </Button>
+        <View style={s.divider} />
 
-        <Button mode="text" onPress={() => navigation.goBack()} style={styles.cancelBtn} textColor="#666" disabled={loading}>
-          Cancel
-        </Button>
+        {/* ════════════════════════════════════════ */}
+        {/* Submit                                   */}
+        {/* ════════════════════════════════════════ */}
+        <TouchableOpacity
+          style={[s.submitBtn, (loading || uploadingPhoto || !description.trim()) && s.submitBtnDisabled]}
+          onPress={handleSubmit}
+          disabled={loading || uploadingPhoto || !description.trim()}
+          activeOpacity={0.85}
+        >
+          {(loading || uploadingPhoto) ? (
+            <View style={s.loadingRow}>
+              <ActivityIndicator color="#fff" size="small" />
+              <Text style={s.submitText}>
+                {uploadingPhoto ? '  Uploading photo...' : '  Submitting...'}
+              </Text>
+            </View>
+          ) : (
+            <View style={s.loadingRow}>
+              <Ionicons name="send-outline" size={18} color="#FFF" />
+              <Text style={s.submitText}>  Submit Complaint</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+
+        {/* Cancel */}
+        <TouchableOpacity style={s.cancelBtn} onPress={() => navigation.goBack()} activeOpacity={0.8}>
+          <Text style={s.cancelText}>Cancel</Text>
+        </TouchableOpacity>
       </View>
-    </ScrollView>
+    </ScreenLayout>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f5f5f5' },
-  assetCard: { backgroundColor: '#2196F3', margin: 15, padding: 20, borderRadius: 15, elevation: 5 },
-  assetHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 15 },
-  assetIcon: { fontSize: 40, marginRight: 15 },
+// ════════════════════════════════════════
+// Detail Row Component
+// ════════════════════════════════════════
+function DetailRow({ icon, label, value, iconColor, last }) {
+  if (!value) return null;
+  return (
+    <View style={[s.detailRow, !last && s.detailRowBorder]}>
+      <Ionicons
+        name={icon}
+        size={15}
+        color={iconColor || TEXT_MUT}
+        style={{ marginRight: 8, width: 22, textAlign: 'center' }}
+      />
+      <Text style={s.detailLabel}>{label}</Text>
+      <Text style={s.detailValue}>{value}</Text>
+    </View>
+  );
+}
+
+const s = StyleSheet.create({
+  mainCard: {
+    backgroundColor: CARD_BG, borderRadius: 18, padding: 20,
+    marginTop: 0, shadowColor: '#A0BDD0',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15, shadowRadius: 12, elevation: 4,
+  },
+
+  // Asset Header
+  assetHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 14 },
+  assetIconWrap: {
+    width: 48, height: 48, borderRadius: 14,
+    backgroundColor: `${ACTIVE}15`, alignItems: 'center',
+    justifyContent: 'center', marginRight: 14,
+  },
   assetInfo: { flex: 1 },
-  assetId: { color: 'white', fontSize: 24, fontWeight: 'bold' },
-  assetType: { color: 'rgba(255,255,255,0.9)', fontSize: 14, marginTop: 2 },
-  locationRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.2)', padding: 10, borderRadius: 8 },
-  locationIcon: { fontSize: 16, marginRight: 8 },
-  assetLocation: { color: 'white', fontSize: 14, flex: 1 },
-  form: { padding: 15 },
-  formTitle: { fontSize: 20, fontWeight: 'bold', color: '#333', marginBottom: 5 },
-  formSubtitle: { fontSize: 14, color: '#666', marginBottom: 15, lineHeight: 20 },
-  textArea: { backgroundColor: 'white', minHeight: 100 },
-  quickIssues: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 10, marginBottom: 25 },
-  quickIssueChip: { backgroundColor: '#e0e0e0', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, marginRight: 8, marginBottom: 8 },
-  quickIssueChipActive: { backgroundColor: '#2196F3' },
-  quickIssueText: { fontSize: 13, color: '#666' },
-  quickIssueTextActive: { color: 'white' },
-  sectionTitle: { fontSize: 16, fontWeight: 'bold', color: '#333', marginBottom: 5 },
-  sectionSubtitle: { fontSize: 13, color: '#666', marginBottom: 15 },
-  addPhotoButton: { backgroundColor: 'white', borderWidth: 2, borderColor: '#e0e0e0', borderStyle: 'dashed', borderRadius: 15, padding: 30, alignItems: 'center', marginBottom: 20 },
-  addPhotoIcon: { fontSize: 40, marginBottom: 10 },
-  addPhotoText: { fontSize: 16, color: '#666' },
-  photoPreview: { backgroundColor: 'white', borderRadius: 15, overflow: 'hidden', marginBottom: 20 },
-  previewImage: { width: '100%', height: 200, resizeMode: 'cover' },
-  photoActions: { flexDirection: 'row', justifyContent: 'center', padding: 10, borderTopWidth: 1, borderTopColor: '#eee' },
-  changePhotoBtn: { paddingHorizontal: 20, paddingVertical: 8, marginRight: 10 },
-  changePhotoText: { color: '#2196F3', fontSize: 14 },
-  removePhotoBtn: { paddingHorizontal: 20, paddingVertical: 8 },
-  removePhotoText: { color: '#ff6b6b', fontSize: 14 },
-  submitBtn: { borderRadius: 10, marginBottom: 10 },
-  submitBtnContent: { paddingVertical: 8 },
-  cancelBtn: { marginBottom: 30 },
+  assetId: { fontSize: 18, fontWeight: '800', color: TEXT_PRI },
+  assetType: { fontSize: 13, color: TEXT_SEC, marginTop: 2 },
+
+  // Asset Details Grid
+  detailsGrid: {
+    backgroundColor: '#F8FAFB',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#EEF4F8',
+    overflow: 'hidden',
+    marginBottom: 4,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+  },
+  detailRowBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEF4F8',
+  },
+  detailLabel: {
+    width: 100,
+    fontSize: 12,
+    color: TEXT_MUT,
+    fontWeight: '600',
+  },
+  detailValue: {
+    flex: 1,
+    fontSize: 13,
+    color: TEXT_PRI,
+    fontWeight: '500',
+    textAlign: 'left',
+  },
+
+  // Divider
+  divider: { height: 1, backgroundColor: '#EEF4F8', marginVertical: 6 },
+
+  // Section label
+  sectionLabel: { fontSize: 14, fontWeight: '700', color: TEXT_PRI, marginBottom: 10 },
+
+  // Description input
+  inputWrap: {
+    backgroundColor: '#F8FAFB', borderRadius: 12, borderWidth: 1.5,
+    borderColor: '#EEF4F8', marginBottom: 20, overflow: 'hidden',
+  },
+  inputWrapFocused: { borderColor: SKY, backgroundColor: '#F0F8FF' },
+  input: {
+    paddingHorizontal: 16, paddingTop: 14, paddingBottom: 10,
+    minHeight: 120, fontSize: 14, color: TEXT_PRI,
+    textAlignVertical: 'top', lineHeight: 21,
+  },
+  charCount: { alignItems: 'flex-end', paddingHorizontal: 16, paddingBottom: 10 },
+  charCountText: { fontSize: 11, color: TEXT_MUT },
+
+  // Photo picker
+  photoPickerRow: { flexDirection: 'row', gap: 12, marginBottom: 8 },
+  photoOption: {
+    flex: 1, backgroundColor: '#F8FAFB', borderRadius: 14,
+    borderWidth: 1.5, borderColor: '#EEF4F8', borderStyle: 'dashed',
+    paddingVertical: 20, alignItems: 'center', gap: 6,
+  },
+  photoOptionIcon: {
+    width: 48, height: 48, borderRadius: 24,
+    backgroundColor: `${ACTIVE}12`, alignItems: 'center',
+    justifyContent: 'center', marginBottom: 4,
+  },
+  photoOptionLabel: { fontSize: 14, fontWeight: '700', color: TEXT_PRI },
+  photoOptionHint: { fontSize: 11, color: TEXT_MUT },
+
+  // Photo preview
+  previewWrap: { position: 'relative', borderRadius: 14, overflow: 'hidden', marginBottom: 8 },
+  preview: { width: '100%', height: 200, borderRadius: 14 },
+  removePhotoBtn: {
+    position: 'absolute', top: 8, right: 8,
+    backgroundColor: 'rgba(255,255,255,0.9)', borderRadius: 14, padding: 2,
+  },
+  previewOverlay: {
+    position: 'absolute', bottom: 0, left: 0, right: 0,
+    backgroundColor: 'rgba(255,255,255,0.92)', flexDirection: 'row',
+    alignItems: 'center', justifyContent: 'center', paddingVertical: 8,
+  },
+  previewText: { fontSize: 12, fontWeight: '600', color: '#4CAF50' },
+
+  // Buttons
+  submitBtn: {
+    backgroundColor: '#004e68', borderRadius: 12, paddingVertical: 16,
+    alignItems: 'center', justifyContent: 'center',
+    shadowColor: ACTIVE, shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3, shadowRadius: 8, elevation: 5,
+  },
+  submitBtnDisabled: { backgroundColor: '#B0CDD8', shadowOpacity: 0, elevation: 0 },
+  submitText: { color: '#FFF', fontWeight: '700', fontSize: 15 },
+  loadingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
+  cancelBtn: {
+    backgroundColor: '#F2F6F8', borderRadius: 12,
+    paddingVertical: 14, alignItems: 'center', marginTop: 10,
+  },
+  cancelText: { color: TEXT_SEC, fontWeight: '600', fontSize: 14 },
 });

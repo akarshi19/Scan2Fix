@@ -65,12 +65,15 @@ export default function ScanQR({ navigation }) {
 
       if (response.data.success) {
         const asset = response.data.data;
-        console.log('✅ Asset found:', asset);
+        console.log('Asset found:', asset);
 
         navigation.navigate('LodgeComplaint', {
-          assetId: asset.id,        // "AC-3F-017"
-          assetType: asset.type,    // "AC"
-          assetLocation: asset.location, // "3rd Floor, Room 317"
+          assetId: asset.id,
+          assetType: asset.type,
+          assetLocation: asset.location,
+          assetBrand: asset.brand,       
+          assetModel: asset.model,        
+          assetInstallDate: asset.install_date,  
         });
       }
     } catch (err) {
@@ -199,10 +202,10 @@ const styles = StyleSheet.create({
   title: { color: 'white', fontSize: 22, fontWeight: 'bold', marginBottom: 10 },
   subtitle: { color: '#888', fontSize: 14, textAlign: 'center', marginBottom: 30, lineHeight: 22 },
   message: { color: 'white', fontSize: 16 },
-  permissionButton: { backgroundColor: '#2196F3', paddingVertical: 15, paddingHorizontal: 40, borderRadius: 10 },
+  permissionButton: { backgroundColor: '#004e68', paddingVertical: 15, paddingHorizontal: 40, borderRadius: 10 },
   permissionButtonText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
   manualEntryLink: { marginTop: 20, padding: 10 },
-  manualEntryLinkText: { color: '#2196F3', fontSize: 14 },
+  manualEntryLinkText: { color: '#004e68', fontSize: 14 },
   overlay: { flex: 1 },
   overlayTop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end', alignItems: 'center', paddingBottom: 20 },
   headerText: { color: 'white', fontSize: 20, fontWeight: 'bold' },
@@ -210,7 +213,7 @@ const styles = StyleSheet.create({
   overlaySide: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)' },
   overlayBottom: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', alignItems: 'center', paddingTop: 30 },
   scanFrame: { width: 260, height: 260, position: 'relative', justifyContent: 'center', alignItems: 'center' },
-  corner: { position: 'absolute', width: 40, height: 40, borderColor: '#2196F3' },
+  corner: { position: 'absolute', width: 40, height: 40, borderColor: '#004e68' },
   topLeft: { top: 0, left: 0, borderTopWidth: 4, borderLeftWidth: 4, borderTopLeftRadius: 10 },
   topRight: { top: 0, right: 0, borderTopWidth: 4, borderRightWidth: 4, borderTopRightRadius: 10 },
   bottomLeft: { bottom: 0, left: 0, borderBottomWidth: 4, borderLeftWidth: 4, borderBottomLeftRadius: 10 },
@@ -220,7 +223,7 @@ const styles = StyleSheet.create({
   instructions: { color: 'white', fontSize: 16, textAlign: 'center', marginBottom: 20 },
   manualButton: { backgroundColor: 'rgba(255,255,255,0.2)', paddingVertical: 12, paddingHorizontal: 25, borderRadius: 25, marginBottom: 15 },
   manualButtonText: { color: 'white', fontSize: 14 },
-  scanAgainButton: { backgroundColor: '#2196F3', paddingVertical: 12, paddingHorizontal: 30, borderRadius: 25 },
+  scanAgainButton: { backgroundColor: '#004e68', paddingVertical: 12, paddingHorizontal: 30, borderRadius: 25 },
   scanAgainText: { color: 'white', fontSize: 14, fontWeight: 'bold' },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'center', alignItems: 'center', padding: 20 },
   modalContent: { backgroundColor: 'white', borderRadius: 15, padding: 25, width: '100%', maxWidth: 350 },
@@ -231,6 +234,6 @@ const styles = StyleSheet.create({
   modalButton: { flex: 1, paddingVertical: 12, borderRadius: 10, alignItems: 'center' },
   cancelButton: { backgroundColor: '#f0f0f0', marginRight: 10 },
   cancelButtonText: { color: '#666', fontWeight: 'bold' },
-  submitButton: { backgroundColor: '#2196F3', marginLeft: 10 },
+  submitButton: { backgroundColor: '#004e68', marginLeft: 10 },
   submitButtonText: { color: 'white', fontWeight: 'bold' },
 });

@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, Alert, Image,
-  TouchableOpacity, Modal,
+  TouchableOpacity, Modal, TextInput, ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker';
 import { complaintsAPI, usersAPI, getFileUrl } from '../../services/api';
 import { useTheme } from '../../context/ThemeContext';
+import { useAuth } from '../../context/AuthContext';
 import ScreenLayout from '../../components/ScreenLayout';
 
 const STATUS_COLORS = {
@@ -19,12 +20,30 @@ const STATUS_COLORS = {
 export default function ComplaintDetail({ route, navigation }) {
   const { complaint } = route.params;
   const { colors } = useTheme();
+  const { user } = useAuth();
   const [staffList, setStaffList] = useState([]);
   const [selectedStaff, setSelectedStaff] = useState(complaint.assigned_staff_id?.toString() || '');
   const [loading, setLoading] = useState(false);
   const [showFullImage, setShowFullImage] = useState(false);
+  const [editingDesc, setEditingDesc] = useState(false);
+  const [descText, setDescText] = useState(complaint.description || '');
+  const [savingDesc, setSavingDesc] = useState(false);
 
-  useEffect(() => { fetchStaffMembers(); }, []);
+  const isAdmin = user?.role === 'ADMIN';
+  const canEditDesc = isAdmin || user?.id === complaint.user_id?.toString();
+
+  useEffect(() => {
+    if (isAdmin) fetchStaffMembers();
+  }, [isAdmin]);
+
+  useEffect(() => {
+    console.log('=== COMPLAINT DETAIL DEBUG ===');
+    console.log('Full user object:', JSON.stringify(user, null, 2));
+    console.log('user.role:', user?.role);
+    console.log('Is admin?:', user?.role === 'ADMIN');
+    console.log('Complaint:', JSON.stringify(complaint, null, 2));
+  }, [user, complaint]);
+
 
   const fetchStaffMembers = async () => {
     try {
@@ -49,110 +68,240 @@ export default function ComplaintDetail({ route, navigation }) {
     finally { setLoading(false); }
   };
 
+  const handleSaveDescription = async () => {
+    if (!descText.trim()) {
+      Alert.alert('Error', 'Description cannot be empty');
+      return;
+    }
+    if (descText.trim().length < 10) {
+      Alert.alert('Error', 'Description must be at least 10 characters');
+      return;
+    }
+    setSavingDesc(true);
+    try {
+      const id = complaint.id || complaint._id;
+      const r = await complaintsAPI.updateDescription(id, descText.trim());
+      if (r.data.success) {
+        complaint.description = descText.trim();
+        setEditingDesc(false);
+        Alert.alert('Success ✅', 'Description updated');
+      }
+    } catch (e) {
+      Alert.alert('Error', e.message || 'Failed to update description');
+    } finally {
+      setSavingDesc(false);
+    }
+  };
+
+  const handleCancelDescEdit = () => {
+    setDescText(complaint.description || '');
+    setEditingDesc(false);
+  };
+
+  const getAssetTypeName = (type) => {
+    switch (type) {
+      case 'AC': return 'Air Conditioner';
+      case 'WATER_COOLER': return 'Water Cooler';
+      case 'DESERT_COOLER': return 'Desert Cooler';
+      default: return 'Equipment';
+    }
+  };
+
   const statusInfo = STATUS_COLORS[complaint.status] ?? { bg: '#F5F5F5', text: '#666', dot: '#999' };
   const photoUrl = getFileUrl(complaint.photo_url);
   const isClosed = complaint.status === 'CLOSED';
   const staffOnLeave = complaint.profiles?.is_on_leave && !isClosed;
   const selectedLeave = selectedStaff && staffList.find(s => s.id === selectedStaff)?.is_on_leave;
 
-  // Get reporter name
-  const reporterName = complaint.reporter?.full_name || complaint.reporter?.email || 'Unknown';
+  // Fix reporter — fallback to current user for "my complaints"
+  const reporterName = complaint.reporter?.full_name
+    || complaint.reporter?.email
+    || user?.full_name
+    || user?.email
+    || 'Unknown';
 
-  // Get resolver name (staff who was assigned when complaint was closed)
   const resolverName = complaint.profiles?.full_name || complaint.profiles?.email || 'Unknown';
 
   return (
-    <ScreenLayout title="Complaint Details" showBack={true}>
+    <ScreenLayout title="Complaint Details" showBack showDecor padBottom={100}>
 
-      {/* Status badge */}
-      <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 12 }}>
-        <View style={[s.statusBadge, { backgroundColor: statusInfo.bg }]}>
-          <View style={[s.statusDot, { backgroundColor: statusInfo.dot }]} />
-          <Text style={[s.statusBadgeText, { color: statusInfo.text }]}>
-            {complaint.status.replace('_', ' ')}
-          </Text>
-        </View>
-      </View>
-
-      {/* Complaint info card */}
+      {/* ════════════════════════════════════════ */}
+      {/* Complaint Info Card                      */}
+      {/* ════════════════════════════════════════ */}
       <View style={[s.card, { backgroundColor: colors.cardBg }]}>
-        <Text style={[s.cardTitle, { color: colors.textPri }]}>Complaint Details</Text>
 
-        <InfoRow icon="barcode-outline" label="Asset ID" value={complaint.asset_id} colors={colors} />
-        <InfoRow icon="cube-outline" label="Type" value={complaint.assets?.type} colors={colors} />
-        <InfoRow icon="location-outline" label="Location" value={complaint.assets?.location} colors={colors} iconColor={colors.active} />
-        <InfoRow icon="calendar-outline" label="Reported" value={
-          new Date(complaint.created_at).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+        {/* Title row — "Complaint Details" + Status badge in same line */}
+        <View style={s.cardTitleRow}>
+          <Text style={[s.cardTitle, { color: colors.textPri }]}>Complaint Details</Text>
+          <View style={[s.statusBadge, { backgroundColor: statusInfo.bg }]}>
+            <View style={[s.statusDot, { backgroundColor: statusInfo.dot }]} />
+            <Text style={[s.statusBadgeText, { color: statusInfo.text }]}>
+              {complaint.status.replace('_', ' ')}
+            </Text>
+          </View>
+        </View>
+
+        {/* Asset Header — icon + ID + type */}
+        <View style={s.assetHeader}>
+          <View style={s.assetHeaderInfo}>
+            <Text style={[s.assetIdText, { color: colors.textPri }]}>{complaint.asset_id}</Text>
+            <Text style={[s.assetTypeText, { color: colors.textSec }]}>
+              {getAssetTypeName(complaint.assets?.type)}
+            </Text>
+          </View>
+        </View>
+
+        {/* All Asset Details */}
+        <InfoRow icon="location-outline" label="Location:" value={complaint.assets?.location} colors={colors} iconColor={colors.active} />
+        <InfoRow icon="pricetag-outline" label="Brand:" value={complaint.assets?.brand} colors={colors} />
+        <InfoRow icon="hardware-chip-outline" label="Model:" value={complaint.assets?.model} colors={colors} />
+        {complaint.assets?.install_date && (
+          <InfoRow icon="construct-outline" label="Installed On:" value={
+            new Date(complaint.assets.install_date).toLocaleDateString('en-GB', {
+              day: 'numeric', month: 'short', year: 'numeric'
+            })
+          } colors={colors} />
+        )}
+        {/* Complaint Meta */}
+        <InfoRow icon="calendar-outline" label="Reported On:" value={
+          new Date(complaint.created_at).toLocaleDateString('en-US', {
+            day: 'numeric', month: 'short', year: 'numeric',
+            hour: '2-digit', minute: '2-digit'
+          })
         } colors={colors} />
 
-        {/* Reported by */}
-        <InfoRow icon="person-outline" label="Reported By" value={reporterName} colors={colors} />
+        <InfoRow icon="person-outline" label="Reported By:" value={reporterName} colors={colors} />
 
-        {/* Resolved by — only for closed complaints */}
-        {isClosed && (
-          <InfoRow icon="checkmark-done-outline" label="Resolved By" value={resolverName} colors={colors} valueColor="#4CAF50" last />
+        {complaint.complaint_number && (
+          <InfoRow icon="document-text-outline" label="Complaint No:" value={complaint.complaint_number} colors={colors} />
         )}
+        {isClosed && (
+          <>
+            <InfoRow icon="checkmark-done-outline" label="Resolved By:" value={resolverName} colors={colors} valueColor="#000" />
+            <InfoRow icon="calendar-outline" label="Resolved On:" value={
+              new Date(complaint.closed_at).toLocaleDateString('en-GB', {
+                day: 'numeric', month: 'short', year: 'numeric'
+              })
+            } colors={colors} valueColor="#000" />
+            {complaint.verified_at && (
+              <InfoRow icon="shield-checkmark-outline" label="Verified On:" value={
+                new Date(complaint.verified_at).toLocaleDateString('en-GB', {
+                  day: 'numeric', month: 'short', year: 'numeric'
+                })
+              } colors={colors} valueColor="#000" last />
+            )}
+          </>
+        )}
+        {/* Issue Description */}
+        <View style={s.descTitleRow}>
+          <Text style={[s.sectionLabel, { color: colors.textPri }]}>Issue Description</Text>
+          {canEditDesc && !isClosed && !editingDesc && (
+            <TouchableOpacity
+              style={s.descEditBtn}
+              onPress={() => setEditingDesc(true)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="pencil-outline" size={14} color="#5BA8D4" />
+            </TouchableOpacity>
+          )}
+        </View>
 
-        {!isClosed && <View style={{ height: 1 }} />}
-
-        <View style={[s.divider, { backgroundColor: colors.divider }]} />
-        <Text style={[s.infoLabel, { color: colors.textMut }]}>Issue Description</Text>
-        <Text style={[s.description, { color: colors.textSec }]}>{complaint.description}</Text>
+        {!editingDesc ? (
+          <View style={s.descriptionBox}>
+            <Text style={[s.description, { color: colors.textSec }]}>
+              {descText}
+            </Text>
+          </View>
+        ) : (
+          <View style={s.descEditWrap}>
+            <TextInput
+              style={[s.descEditInput, { color: colors.textPri }]}
+              value={descText}
+              onChangeText={setDescText}
+              multiline
+              placeholder="Describe the issue..."
+              placeholderTextColor="#9DB5C0"
+              autoFocus
+            />
+            <View style={s.descCharRow}>
+              <Text style={[s.descCharCount, descText.trim().length < 10 && { color: '#E53935' }]}>
+                {descText.trim().length} characters {descText.trim().length < 10 ? '(min 10)' : '✓'}
+              </Text>
+            </View>
+            <View style={s.descEditActions}>
+              <TouchableOpacity style={s.descCancelBtn} onPress={handleCancelDescEdit}>
+                <Text style={s.descCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[s.descSaveBtn, (savingDesc || descText.trim().length < 10) && s.descSaveBtnDisabled]}
+                onPress={handleSaveDescription}
+                disabled={savingDesc || descText.trim().length < 10}
+                activeOpacity={0.85}
+              >
+                {savingDesc ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <>
+                    <Ionicons name="checkmark-outline" size={16} color="#FFF" />
+                    <Text style={s.descSaveText}> Save</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
       </View>
 
-      {/* Photo */}
+      {/* ════════════════════════════════════════ */}
+      {/* Photo Card                               */}
+      {/* ════════════════════════════════════════ */}
       {photoUrl && (
         <View style={[s.card, { backgroundColor: colors.cardBg }]}>
-          <Text style={[s.cardTitle, { color: colors.textPri }]}>Attached Photo</Text>
+          <Text style={[s.cardTitleSimple, { color: colors.textPri }]}>Attached Photo</Text>
           <TouchableOpacity onPress={() => setShowFullImage(true)} activeOpacity={0.9}>
-            <Image source={{ uri: photoUrl }} style={s.photo} />
-            <View style={s.enlargeRow}>
-              <Ionicons name="expand-outline" size={13} color={colors.active} />
-              <Text style={{ fontSize: 12, color: colors.active, fontWeight: '500' }}> Tap to enlarge</Text>
+            <View style={s.photoWrap}>
+              <Image source={{ uri: photoUrl }} style={s.photo} />
+              <View style={s.enlargeOverlay}>
+                <Ionicons name="expand-outline" size={13} color={colors.active} />
+                <Text style={{ fontSize: 12, color: colors.active, fontWeight: '500' }}> Tap to enlarge</Text>
+              </View>
             </View>
           </TouchableOpacity>
         </View>
       )}
-
-      {/* Closed banner — replaces assign staff when complaint is resolved */}
-      {isClosed ? (
+      {/* ════════════════════════════════════════ */}
+      {/* Assign Staff — ADMIN ONLY                */}
+      {/* ════════════════════════════════════════ */}
+      {!isClosed && isAdmin && (
         <View style={[s.card, { backgroundColor: colors.cardBg }]}>
-          <View style={s.closedBox}>
-            <Ionicons name="checkmark-circle" size={40} color="#4CAF50" />
-            <Text style={s.closedTitle}>Complaint Resolved</Text>
-            <Text style={s.closedDate}>
-              Closed: {new Date(complaint.closed_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
-            </Text>
-            {complaint.verified_at && (
-              <Text style={s.closedDate}>
-                Verified: {new Date(complaint.verified_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
-              </Text>
-            )}
-          </View>
-        </View>
-      ) : (
-        /* Assign staff card — only for non-closed complaints */
-        <View style={[s.card, { backgroundColor: colors.cardBg }]}>
-          <Text style={[s.cardTitle, { color: colors.textPri }]}>Assign Staff</Text>
+          <Text style={[s.cardTitleSimple, { color: colors.textPri }]}>Assign Staff</Text>
 
-          {/* Staff on leave warning for this complaint */}
           {staffOnLeave && (
             <View style={s.leaveWarning}>
               <Ionicons name="warning" size={16} color="#F44336" />
               <Text style={s.leaveWarningText}>
-                  Assigned staff ({complaint.profiles?.full_name}) is currently on leave. Consider reassigning.
+                Assigned staff ({complaint.profiles?.full_name}) is currently on leave. Consider reassigning.
               </Text>
             </View>
           )}
 
           <Text style={[s.pickerLabel, { color: colors.textSec }]}>Select Staff Member</Text>
           <View style={[s.pickerWrap, { borderColor: colors.inputBorder }]}>
-            <Picker selectedValue={selectedStaff} onValueChange={setSelectedStaff} style={{ height: 52, color: colors.textPri }} dropdownIconColor={colors.active}>
+            <Picker
+              selectedValue={selectedStaff}
+              onValueChange={setSelectedStaff}
+              style={{ height: 52, color: colors.textPri }}
+              dropdownIconColor={colors.active}
+            >
               <Picker.Item label="-- Select Staff --" value="" />
               {staffList.map(staff => (
-                <Picker.Item key={staff.id}
+                <Picker.Item
+                  key={staff.id}
                   label={`${staff.full_name || staff.email}${staff.is_on_leave ? '  (On Leave)' : '  ✓'}`}
-                  value={staff.id} color={staff.is_on_leave ? '#AAA' : colors.textPri} enabled={!staff.is_on_leave} />
+                  value={staff.id}
+                  color={staff.is_on_leave ? '#AAA' : colors.textPri}
+                  enabled={!staff.is_on_leave}
+                />
               ))}
             </Picker>
           </View>
@@ -184,6 +333,51 @@ export default function ComplaintDetail({ route, navigation }) {
         </View>
       )}
 
+      {/* ════════════════════════════════════════ */}
+      {/* Assigned Staff — NON-ADMIN read-only     */}
+      {/* ════════════════════════════════════════ */}
+      {!isClosed && !isAdmin && complaint.profiles && (
+        <View style={[s.card, { backgroundColor: colors.cardBg }]}>
+          <Text style={[s.cardTitleSimple, { color: colors.textPri }]}>Assigned Staff</Text>
+          <View style={s.staffInfoBar}>
+            {complaint.profiles.photo_url ? (
+              <Image source={{ uri: getFileUrl(complaint.profiles.photo_url) }} style={s.staffAvatar} />
+            ) : (
+              <View style={s.staffAvatarFallback}>
+                <Text style={s.staffAvatarInitial}>
+                  {complaint.profiles.full_name?.charAt(0) ?? 'S'}
+                </Text>
+              </View>
+            )}
+            <View style={{ flex: 1 }}>
+              <Text style={[s.staffName, { color: colors.textPri }]}>
+                {complaint.profiles.full_name || complaint.profiles.email}
+              </Text>
+              <Text style={[s.staffRole, { color: colors.textMut }]}>Maintenance Staff</Text>
+            </View>
+            <Ionicons name="checkmark-circle" size={22} color="#4CAF50" />
+          </View>
+
+          {staffOnLeave && (
+            <View style={s.leaveWarning}>
+              <Ionicons name="warning" size={16} color="#F44336" />
+              <Text style={s.leaveWarningText}>This staff member is currently on leave</Text>
+            </View>
+          )}
+        </View>
+      )}
+
+      {/* Not assigned — NON-ADMIN */}
+      {!isClosed && !isAdmin && !complaint.profiles && (
+        <View style={[s.card, { backgroundColor: colors.cardBg }]}>
+          <View style={s.notAssignedBox}>
+            <Ionicons name="time-outline" size={32} color="#FF9800" />
+            <Text style={s.notAssignedTitle}>Pending Assignment</Text>
+            <Text style={s.notAssignedText}>A staff member will be assigned shortly</Text>
+          </View>
+        </View>
+      )}
+
       {/* Full image modal */}
       <Modal visible={showFullImage} transparent animationType="fade" onRequestClose={() => setShowFullImage(false)}>
         <TouchableOpacity style={s.modalOverlay} activeOpacity={1} onPress={() => setShowFullImage(false)}>
@@ -199,6 +393,7 @@ export default function ComplaintDetail({ route, navigation }) {
 }
 
 function InfoRow({ icon, label, value, colors, iconColor, valueColor, last }) {
+  if (!value && value !== 0) return null; // Don't render if no value
   return (
     <View style={[s.infoRow, !last && { borderBottomWidth: 1, borderBottomColor: colors.divider }]}>
       <Ionicons name={icon} size={16} color={iconColor || colors.textMut} style={{ marginRight: 8, width: 24, textAlign: 'center' }} />
@@ -209,33 +404,212 @@ function InfoRow({ icon, label, value, colors, iconColor, valueColor, last }) {
 }
 
 const s = StyleSheet.create({
-  statusBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, gap: 6 },
-  statusDot: { width: 8, height: 8, borderRadius: 4 },
-  statusBadgeText: { fontSize: 12, fontWeight: '700' },
-  card: { borderRadius: 16, padding: 18, marginBottom: 14, shadowColor: '#A0BDD0', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.12, shadowRadius: 8, elevation: 3 },
-  cardTitle: { fontSize: 15, fontWeight: '800', marginBottom: 16, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: '#EEF4F8' },
+  // Card
+  card: {
+    borderRadius: 16, padding: 18, marginBottom: 14,
+    shadowColor: '#A0BDD0', shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.12, shadowRadius: 8, elevation: 3,
+  },
+
+  // Title row — title + status in same line
+  cardTitleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEF4F8',
+  },
+  cardTitle: { fontSize: 15, fontWeight: '800' },
+  cardTitleSimple: {
+    fontSize: 15, fontWeight: '800',
+    marginBottom: 16, paddingBottom: 10,
+    borderBottomWidth: 1, borderBottomColor: '#EEF4F8',
+  },
+
+  // Status badge
+  statusBadge: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 10, paddingVertical: 5,
+    borderRadius: 12, gap: 5,
+  },
+  statusDot: { width: 7, height: 7, borderRadius: 4 },
+  statusBadgeText: { fontSize: 11, fontWeight: '700' },
+
+  // Asset header
+  assetHeader: {
+    flexDirection: 'row', alignItems: 'center',
+    marginBottom: 14,
+  },
+  assetIconWrap: {
+    width: 44, height: 44, borderRadius: 12,
+    alignItems: 'center', justifyContent: 'center',
+    marginRight: 12,
+  },
+  assetHeaderInfo: { flex: 1 },
+  assetIdText: { fontSize: 17, fontWeight: '800' },
+  assetTypeText: { fontSize: 12, marginTop: 2 },
+
+  // Info rows
   infoRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 11 },
   infoLabel: { width: 90, fontSize: 12, fontWeight: '600' },
   infoValue: { flex: 1, fontSize: 14, fontWeight: '500' },
+
+  // Section label
+  sectionLabel: { fontSize: 13, fontWeight: '600', marginBottom: 6, marginTop: 10 },
+
+  // Description box
+  descriptionBox: {
+    backgroundColor: '#F8FAFB', borderRadius: 10,
+    padding: 12, borderWidth: 1, borderColor: '#EEF4F8',
+  },
+  description: { fontSize: 14, lineHeight: 22 },
+
+  // Divider
   divider: { height: 1, marginVertical: 12 },
-  description: { fontSize: 14, lineHeight: 22, marginTop: 6 },
-  photo: { width: '100%', height: 200, borderRadius: 10 },
-  enlargeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 8 },
-  leaveWarning: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFEBEE', borderRadius: 10, padding: 12, marginBottom: 14, gap: 8 },
+
+  // Photo
+  photoWrap: { borderRadius: 12, overflow: 'hidden' },
+  photo: { width: '100%', height: 200, borderRadius: 12 },
+  enlargeOverlay: {
+    position: 'absolute', bottom: 0, left: 0, right: 0,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    paddingVertical: 8,
+  },
+
+  // Leave warning
+  leaveWarning: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: '#FFEBEE', borderRadius: 10,
+    padding: 12, marginBottom: 14, gap: 8,
+  },
   leaveWarningText: { flex: 1, color: '#C62828', fontSize: 12, fontWeight: '500', lineHeight: 18 },
+
+  // Picker
   pickerLabel: { fontSize: 13, fontWeight: '600', marginBottom: 8 },
   pickerWrap: { backgroundColor: '#EEF6FB', borderRadius: 10, marginBottom: 14, borderWidth: 1, overflow: 'hidden' },
   warnBox: { backgroundColor: '#FFF3E0', borderRadius: 8, padding: 12, marginBottom: 14, flexDirection: 'row', alignItems: 'center' },
   warnText: { color: '#E65100', fontSize: 13 },
-  assignBtn: { backgroundColor: '#5BA8D4', borderRadius: 10, paddingVertical: 14, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8, shadowColor: '#5BA8D4', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 8, elevation: 6 },
-  assignBtnDisabled: { backgroundColor: '#B0CDD8', shadowOpacity: 0, elevation: 0 },
+
+  // Assign button
+  assignBtn: {
+    backgroundColor: '#004e68', borderRadius: 10, paddingVertical: 14,
+    alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8,
+    shadowColor: '#004e68', shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35, shadowRadius: 8, elevation: 6,
+  },
+  assignBtnDisabled: { backgroundColor: '#004e684b', shadowOpacity: 0, elevation: 0 },
   assignBtnText: { color: '#FFF', fontWeight: '700', fontSize: 15 },
   currentAssign: { textAlign: 'center', marginTop: 12, fontSize: 12 },
+
+  // Closed
   closedBox: { backgroundColor: '#E8F5E9', borderRadius: 10, padding: 24, alignItems: 'center', gap: 6 },
   closedTitle: { fontSize: 16, fontWeight: '700', color: '#2E7D32' },
   closedDate: { fontSize: 12, color: '#666' },
+
+  // Staff info
+  staffInfoBar: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: '#EEF6FB', borderRadius: 10,
+    padding: 14, gap: 12,
+  },
+  staffAvatar: { width: 44, height: 44, borderRadius: 22, borderWidth: 2, borderColor: '#5BA8D4' },
+  staffAvatarFallback: {
+    width: 44, height: 44, borderRadius: 22,
+    backgroundColor: '#5BA8D4', alignItems: 'center',
+    justifyContent: 'center', borderWidth: 2, borderColor: '#FFF',
+  },
+  staffAvatarInitial: { color: '#FFF', fontWeight: '700', fontSize: 16 },
+  staffName: { fontSize: 15, fontWeight: '700' },
+  staffRole: { fontSize: 12, marginTop: 2 },
+
+  // Not assigned
+  notAssignedBox: {
+    backgroundColor: '#FFF8E1', borderRadius: 10,
+    padding: 24, alignItems: 'center', gap: 6,
+  },
+  notAssignedTitle: { fontSize: 16, fontWeight: '700', color: '#E65100' },
+  notAssignedText: { fontSize: 13, color: '#666', textAlign: 'center' },
+
+  // Modal
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.92)', justifyContent: 'center', alignItems: 'center' },
   fullImage: { width: '95%', height: '70%' },
   closeHintRow: { flexDirection: 'row', alignItems: 'center', marginTop: 16 },
   closeHint: { color: 'rgba(255,255,255,0.6)', fontSize: 13 },
+
+    // Description editable
+  descTitleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  descEditBtn: {
+    width: 30, height: 30, borderRadius: 8,
+    backgroundColor: '#EEF6FB',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  descEditWrap: {
+    backgroundColor: '#F8FAFB',
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#7DD3F0',
+    overflow: 'hidden',
+  },
+  descEditInput: {
+    paddingHorizontal: 14,
+    paddingTop: 12,
+    paddingBottom: 8,
+    minHeight: 100,
+    fontSize: 14,
+    textAlignVertical: 'top',
+    lineHeight: 21,
+  },
+  descCharRow: {
+    alignItems: 'flex-end',
+    paddingHorizontal: 14,
+    paddingBottom: 8,
+  },
+  descCharCount: {
+    fontSize: 11,
+    color: '#9DB5C0',
+  },
+  descEditActions: {
+    flexDirection: 'row',
+    gap: 8,
+    padding: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#EEF4F8',
+  },
+  descCancelBtn: {
+    flex: 1,
+    backgroundColor: '#EEF4F8',
+    borderRadius: 8,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  descCancelText: {
+    color: '#5A7A8A',
+    fontWeight: '600',
+    fontSize: 13,
+  },
+  descSaveBtn: {
+    flex: 1,
+    backgroundColor: '#5BA8D4',
+    borderRadius: 8,
+    paddingVertical: 10,
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+  },
+  descSaveBtnDisabled: {
+    backgroundColor: '#B0CDD8',
+  },
+  descSaveText: {
+    color: '#FFF',
+    fontWeight: '700',
+    fontSize: 13,
+  },
 });

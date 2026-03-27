@@ -77,7 +77,7 @@ const complaintSchema = new mongoose.Schema(
       type: String,
       enum: {
         values: Object.values(COMPLAINT_STATUS),
-        message: 'Status must be OPEN, ASSIGNED, IN_PROGRESS, or CLOSED',
+        message: 'Status must be OPEN, ASSIGNED, IN_PROGRESS, FINISHING, or CLOSED',
       },
       default: COMPLAINT_STATUS.OPEN,
     },

@@ -11,37 +11,248 @@ import {
   Dimensions,
   StatusBar,
   TextInput,
+  ActivityIndicator,
+  Image,
+  Modal,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons, AntDesign, FontAwesome } from '@expo/vector-icons';
-import { authAPI, saveToken, saveUserData } from '../../services/api';
+import { Ionicons, AntDesign } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
+import { authAPI, uploadAPI, saveToken, saveUserData } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
-import * as WebBrowser from 'expo-web-browser';
-import * as AuthSession from 'expo-auth-session';
-
-WebBrowser.maybeCompleteAuthSession();
-
-const GOOGLE_CLIENT_ID = '341075816349-p63eudrknd0sujlri1tn5v8vnkso83ra.apps.googleusercontent.com';
 
 const { width } = Dimensions.get('window');
+
+const ROLES = [
+  { key: 'USER', label: 'User', icon: 'person-outline', color: '#2196F3', desc: 'Report issues' },
+  { key: 'STAFF', label: 'Staff', icon: 'build-outline', color: '#5BA8D4', desc: 'Fix issues' },
+];
 
 export default function SignupScreen({ navigation }) {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [phone, setPhone] = useState('');
+  const [role, setRole] = useState('USER');
+  const [employeeId, setEmployeeId] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const { signIn } = useAuth();
+
+  // Photo upload states
+  const [photoUri, setPhotoUri] = useState(null);
+  const [uploadedPhotoUrl, setUploadedPhotoUrl] = useState('');
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [showPhotoOptions, setShowPhotoOptions] = useState(false);
+
+  // Email verification states
+  const [showVerification, setShowVerification] = useState(false);
+  const [verificationCode, setVerificationCode] = useState('');
+  const [sendingCode, setSendingCode] = useState(false);
+  const [verifyingCode, setVerifyingCode] = useState(false);
+  const [isEmailVerified, setIsEmailVerified] = useState(false);
+  const [countdown, setCountdown] = useState(0);
+
+  // Role selection modal
+  const [showRoleModal, setShowRoleModal] = useState(false);
 
   // Focus states
   const [nameFocused, setNameFocused] = useState(false);
   const [emailFocused, setEmailFocused] = useState(false);
   const [passwordFocused, setPasswordFocused] = useState(false);
   const [confirmFocused, setConfirmFocused] = useState(false);
+  const [phoneFocused, setPhoneFocused] = useState(false);
+  const [codeFocused, setCodeFocused] = useState(false);
+  const [empIdFocused, setEmpIdFocused] = useState(false);
+
+  // Countdown timer for resend
+  React.useEffect(() => {
+    if (countdown > 0) {
+      const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [countdown]);
+
+  React.useEffect(() => {
+    requestPermissions();
+  }, []);
+
+  const requestPermissions = async () => {
+    const cameraPermission = await ImagePicker.requestCameraPermissionsAsync();
+    const mediaPermission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+    if (cameraPermission.status !== 'granted' || mediaPermission.status !== 'granted') {
+      Alert.alert(
+        'Permissions Required',
+        'Camera and photo library access is needed to upload profile pictures.',
+      );
+    }
+  };
+
+  // Photo picker options modal
+  const handlePhotoOptionPress = (option) => {
+    setShowPhotoOptions(false);
+    if (option === 'camera') {
+      handleTakePhoto();
+    } else {
+      handlePickPhoto();
+    }
+  };
+
+  const handleTakePhoto = async () => {
+    try {
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled) {
+        setPhotoUri(result.assets[0].uri);
+        await handleUploadPhoto(result.assets[0].uri);
+      }
+    } catch (error) {
+      console.error('Camera error:', error);
+      Alert.alert('Error', 'Failed to take photo');
+    }
+  };
+
+  const handlePickPhoto = async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled) {
+        setPhotoUri(result.assets[0].uri);
+        await handleUploadPhoto(result.assets[0].uri);
+      }
+    } catch (error) {
+      console.error('Photo picker error:', error);
+      Alert.alert('Error', 'Failed to pick photo');
+    }
+  };
+
+  const handleUploadPhoto = async (uri) => {
+    setUploadingPhoto(true);
+    try {
+      const formData = new FormData();
+      formData.append('photo', {
+        uri,
+        type: 'image/jpeg',
+        name: `profile_${Date.now()}.jpg`,
+      });
+
+      const response = await uploadAPI.uploadPhoto(formData);
+      if (response.data.success) {
+        setUploadedPhotoUrl(response.data.data.url);
+        Alert.alert('Success', 'Photo uploaded successfully!');
+      }
+    } catch (error) {
+      console.error('Photo upload error:', error);
+      Alert.alert('Error', 'Failed to upload photo. Please try again.');
+      setPhotoUri(null);
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
+  const validateEmail = () => {
+    if (!email.trim()) {
+      Alert.alert('Error', 'Please enter your email');
+      return false;
+    }
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!emailRegex.test(email.trim())) {
+      Alert.alert(
+        'Invalid Email',
+        'Please enter a valid email address.\n\nExamples:\n• user@gmail.com\n• staff@company.com',
+      );
+      return false;
+    }
+    return true;
+  };
+
+  const handleSendVerificationCode = async () => {
+    if (!validateEmail()) return;
+
+    if (!fullName.trim()) {
+      Alert.alert('Error', 'Please enter your full name first');
+      return;
+    }
+
+    setSendingCode(true);
+    try {
+      const response = await authAPI.sendVerificationCode(email.trim(), fullName.trim());
+      if (response.data.success) {
+        setShowVerification(true);
+        setCountdown(60);
+        Alert.alert(
+          'Code Sent! 📧',
+          'A 6-digit verification code has been sent to your email.\n\nPlease check your inbox (and spam folder).',
+        );
+      }
+    } catch (error) {
+      if (error.message.includes('already registered')) {
+        Alert.alert(
+          'Email Already Registered',
+          'This email is already associated with an account. Please login instead.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Go to Login', onPress: () => navigation.navigate('Login') },
+          ]
+        );
+      } else {
+        Alert.alert('Error', error.message || 'Failed to send verification code');
+      }
+    } finally {
+      setSendingCode(false);
+    }
+  };
+
+  const handleVerifyCode = async () => {
+    if (!verificationCode || verificationCode.length !== 6) {
+      Alert.alert('Error', 'Please enter the 6-digit verification code');
+      return;
+    }
+
+    setVerifyingCode(true);
+    try {
+      const response = await authAPI.verifyEmailCode(email.trim(), verificationCode);
+      if (response.data.success) {
+        setIsEmailVerified(true);
+        setShowVerification(false);
+        Alert.alert('Success! ✅', 'Email verified successfully. You can now complete your signup.');
+      }
+    } catch (error) {
+      if (error.response?.data?.attemptsLeft !== undefined) {
+        Alert.alert(
+          'Invalid Code',
+          `Incorrect verification code.\n\nAttempts remaining: ${error.response.data.attemptsLeft}`,
+        );
+      } else {
+        Alert.alert('Error', error.message || 'Failed to verify code');
+      }
+    } finally {
+      setVerifyingCode(false);
+    }
+  };
 
   const handleSignup = async () => {
+    // Check email verification
+    if (!isEmailVerified) {
+      Alert.alert(
+        'Email Not Verified',
+        'Please verify your email address first by clicking "Send Verification Code".',
+      );
+      return;
+    }
+
     if (!fullName.trim()) {
       Alert.alert('Error', 'Please enter your full name');
       return;
@@ -51,21 +262,8 @@ export default function SignupScreen({ navigation }) {
       return;
     }
 
-    // Email validation
-    if (!email.trim()) {
-      Alert.alert('Error', 'Please enter your email');
-      return;
-    }
-    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-    if (!emailRegex.test(email.trim())) {
-      Alert.alert(
-        'Invalid Email',
-        'Please enter a valid email address.\n\nExamples:\n• user@gmail.com\n• staff@company.com',
-      );
-      return;
-    }
+    if (!validateEmail()) return;
 
-    // Password validation
     if (!password) {
       Alert.alert('Error', 'Please enter a password');
       return;
@@ -86,12 +284,44 @@ export default function SignupScreen({ navigation }) {
       return;
     }
 
+    // Phone validation (Indian)
+    if (phone) {
+      const phoneDigits = phone.replace(/\D/g, '');
+      if (phoneDigits.length !== 10) {
+        Alert.alert('Invalid Phone', 'Phone number must be exactly 10 digits');
+        return;
+      }
+      if (!/^[6-9]/.test(phoneDigits)) {
+        Alert.alert(
+          'Invalid Phone Number',
+          'Indian mobile numbers must start with 6, 7, 8, or 9.\n\nExample: 9876543210'
+        );
+        return;
+      }
+    }
+
+    // Staff-specific validations
+    if (role === 'STAFF') {
+      if (!employeeId.trim()) {
+        Alert.alert('Error', 'Employee ID is required for staff members');
+        return;
+      }
+      if (!uploadedPhotoUrl) {
+        Alert.alert('Photo Required', 'Please upload a photo. This is mandatory for staff members.');
+        return;
+      }
+    }
+
     setLoading(true);
     try {
       const response = await authAPI.signup(
         email.trim(),
         password,
-        fullName.trim()
+        fullName.trim(),
+        phone.replace(/\D/g, ''),
+        role,
+        role === 'STAFF' ? employeeId.trim() : null,
+        uploadedPhotoUrl
       );
 
       if (response.data.success) {
@@ -100,8 +330,8 @@ export default function SignupScreen({ navigation }) {
         await saveUserData(user);
 
         Alert.alert(
-          'Account Created! ✅',
-          'Welcome to Scan2Fix!',
+          'Account Created! 🎉',
+          `Welcome to Scan2Fix${role === 'STAFF' ? ' as a Staff Member' : ''}!`,
           [
             {
               text: 'OK',
@@ -113,114 +343,21 @@ export default function SignupScreen({ navigation }) {
         );
       }
     } catch (error) {
-      Alert.alert('Signup Failed', error.message || 'Please try again');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSocialLoginSuccess = async (provider, tokenData) => {
-    try {
-      let response;
-
-      switch (provider) {
-        case 'Google':
-          response = await authAPI.googleLogin(tokenData.access_token);
-          break;
-        default:
-          throw new Error('Unknown provider');
-      }
-
-      if (response.data.success) {
-        const { token, user } = response.data.data;
-        await saveToken(token);
-        await saveUserData(user);
-
+      if (error.message.includes('verify your email')) {
         Alert.alert(
-          'Welcome! 👋',
-          `Account created for ${user.full_name || user.email}`,
-          [
-            {
-              text: 'OK',
-              onPress: async () => {
-                await signIn(user.email, '');
-              },
-            },
-          ]
+          'Verification Required',
+          'Please verify your email first by entering the code sent to your inbox.',
         );
+        setShowVerification(true);
+      } else {
+        Alert.alert('Signup Failed', error.message || 'Please try again');
       }
-    } catch (error) {
-      console.error(`${provider} signup error:`, error);
-      Alert.alert('Signup Failed', error.message || `${provider} signup failed.`);
-    }
-  };
-
-  const handleGoogleSignup = async () => {
-    if (GOOGLE_CLIENT_ID === 'YOUR_ACTUAL_GOOGLE_CLIENT_ID.apps.googleusercontent.com') {
-      Alert.alert(
-        'Setup Required',
-        'Google signup requires OAuth setup.\n\nPlease use email/password signup.',
-        [{ text: 'OK' }]
-      );
-      return;
-    }
-
-    setLoading(true);
-
-    try {
-      // Use YOUR server as the redirect URI
-      const redirectUri = 'https://turgid-falcate-chun.ngrok-free.dev/auth/callback';
-
-      const authUrl =
-        'https://accounts.google.com/o/oauth2/v2/auth?' +
-        `client_id=${GOOGLE_CLIENT_ID}&` +
-        `redirect_uri=${encodeURIComponent(redirectUri)}&` +
-        'response_type=token&' +
-        `scope=${encodeURIComponent('openid email profile')}`;
-
-      const result = await WebBrowser.openAuthSessionAsync(
-        authUrl,
-        'scan2fix://auth'
-      );
-
-      if (result.type === 'success' && result.url) {
-        let accessToken = null;
-
-        if (result.url.includes('access_token=')) {
-          const tokenMatch = result.url.match(/access_token=([^&]+)/);
-          if (tokenMatch) {
-            accessToken = decodeURIComponent(tokenMatch[1]);
-          }
-        }
-
-        if (accessToken) {
-          await handleSocialLoginSuccess('Google', {
-            access_token: accessToken,
-          });
-        } else {
-          Alert.alert(
-            'Note',
-            'Google signup may not redirect back in Expo Go.\n\n' +
-            'It will work in the built APK.\n\nPlease use email signup for now.',
-            [{ text: 'OK' }]
-          );
-        }
-      }
-    } catch (error) {
-      console.error('Google signup error:', error);
-      Alert.alert('Error', 'Google signup failed. Please try email signup.');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleAppleSignup = () => {
-    if (Platform.OS !== 'ios') {
-      Alert.alert('iOS Only', 'Apple Sign-In is only available on iOS devices.');
-      return;
-    }
-    Alert.alert('Coming Soon', 'Apple signup will be available in a future update.');
-  };
+  const selectedRole = ROLES.find(r => r.key === role);
 
   return (
     <View style={styles.container}>
@@ -230,7 +367,7 @@ export default function SignupScreen({ navigation }) {
       <View style={styles.topDecoration}>
         <View style={styles.shapeBack}>
           <LinearGradient
-            colors={['#94a3b8', '#64748b']}
+            colors={['#004e68', '#004e68']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.shapeGradient}
@@ -238,7 +375,7 @@ export default function SignupScreen({ navigation }) {
         </View>
         <View style={styles.shapeFront}>
           <LinearGradient
-            colors={['#7dd3fc', '#38bdf8']}
+            colors={['#8CD6F7', '#8CD6F7']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.shapeGradient}
@@ -267,12 +404,72 @@ export default function SignupScreen({ navigation }) {
           <View style={styles.welcomeSection}>
             <Text style={styles.welcomeTitle}>Create Account</Text>
             <Text style={styles.welcomeSubtitle}>
-              Join Scan2Fix to report issues
+              Join Scan2Fix to {role === 'STAFF' ? 'fix' : 'report'} issues
             </Text>
           </View>
 
           {/* Form */}
           <View style={styles.formSection}>
+            {/* Role Selection */}
+            <Text style={styles.sectionLabel}>I want to join as</Text>
+            <TouchableOpacity
+              style={styles.roleSelector}
+              onPress={() => setShowRoleModal(true)}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.roleSelectorIcon, { backgroundColor: `${selectedRole.color}15` }]}>
+                <Ionicons name={selectedRole.icon} size={22} color={selectedRole.color} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.roleSelectorLabel}>{selectedRole.label}</Text>
+                <Text style={styles.roleSelectorDesc}>{selectedRole.desc}</Text>
+              </View>
+              <Ionicons name="chevron-down" size={20} color="#9ca3af" />
+            </TouchableOpacity>
+
+            {/* Photo Upload - Show for STAFF */}
+            {role === 'STAFF' && (
+              <View style={styles.photoSection}>
+                <View style={styles.photoHeader}>
+                  <Text style={styles.sectionLabel}>
+                    Profile Photo <Text style={{ color: '#F44336' }}>*</Text>
+                  </Text>
+                  <Text style={styles.requiredBadge}>Required for Staff</Text>
+                </View>
+
+                {photoUri ? (
+                  <View style={styles.photoPreviewContainer}>
+                    <Image source={{ uri: photoUri }} style={styles.photoPreview} />
+                    {uploadingPhoto && (
+                      <View style={styles.uploadingOverlay}>
+                        <ActivityIndicator size="large" color="#fff" />
+                        <Text style={styles.uploadingText}>Uploading...</Text>
+                      </View>
+                    )}
+                    <TouchableOpacity
+                      style={styles.photoRemoveBtn}
+                      onPress={() => {
+                        setPhotoUri(null);
+                        setUploadedPhotoUrl('');
+                      }}
+                    >
+                      <Ionicons name="close-circle" size={32} color="#F44336" />
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    style={styles.photoPlaceholder}
+                    onPress={() => setShowPhotoOptions(true)}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="camera-outline" size={40} color="#9ca3af" />
+                    <Text style={styles.photoPlaceholderText}>Tap to add photo</Text>
+                    <Text style={styles.photoPlaceholderSubtext}>Camera or Gallery</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
+
             {/* Full Name */}
             <View style={[styles.inputContainer, nameFocused && styles.inputContainerFocused]}>
               <View style={styles.inputIconContainer}>
@@ -289,6 +486,24 @@ export default function SignupScreen({ navigation }) {
               />
             </View>
 
+            {/* Employee ID - Only for STAFF */}
+            {role === 'STAFF' && (
+              <View style={[styles.inputContainer, empIdFocused && styles.inputContainerFocused]}>
+                <View style={styles.inputIconContainer}>
+                  <Ionicons name="card-outline" size={20} color={empIdFocused ? '#38bdf8' : '#9ca3af'} />
+                </View>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Employee ID (e.g., EMP001)"
+                  placeholderTextColor="#9ca3af"
+                  value={employeeId}
+                  onChangeText={setEmployeeId}
+                  onFocus={() => setEmpIdFocused(true)}
+                  onBlur={() => setEmpIdFocused(false)}
+                />
+              </View>
+            )}
+
             {/* Email */}
             <View style={[styles.inputContainer, emailFocused && styles.inputContainerFocused]}>
               <View style={styles.inputIconContainer}>
@@ -304,8 +519,131 @@ export default function SignupScreen({ navigation }) {
                 autoCapitalize="none"
                 onFocus={() => setEmailFocused(true)}
                 onBlur={() => setEmailFocused(false)}
+                editable={!isEmailVerified}
               />
+              {isEmailVerified && (
+                <Ionicons name="checkmark-circle" size={22} color="#4CAF50" style={{ marginRight: 8 }} />
+              )}
             </View>
+
+            {/* Email Verification Button */}
+            {!isEmailVerified && (
+              <TouchableOpacity
+                style={[styles.verifyButton, (sendingCode || countdown > 0) && styles.verifyButtonDisabled]}
+                onPress={handleSendVerificationCode}
+                disabled={sendingCode || countdown > 0}
+                activeOpacity={0.8}
+              >
+                {sendingCode ? (
+                  <>
+                    <ActivityIndicator size="small" color="#fff" />
+                    <Text style={styles.verifyButtonText}>  Sending...</Text>
+                  </>
+                ) : (
+                  <>
+                    <Ionicons name="mail-outline" size={18} color="#fff" />
+                    <Text style={styles.verifyButtonText}>
+                      {countdown > 0 ? `  Resend in ${countdown}s` : '  Send Verification Code'}
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            )}
+
+            {/* Verification Code Input */}
+            {showVerification && !isEmailVerified && (
+              <View style={styles.verificationBox}>
+                <Text style={styles.verificationTitle}>Enter Verification Code</Text>
+                <Text style={styles.verificationSubtitle}>
+                  Check your email for the 6-digit code
+                </Text>
+                <View style={[styles.inputContainer, codeFocused && styles.inputContainerFocused, { marginTop: 12 }]}>
+                  <View style={styles.inputIconContainer}>
+                    <Ionicons name="key-outline" size={20} color={codeFocused ? '#38bdf8' : '#9ca3af'} />
+                  </View>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="6-digit code"
+                    placeholderTextColor="#9ca3af"
+                    value={verificationCode}
+                    onChangeText={(text) => {
+                      const digits = text.replace(/\D/g, '');
+                      if (digits.length <= 6) {
+                        setVerificationCode(digits);
+                      }
+                    }}
+                    keyboardType="number-pad"
+                    maxLength={6}
+                    onFocus={() => setCodeFocused(true)}
+                    onBlur={() => setCodeFocused(false)}
+                  />
+                  {verificationCode.length === 6 && (
+                    <Ionicons name="checkmark-circle" size={22} color="#4CAF50" style={{ marginRight: 8 }} />
+                  )}
+                </View>
+                <TouchableOpacity
+                  style={[styles.verifyCodeButton, verifyingCode && styles.verifyCodeButtonDisabled]}
+                  onPress={handleVerifyCode}
+                  disabled={verifyingCode || verificationCode.length !== 6}
+                  activeOpacity={0.8}
+                >
+                  {verifyingCode ? (
+                    <>
+                      <ActivityIndicator size="small" color="#fff" />
+                      <Text style={styles.verifyCodeButtonText}>  Verifying...</Text>
+                    </>
+                  ) : (
+                    <>
+                      <Ionicons name="shield-checkmark-outline" size={18} color="#fff" />
+                      <Text style={styles.verifyCodeButtonText}>  Verify Code</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* Phone Number */}
+            <View style={[styles.inputContainer, phoneFocused && styles.inputContainerFocused]}>
+              <View style={styles.inputIconContainer}>
+                <Ionicons name="call-outline" size={20} color={phoneFocused ? '#38bdf8' : '#9ca3af'} />
+              </View>
+              <TextInput
+                style={styles.input}
+                placeholder="Phone (10 digits, optional)"
+                placeholderTextColor="#9ca3af"
+                value={phone}
+                onChangeText={(text) => {
+                  const digits = text.replace(/\D/g, '');
+                  if (digits.length <= 10) {
+                    setPhone(digits);
+                  }
+                }}
+                keyboardType="phone-pad"
+                maxLength={10}
+                onFocus={() => setPhoneFocused(true)}
+                onBlur={() => setPhoneFocused(false)}
+              />
+              {phone.length > 0 && (
+                <View style={{ marginRight: 8 }}>
+                  <Ionicons
+                    name={phone.length === 10 && /^[6-9]/.test(phone) ? 'checkmark-circle' : 'alert-circle'}
+                    size={18}
+                    color={phone.length === 10 && /^[6-9]/.test(phone) ? '#4CAF50' : '#FF9800'}
+                  />
+                </View>
+              )}
+            </View>
+
+            {phone.length > 0 && phone.length < 10 && (
+              <Text style={styles.phoneHint}>
+                {phone.length}/10 digits
+              </Text>
+            )}
+            {phone.length > 0 && phone.length === 10 && !/^[6-9]/.test(phone) && (
+              <Text style={styles.phoneError}>
+                Indian numbers must start with 6, 7, 8, or 9
+              </Text>
+            )}
 
             {/* Password */}
             <View style={[styles.inputContainer, passwordFocused && styles.inputContainerFocused]}>
@@ -327,6 +665,27 @@ export default function SignupScreen({ navigation }) {
               </TouchableOpacity>
             </View>
 
+            {/* Password Strength */}
+            {password.length > 0 && (
+              <View style={styles.strengthRow}>
+                <View style={styles.strengthBar}>
+                  <View style={[styles.strengthFill, {
+                    width: password.length < 6 ? '30%' :
+                      (!/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) ? '60%' : '100%',
+                    backgroundColor: password.length < 6 ? '#ef4444' :
+                      (!/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) ? '#f59e0b' : '#22c55e',
+                  }]} />
+                </View>
+                <Text style={[styles.strengthText, {
+                  color: password.length < 6 ? '#ef4444' :
+                    (!/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) ? '#f59e0b' : '#22c55e',
+                }]}>
+                  {password.length < 6 ? 'Too short' :
+                    (!/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) ? 'Add letter + number' : 'Strong ✓'}
+                </Text>
+              </View>
+            )}
+
             {/* Confirm Password */}
             <View style={[styles.inputContainer, confirmFocused && styles.inputContainerFocused]}>
               <View style={styles.inputIconContainer}>
@@ -346,43 +705,46 @@ export default function SignupScreen({ navigation }) {
                 <Ionicons name={showConfirm ? 'eye-off-outline' : 'eye-outline'} size={20} color="#9ca3af" />
               </TouchableOpacity>
             </View>
+
+            {/* Password Match Indicator */}
+            {confirmPassword.length > 0 && (
+              <View style={styles.matchRow}>
+                <Ionicons
+                  name={password === confirmPassword ? 'checkmark-circle' : 'close-circle'}
+                  size={14}
+                  color={password === confirmPassword ? '#4CAF50' : '#F44336'}
+                />
+                <Text style={{
+                  fontSize: 11, marginLeft: 4,
+                  color: password === confirmPassword ? '#4CAF50' : '#F44336',
+                }}>
+                  {password === confirmPassword ? 'Passwords match' : 'Passwords do not match'}
+                </Text>
+              </View>
+            )}
           </View>
 
           {/* Sign Up Button */}
           <TouchableOpacity
-            style={styles.loginButtonContainer}
+            style={[styles.loginButtonContainer, (!isEmailVerified || loading) && styles.loginButtonDisabled]}
             onPress={handleSignup}
-            disabled={loading}
+            disabled={!isEmailVerified || loading}
             activeOpacity={0.8}
           >
             <LinearGradient
-              colors={['#7dd3fc', '#64748b']}
+              colors={!isEmailVerified || loading ? ['#B0CDD8', '#B0CDD8'] : ['#7dd3fc', '#004e68']}
               start={{ x: 0, y: 0 }}
               end={{ x: 0, y: 1 }}
               style={styles.loginButton}
             >
+              {loading ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : null}
               <Text style={styles.loginButtonText}>
-                {loading ? 'CREATING...' : 'SIGN UP'}
+                {loading ? '  CREATING...' : 'SIGN UP'}
               </Text>
             </LinearGradient>
           </TouchableOpacity>
-
-          {/* Social Divider */}
-          <View style={styles.dividerSection}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>Or sign up using</Text>
-            <View style={styles.dividerLine} />
-          </View>
-
-          {/* Social Buttons */}
-          <View style={styles.socialSection}>
-            <TouchableOpacity style={styles.socialButton} onPress={() => handleGoogleSignup()}>
-              <AntDesign name="google" size={22}/>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.socialButton} onPress={() => handleAppleSignup()}>
-              <AntDesign name="apple" size={22}/>
-            </TouchableOpacity>
-          </View>
 
           {/* Login Link */}
           <View style={styles.signupSection}>
@@ -393,6 +755,106 @@ export default function SignupScreen({ navigation }) {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Role Selection Modal */}
+      <Modal
+        visible={showRoleModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowRoleModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowRoleModal(false)}
+        >
+          <View style={styles.modalContent} onStartShouldSetResponder={() => true}>
+            <Text style={styles.modalTitle}>Select Your Role</Text>
+            {ROLES.map((r) => (
+              <TouchableOpacity
+                key={r.key}
+                style={[
+                  styles.roleOption,
+                  role === r.key && { backgroundColor: `${r.color}10`, borderColor: r.color },
+                ]}
+                onPress={() => {
+                  setRole(r.key);
+                  setShowRoleModal(false);
+                }}
+                activeOpacity={0.8}
+              >
+                <View style={[styles.roleOptionIcon, { backgroundColor: `${r.color}15` }]}>
+                  <Ionicons name={r.icon} size={28} color={r.color} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.roleOptionLabel, role === r.key && { color: r.color }]}>
+                    {r.label}
+                  </Text>
+                  <Text style={styles.roleOptionDesc}>{r.desc}</Text>
+                </View>
+                {role === r.key && (
+                  <Ionicons name="checkmark-circle" size={24} color={r.color} />
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Photo Options Modal */}
+      <Modal
+        visible={showPhotoOptions}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowPhotoOptions(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowPhotoOptions(false)}
+        >
+          <View style={styles.photoOptionsContent} onStartShouldSetResponder={() => true}>
+            <Text style={styles.modalTitle}>Choose Photo Source</Text>
+
+            <TouchableOpacity
+              style={styles.photoOptionBtn}
+              onPress={() => handlePhotoOptionPress('camera')}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.photoOptionIcon, { backgroundColor: '#E3F2FD' }]}>
+                <Ionicons name="camera-outline" size={28} color="#2196F3" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.photoOptionLabel}>Take Photo</Text>
+                <Text style={styles.photoOptionDesc}>Use camera to take a new photo</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.photoOptionBtn}
+              onPress={() => handlePhotoOptionPress('gallery')}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.photoOptionIcon, { backgroundColor: '#F3E5F5' }]}>
+                <Ionicons name="images-outline" size={28} color="#9C27B0" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.photoOptionLabel}>Choose from Gallery</Text>
+                <Text style={styles.photoOptionDesc}>Select from your photo library</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.photoCancelBtn}
+              onPress={() => setShowPhotoOptions(false)}
+            >
+              <Text style={styles.photoCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
@@ -418,12 +880,9 @@ const styles = StyleSheet.create({
 
   // Logo
   logoSection: { alignItems: 'center', marginTop: 140, marginBottom: 5 },
-  logoRow: {
-  flexDirection: 'row',
-  alignItems: 'center',
-},
-  logoText: { fontSize: 44, fontWeight: '300', color: '#7dd3fc', letterSpacing: 2 },
-  logoText2: { fontSize: 44, fontWeight: '700', color: '#38bdf8', letterSpacing: 2 },
+  logoRow: { flexDirection: 'row', alignItems: 'center' },
+  logoText: { fontSize: 44, fontWeight: '300', color: '#8CD6F7', letterSpacing: 2 },
+  logoText2: { fontSize: 44, fontWeight: '700', color: '#004e68', letterSpacing: 2 },
 
   // Welcome
   welcomeSection: { alignItems: 'center', marginTop: 15, marginBottom: 25 },
@@ -432,6 +891,52 @@ const styles = StyleSheet.create({
 
   // Form
   formSection: { paddingHorizontal: 36 },
+  sectionLabel: { fontSize: 13, fontWeight: '600', color: '#1e293b', marginBottom: 8 },
+
+  // Role selector
+  roleSelector: {
+    flexDirection: 'row', alignItems: 'center', backgroundColor: '#f4f4f5',
+    borderRadius: 12, padding: 14, marginBottom: 18, borderWidth: 2, borderColor: '#e5e7eb',
+  },
+  roleSelectorIcon: {
+    width: 44, height: 44, borderRadius: 12, alignItems: 'center',
+    justifyContent: 'center', marginRight: 12,
+  },
+  roleSelectorLabel: { fontSize: 16, fontWeight: '700', color: '#1e293b' },
+  roleSelectorDesc: { fontSize: 12, color: '#6b7280', marginTop: 2 },
+
+  // Photo section
+  photoSection: { marginBottom: 18 },
+  photoHeader: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  requiredBadge: {
+    fontSize: 10, fontWeight: '600', color: '#F44336',
+    backgroundColor: '#FFEBEE', paddingHorizontal: 8, paddingVertical: 3,
+    borderRadius: 8,
+  },
+  photoPlaceholder: {
+    height: 160, borderRadius: 12, borderWidth: 2, borderStyle: 'dashed',
+    borderColor: '#e5e7eb', justifyContent: 'center', alignItems: 'center',
+    backgroundColor: '#f9fafb',
+  },
+  photoPlaceholderText: { fontSize: 14, color: '#6b7280', marginTop: 8, fontWeight: '500' },
+  photoPlaceholderSubtext: { fontSize: 11, color: '#9ca3af', marginTop: 2 },
+  photoPreviewContainer: { position: 'relative', alignSelf: 'center' },
+  photoPreview: { width: 160, height: 160, borderRadius: 12 },
+  uploadingOverlay: {
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 12,
+    justifyContent: 'center', alignItems: 'center',
+  },
+  uploadingText: { color: '#fff', fontSize: 13, marginTop: 10, fontWeight: '600' },
+  photoRemoveBtn: {
+    position: 'absolute', top: -8, right: -8,
+    backgroundColor: '#fff', borderRadius: 16, shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4, elevation: 5,
+  },
+
   inputContainer: {
     flexDirection: 'row', alignItems: 'center', backgroundColor: '#f4f4f5',
     borderRadius: 8, height: 54, marginBottom: 14, paddingHorizontal: 16,
@@ -442,30 +947,99 @@ const styles = StyleSheet.create({
   input: { flex: 1, fontSize: 14, color: '#1e293b', paddingVertical: 0, marginLeft: 8 },
   eyeButton: { padding: 8 },
 
+  // Verification button
+  verifyButton: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: '#2196F3', borderRadius: 8, paddingVertical: 12,
+    marginBottom: 14, shadowColor: '#2196F3', shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25, shadowRadius: 5, elevation: 4,
+  },
+  verifyButtonDisabled: { backgroundColor: '#90CAF9', shadowOpacity: 0 },
+  verifyButtonText: { color: '#fff', fontSize: 14, fontWeight: '600' },
+
+  // Verification box
+  verificationBox: {
+    backgroundColor: '#E3F2FD', borderRadius: 12, padding: 16, marginBottom: 14,
+    borderWidth: 2, borderColor: '#2196F3',
+  },
+  verificationTitle: { fontSize: 15, fontWeight: '700', color: '#1565C0', marginBottom: 4 },
+  verificationSubtitle: { fontSize: 12, color: '#1976D2', marginBottom: 8 },
+  verifyCodeButton: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: '#4CAF50', borderRadius: 8, paddingVertical: 12, marginTop: 12,
+    shadowColor: '#4CAF50', shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25, shadowRadius: 5, elevation: 4,
+  },
+  verifyCodeButtonDisabled: { backgroundColor: '#A5D6A7', shadowOpacity: 0 },
+  verifyCodeButtonText: { color: '#fff', fontSize: 14, fontWeight: '600' },
+
+  // Phone hints
+  phoneHint: { fontSize: 11, color: '#FF9800', marginTop: -10, marginBottom: 10, marginLeft: 4 },
+  phoneError: { fontSize: 11, color: '#F44336', marginTop: -10, marginBottom: 10, marginLeft: 4 },
+
+  // Password strength
+  strengthRow: { flexDirection: 'row', alignItems: 'center', marginTop: -8, marginBottom: 10, paddingHorizontal: 4 },
+  strengthBar: { width: 80, height: 4, backgroundColor: '#e5e7eb', borderRadius: 2, marginRight: 8, overflow: 'hidden' },
+  strengthFill: { height: '100%', borderRadius: 2 },
+  strengthText: { fontSize: 11, fontWeight: '500' },
+
+  // Match indicator
+  matchRow: { flexDirection: 'row', alignItems: 'center', marginTop: -8, marginBottom: 10, paddingHorizontal: 4 },
+
   // Button
   loginButtonContainer: {
     paddingHorizontal: 80, marginTop: 12,
     shadowColor: '#000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.19, shadowRadius: 7, elevation: 5,
   },
-  loginButton: { height: 50, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
+  loginButtonDisabled: { shadowOpacity: 0, elevation: 0 },
+  loginButton: { height: 50, borderRadius: 8, flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
   loginButtonText: { color: '#ffffff', fontSize: 16, fontWeight: 'bold', letterSpacing: 1.5 },
 
-  // Divider
-  dividerSection: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 50, marginTop: 24, marginBottom: 18 },
-  dividerLine: { flex: 1, height: 1, backgroundColor: '#e5e7eb' },
-  dividerText: { marginHorizontal: 12, fontSize: 13, color: '#6b7280' },
-
-  // Social
-  socialSection: { flexDirection: 'row', justifyContent: 'center', gap: 20, marginBottom: 25 },
-  socialButton: {
-    width: 50, height: 50, borderRadius: 25, backgroundColor: '#fafaf9',
-    justifyContent: 'center', alignItems: 'center',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 4,
-    elevation: 3, borderWidth: 1, borderColor: '#f0f0f0',
-  },
-
   // Sign up link
-  signupSection: { flexDirection: 'row', justifyContent: 'center', marginBottom: 20 },
+  signupSection: { flexDirection: 'row', justifyContent: 'center', marginTop: 25, marginBottom: 20 },
   signupText: { fontSize: 15, color: '#6b7280' },
   signupLink: { fontSize: 15, fontWeight: 'bold', color: '#1e293b' },
+
+  // Role modal
+  modalOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center',
+    alignItems: 'center', padding: 20,
+  },
+  modalContent: {
+    width: '100%', maxWidth: 360, backgroundColor: '#fff',
+    borderRadius: 20, padding: 20, elevation: 10,
+  },
+  modalTitle: { fontSize: 18, fontWeight: '800', textAlign: 'center', marginBottom: 20, color: '#1e293b' },
+  roleOption: {
+    flexDirection: 'row', alignItems: 'center', padding: 16,
+    borderRadius: 12, marginBottom: 12, borderWidth: 2, borderColor: '#e5e7eb',
+  },
+  roleOptionIcon: {
+    width: 52, height: 52, borderRadius: 14, alignItems: 'center',
+    justifyContent: 'center', marginRight: 14,
+  },
+  roleOptionLabel: { fontSize: 16, fontWeight: '700', color: '#1e293b' },
+  roleOptionDesc: { fontSize: 12, color: '#6b7280', marginTop: 2 },
+
+  // Photo options modal
+  photoOptionsContent: {
+    width: '100%', maxWidth: 360, backgroundColor: '#fff',
+    borderRadius: 20, padding: 20, elevation: 10,
+  },
+  photoOptionBtn: {
+    flexDirection: 'row', alignItems: 'center', padding: 16,
+    borderRadius: 12, marginBottom: 12, backgroundColor: '#f9fafb',
+    borderWidth: 1, borderColor: '#e5e7eb',
+  },
+  photoOptionIcon: {
+    width: 52, height: 52, borderRadius: 14, alignItems: 'center',
+    justifyContent: 'center', marginRight: 14,
+  },
+  photoOptionLabel: { fontSize: 15, fontWeight: '700', color: '#1e293b' },
+  photoOptionDesc: { fontSize: 12, color: '#6b7280', marginTop: 2 },
+  photoCancelBtn: {
+    marginTop: 8, paddingVertical: 14, borderRadius: 12,
+    backgroundColor: '#f4f4f5', alignItems: 'center',
+  },
+  photoCancelText: { fontSize: 15, fontWeight: '600', color: '#6b7280' },
 });

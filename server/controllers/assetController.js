@@ -58,6 +58,7 @@ exports.getAssetByQR = async (req, res) => {
         location: asset.location,   // "3rd Floor, Room 317"
         brand: asset.brand,
         model: asset.model,
+        install_date: asset.install_date,
         is_active: asset.is_active,
       },
     });
@@ -158,13 +159,14 @@ exports.createAsset = async (req, res) => {
 // ────────────────────────────────────────
 exports.updateAsset = async (req, res) => {
   try {
-    const { location, brand, model, is_active } = req.body;
+    const { location, brand, model, is_active, install_date } = req.body;
 
     const updateFields = {};
     if (location !== undefined) updateFields.location = location;
     if (brand !== undefined) updateFields.brand = brand;
     if (model !== undefined) updateFields.model = model;
     if (is_active !== undefined) updateFields.is_active = is_active;
+    if (install_date !== undefined) updateFields.install_date = install_date;
 
     const asset = await Asset.findByIdAndUpdate(req.params.id, updateFields, {
       new: true,
@@ -188,6 +190,59 @@ exports.updateAsset = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Server error updating asset',
+    });
+  }
+};
+
+// ────────────────────────────────────────
+// GET /api/assets/types
+// ────────────────────────────────────────
+// Get all unique asset types
+// ────────────────────────────────────────
+exports.getAssetTypes = async (req, res) => {
+  try {
+    const types = await Asset.distinct('type');
+    res.status(200).json({
+      success: true,
+      data: types.sort(),
+    });
+  } catch (error) {
+    console.error('Get asset types error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error fetching asset types',
+    });
+  }
+};
+
+// ────────────────────────────────────────
+// PUT /api/assets/:id/toggle-active
+// ────────────────────────────────────────
+// Toggle asset active/inactive status
+// ────────────────────────────────────────
+exports.toggleAssetActive = async (req, res) => {
+  try {
+    const asset = await Asset.findById(req.params.id);
+    if (!asset) {
+      return res.status(404).json({
+        success: false,
+        message: 'Asset not found',
+      });
+    }
+
+    asset.is_active = !asset.is_active;
+    await asset.save();
+
+    res.status(200).json({
+      success: true,
+      message: `Asset ${asset.asset_id} is now ${asset.is_active ? 'Active' : 'Inactive'}`,
+      data: asset,
+    });
+  } catch (error) {
+    console.error('Toggle asset active error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error toggling asset status',
     });
   }
 };

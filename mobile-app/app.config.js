@@ -6,24 +6,23 @@ export default {
     slug: "scan2fix",
     version: "1.0.0",
     orientation: "portrait",
-    icon: "./assets/images/icon.png",
-    scheme: "scan2fix",
+    icon: "./assets/images/splash-icon.png",
+    scheme: "scan2fix",  
     userInterfaceStyle: "automatic",
     newArchEnabled: true,
 
     ios: {
       supportsTablet: true,
       bundleIdentifier: "com.scan2fix.app",
+      // iOS uses the scheme automatically, no extra config needed
     },
 
     android: {
       package: "com.scan2fix.app",
-      versionCode: 1,
+      versionCode: 2,  // Bump this since you're rebuilding
       adaptiveIcon: {
-        backgroundColor: "#E6F4FE",
-        foregroundImage: "./assets/images/android-icon-foreground.png",
-        backgroundImage: "./assets/images/android-icon-background.png",
-        monochromeImage: "./assets/images/android-icon-monochrome.png",
+        backgroundColor: "#ffffff",
+        foregroundImage: "./assets/images/splash-icon.png",
       },
       edgeToEdgeEnabled: true,
       predictiveBackGestureEnabled: false,
@@ -31,6 +30,23 @@ export default {
         "CAMERA",
         "READ_EXTERNAL_STORAGE",
         "WRITE_EXTERNAL_STORAGE"
+      ],
+
+      // ════════════════════════════════════════
+      // ADD THIS - Required for deep link redirect
+      // ════════════════════════════════════════
+      intentFilters: [
+        {
+          action: "VIEW",
+          autoVerify: true,
+          data: [
+            {
+              scheme: "scan2fix",
+              host: "auth",
+            }
+          ],
+          category: ["BROWSABLE", "DEFAULT"]
+        }
       ],
     },
 
@@ -56,25 +72,24 @@ export default {
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow Scan2Fix to access your camera to scan QR codes"
+          cameraPermission: "Allow Scan2Fix to access your camera to scan QR codes"
         }
       ],
-       "expo-secure-store",
       [
         "expo-media-library",
         {
-          "photosPermission": "Allow Scan2Fix to save QR codes to your gallery",
-          "savePhotosPermission": "Allow Scan2Fix to save QR codes to your gallery",
-          "isAccessMediaLocationEnabled": true
+          photosPermission: "Allow Scan2Fix to save QR codes to your gallery",
+          savePhotosPermission: "Allow Scan2Fix to save QR codes to your gallery",
+          isAccessMediaLocationEnabled: true
         }
       ],
-      ["expo-barcode-scanner",
+       [
+        "expo-image-picker",
         {
-          newArchEnabled: false,
+          "photosPermission": "The app needs access to your photos to upload profile pictures.",
+          "cameraPermission": "The app needs access to your camera to take profile pictures."
         }
       ],
-      "expo-secure-store",
-      "expo-web-browser",
     ],
 
     experiments: {

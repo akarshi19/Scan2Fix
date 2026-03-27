@@ -101,33 +101,43 @@ exports.createComplaint = async (req, res) => {
 exports.getMyComplaints = async (req, res) => {
   try {
     const complaints = await Complaint.find({ user_id: req.user._id })
-      .populate('asset', 'type location')
+      .populate('asset', 'type location brand model install_date')  // ← Added brand, model, install_date
       .populate('assigned_staff_id', 'full_name email photo_url is_on_leave')
+      .populate('user_id', 'full_name email')  // ← ADD THIS: populate reporter
       .sort({ created_at: -1 });
 
-    // Transform to match Supabase response shape
-    // Your mobile app expects: item.assets.location, item.profiles.full_name
     const transformed = complaints.map((c) => {
       const obj = c.toObject();
       return {
         ...obj,
         id: obj._id,
-        // Map populated fields to match Supabase naming
         assets: obj.asset
-          ? { location: obj.asset.location, type: obj.asset.type }
+          ? {
+              location: obj.asset.location,
+              type: obj.asset.type,
+              brand: obj.asset.brand,        // ← Added
+              model: obj.asset.model,        // ← Added
+              install_date: obj.asset.install_date,  // ← Added
+            }
           : null,
         profiles: obj.assigned_staff_id
           ? {
               full_name: obj.assigned_staff_id.full_name,
               email: obj.assigned_staff_id.email,
               photo_url: obj.assigned_staff_id.photo_url,
-              is_on_leave: obj.assigned_staff_id.is_on_leave, 
+              is_on_leave: obj.assigned_staff_id.is_on_leave,
             }
           : null,
-        // Keep assigned_staff_id as just the ID string for compatibility
+        reporter: obj.user_id              // ← ADD THIS
+          ? {
+              full_name: obj.user_id.full_name,
+              email: obj.user_id.email,
+            }
+          : null,
         assigned_staff_id: obj.assigned_staff_id
           ? obj.assigned_staff_id._id
           : null,
+        user_id: obj.user_id ? obj.user_id._id : null,
       };
     });
 
@@ -138,10 +148,7 @@ exports.getMyComplaints = async (req, res) => {
     });
   } catch (error) {
     console.error('Get my complaints error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error fetching complaints',
-    });
+    res.status(500).json({ success: false, message: 'Server error fetching complaints' });
   }
 };
 
@@ -167,7 +174,7 @@ exports.getAllComplaints = async (req, res) => {
     if (asset_type) filter.asset_id = { $regex: asset_type, $options: 'i' };
 
     const complaints = await Complaint.find(filter)
-      .populate('asset', 'type location')
+      .populate('asset', 'type location brand model install_date')
       .populate('assigned_staff_id', 'full_name email photo_url is_on_leave')
       .populate('user_id', 'full_name email')
       .sort({ created_at: -1 });
@@ -233,12 +240,13 @@ exports.getStaffJobs = async (req, res) => {
   try {
     const { status } = req.query;
 
-    // Build filter — always filter by current staff member
     const filter = { assigned_staff_id: req.user._id };
     if (status) filter.status = status.toUpperCase();
 
     const jobs = await Complaint.find(filter)
-      .populate('asset', 'type location')
+      .populate('asset', 'type location brand model install_date')
+      .populate('user_id', 'full_name email')           // ← ADD THIS
+      .populate('assigned_staff_id', 'full_name email')  // ← ADD THIS
       .sort({ created_at: -1 });
 
     // Transform
@@ -248,7 +256,29 @@ exports.getStaffJobs = async (req, res) => {
         ...obj,
         id: obj._id,
         assets: obj.asset
-          ? { location: obj.asset.location, type: obj.asset.type }
+          ? {
+              location: obj.asset.location,
+              type: obj.asset.type,
+              brand: obj.asset.brand,
+              model: obj.asset.model,
+              install_date: obj.asset.install_date,
+            }
+          : null,
+        reporter: obj.user_id
+          ? {
+              full_name: obj.user_id.full_name,
+              email: obj.user_id.email,
+            }
+          : null,
+        profiles: obj.assigned_staff_id
+          ? {
+              full_name: obj.assigned_staff_id.full_name,
+              email: obj.assigned_staff_id.email,
+            }
+          : null,
+        user_id: obj.user_id ? obj.user_id._id : null,
+        assigned_staff_id: obj.assigned_staff_id
+          ? obj.assigned_staff_id._id
           : null,
       };
     });
@@ -275,7 +305,7 @@ exports.getStaffJobs = async (req, res) => {
 exports.getComplaintById = async (req, res) => {
   try {
     const complaint = await Complaint.findById(req.params.id)
-      .populate('asset', 'type location')
+      .populate('asset', 'type location brand model install_date')
       .populate('assigned_staff_id', 'full_name email photo_url is_on_leave')
       .populate('user_id', 'full_name email');
 
@@ -291,7 +321,13 @@ exports.getComplaintById = async (req, res) => {
       ...obj,
       id: obj._id,
       assets: obj.asset
-        ? { location: obj.asset.location, type: obj.asset.type }
+        ? {
+          location: obj.asset.location,
+          type: obj.asset.type,
+          brand: obj.asset.brand,
+          model: obj.asset.model,
+          install_date: obj.asset.install_date,
+        }
         : null,
       profiles: obj.assigned_staff_id
         ? {
@@ -473,18 +509,7 @@ exports.updateStatus = async (req, res) => {
   }
 };
 
-// ────────────────────────────────────────
 // POST /api/complaints/:id/generate-otp
-// ────────────────────────────────────────
-// Staff generates OTP for user verification
-//
-// Replaces (JobDetails.js):
-//   const otp = Math.floor(100000 + Math.random() * 900000).toString();
-//   const { error } = await supabase
-//     .from('complaints')
-//     .update({ otp: otp, otp_created_at: new Date().toISOString() })
-//     .eq('id', job.id);
-// ────────────────────────────────────────
 exports.generateComplaintOTP = async (req, res) => {
   try {
     const complaint = await Complaint.findById(req.params.id);
@@ -496,14 +521,19 @@ exports.generateComplaintOTP = async (req, res) => {
       });
     }
 
-    // Verify this staff member is assigned to this complaint
-    if (
-      !complaint.assigned_staff_id ||
-      complaint.assigned_staff_id.toString() !== req.user._id.toString()
-    ) {
+    // Verify this is the user who created the complaint
+    if (complaint.user_id.toString() !== req.user._id.toString()) {
       return res.status(403).json({
         success: false,
-        message: 'You are not assigned to this complaint',
+        message: 'You can only generate OTP for your own complaints',
+      });
+    }
+
+    // Only allow OTP generation if complaint is FINISHING
+    if (complaint.status !== 'FINISHING') {
+      return res.status(400).json({
+        success: false,
+        message: 'OTP can only be generated when the work is finished by staff',
       });
     }
 
@@ -533,19 +563,74 @@ exports.generateComplaintOTP = async (req, res) => {
   }
 };
 
-// ────────────────────────────────────────
+// Update the updateStatus function to allow FINISHING status
+exports.updateStatus = async (req, res) => {
+  try {
+    const { status } = req.body;
+
+    if (!status) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide status',
+      });
+    }
+
+    const validStatuses = ['OPEN', 'ASSIGNED', 'IN_PROGRESS', 'FINISHING', 'CLOSED'];
+    if (!validStatuses.includes(status.toUpperCase())) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid status. Must be: ${validStatuses.join(', ')}`,
+      });
+    }
+
+    const complaint = await Complaint.findById(req.params.id);
+    if (!complaint) {
+      return res.status(404).json({
+        success: false,
+        message: 'Complaint not found',
+      });
+    }
+
+    // Validate status transitions
+    if (status.toUpperCase() === 'FINISHING') {
+      if (complaint.status !== 'IN_PROGRESS') {
+        return res.status(400).json({
+          success: false,
+          message: 'Can only mark as FINISHING when work is IN_PROGRESS',
+        });
+      }
+    }
+
+    // Update status
+    complaint.status = status.toUpperCase();
+
+    // Set closed_at if closing
+    if (status.toUpperCase() === 'CLOSED') {
+      complaint.closed_at = new Date();
+    }
+
+    // Clear closed_at if reopening
+    if (status.toUpperCase() !== 'CLOSED') {
+      complaint.closed_at = null;
+    }
+
+    await complaint.save();
+
+    res.status(200).json({
+      success: true,
+      message: `Status updated to ${status.toUpperCase()}`,
+      data: complaint,
+    });
+  } catch (error) {
+    console.error('Update status error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error updating status',
+    });
+  }
+};
+
 // POST /api/complaints/:id/verify-otp
-// ────────────────────────────────────────
-// User verifies OTP to close complaint
-//
-// Replaces (VerifyOTPScreen.js):
-//   1. Fetch complaint to check OTP:
-//      supabase.from('complaints').select('otp, otp_created_at').eq('id', id)
-//   2. If valid, close complaint:
-//      supabase.from('complaints').update({
-//        status: 'CLOSED', closed_at, verified_at, otp: null
-//      })
-// ────────────────────────────────────────
 exports.verifyOTP = async (req, res) => {
   try {
     const { otp } = req.body;
@@ -557,7 +642,8 @@ exports.verifyOTP = async (req, res) => {
       });
     }
 
-    const complaint = await Complaint.findById(req.params.id);
+    const complaint = await Complaint.findById(req.params.id)
+      .populate('user_id', 'full_name email');
 
     if (!complaint) {
       return res.status(404).json({
@@ -566,11 +652,22 @@ exports.verifyOTP = async (req, res) => {
       });
     }
 
+    // Verify this staff member is assigned to this complaint
+    if (
+      !complaint.assigned_staff_id ||
+      complaint.assigned_staff_id.toString() !== req.user._id.toString()
+    ) {
+      return res.status(403).json({
+        success: false,
+        message: 'You are not assigned to this complaint',
+      });
+    }
+
     // Check if OTP exists
     if (!complaint.otp) {
       return res.status(400).json({
         success: false,
-        message: 'No OTP found. Ask staff to generate one.',
+        message: 'No OTP found. User needs to generate one.',
       });
     }
 
@@ -580,7 +677,7 @@ exports.verifyOTP = async (req, res) => {
     if (otpAge > 300) {
       return res.status(400).json({
         success: false,
-        message: 'OTP has expired. Ask staff to generate a new one.',
+        message: 'OTP has expired. Ask user to generate a new one.',
       });
     }
 
@@ -602,7 +699,7 @@ exports.verifyOTP = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: 'Complaint verified and closed successfully',
+      message: `Complaint verified and closed successfully. User ${complaint.user_id.full_name || complaint.user_id.email} confirmed completion.`,
       data: complaint,
     });
   } catch (error) {
@@ -610,6 +707,61 @@ exports.verifyOTP = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Server error verifying OTP',
+    });
+  }
+};
+
+// PUT /api/complaints/:id/description
+exports.updateDescription = async (req, res) => {
+  try {
+    const { description } = req.body;
+
+    if (!description || description.trim().length < 10) {
+      return res.status(400).json({
+        success: false,
+        message: 'Description must be at least 10 characters',
+      });
+    }
+
+    const complaint = await Complaint.findById(req.params.id);
+    if (!complaint) {
+      return res.status(404).json({
+        success: false,
+        message: 'Complaint not found',
+      });
+    }
+
+    // Only reporter or admin can edit
+    const isReporter = complaint.user_id.toString() === req.user._id.toString();
+    const isAdmin = req.user.role === 'ADMIN';
+
+    if (!isReporter && !isAdmin) {
+      return res.status(403).json({
+        success: false,
+        message: 'Only the reporter or admin can edit the description',
+      });
+    }
+
+    if (complaint.status === 'CLOSED') {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot edit a closed complaint',
+      });
+    }
+
+    complaint.description = description.trim();
+    await complaint.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Description updated successfully',
+      data: complaint,
+    });
+  } catch (error) {
+    console.error('Update description error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error updating description',
     });
   }
 };

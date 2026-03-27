@@ -31,7 +31,7 @@ const LIFT   = 30;
 const TAB_CONFIG = [
   { name: 'Dashboard',  label: 'Home',       icon: 'home-outline',       iconActive: 'home' },
   { name: 'Complaints', label: 'Complaints', icon: 'clipboard-outline',  iconActive: 'clipboard' },
-  { name: 'Assets',     label: 'Assets',     icon: 'cube-outline',       iconActive: 'cube' },
+  { name: 'Assets',     label: 'Equipments',     icon: 'cube-outline',       iconActive: 'cube' },
   { name: 'Users',      label: 'Users',      icon: 'people-outline',     iconActive: 'people' },
   //{ name: 'My Profile', label: 'Profile',    icon: 'person-outline',     iconActive: 'person' },
 ];
@@ -53,6 +53,7 @@ function ComplaintsStack() {
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="ComplaintsList" component={AllComplaints} />
       <Stack.Screen name="ComplaintDetail" component={ComplaintDetail} />
+      <Stack.Screen name="ProfileScreen" component={ProfileScreen} />
     </Stack.Navigator>
   );
 }
@@ -63,6 +64,7 @@ function UsersStack() {
       <Stack.Screen name="UsersList" component={ManageUsers} />
       <Stack.Screen name="AddUser" component={AddUser} />
       <Stack.Screen name="UserDetail" component={UserDetail} />
+      <Stack.Screen name="ProfileScreen" component={ProfileScreen} />
     </Stack.Navigator>
   );
 }
@@ -73,6 +75,7 @@ function AssetsStack() {
       <Stack.Screen name="AssetsList" component={AllAssets} />
       <Stack.Screen name="AssetDetail" component={AssetDetail} />
       <Stack.Screen name="AddAsset" component={AddAsset} />
+      <Stack.Screen name="ProfileScreen" component={ProfileScreen} />
     </Stack.Navigator>
   );
 }

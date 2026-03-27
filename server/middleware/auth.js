@@ -1,18 +1,4 @@
-// ============================================
 // Authentication Middleware
-// ============================================
-// Replaces Supabase's Row Level Security (RLS)
-//
-// HOW IT WORKS:
-// 1. Mobile app sends: Authorization: Bearer <token>
-// 2. This middleware extracts and verifies the token
-// 3. Attaches the full user object to req.user
-// 4. If invalid/missing → 401 Unauthorized
-//
-// SUPABASE EQUIVALENT:
-// Supabase automatically knew who was calling via the session.
-// Now WE verify it manually with JWT.
-// ============================================
 
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');

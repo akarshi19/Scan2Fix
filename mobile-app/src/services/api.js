@@ -1,30 +1,15 @@
-// ============================================
 // API Service — 
-// ============================================
-// This file is the ONLY place that talks to your server.
-//
-// AFTER (api.js):
-//   import api from '../services/api';
-//   const { data } = await api.get('/complaints');
-//
-// Authentication:
-//   AFTER:  We store JWT in SecureStore, axios interceptor attaches it
-// ============================================
 
 import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 import Constants from 'expo-constants';
 
-// ════════════════════════════════════════
 // Base URL from app.config.js
-// ════════════════════════════════════════
 const API_URL = Constants.expoConfig?.extra?.apiUrl || 'http://localhost:5000/api';
 
 console.log('🌐 API URL:', API_URL);
 
-// ════════════════════════════════════════
 // Create Axios Instance
-// ════════════════════════════════════════
 const api = axios.create({
   baseURL: API_URL,
   timeout: 15000, // 15 seconds
@@ -37,7 +22,6 @@ const api = axios.create({
 // ════════════════════════════════════════
 // REQUEST INTERCEPTOR
 // Automatically attach JWT token to every request
-// ════════════════════════════════════════
 // We now store the JWT in SecureStore (encrypted) and attach it manually.
 // ════════════════════════════════════════
 api.interceptors.request.use(
@@ -57,10 +41,8 @@ api.interceptors.request.use(
   }
 );
 
-// ════════════════════════════════════════
 // RESPONSE INTERCEPTOR
 // Handle common errors globally
-// ════════════════════════════════════════
 api.interceptors.response.use(
   (response) => {
     // Return the response data directly
@@ -91,9 +73,7 @@ api.interceptors.response.use(
   }
 );
 
-// ════════════════════════════════════════
 // TOKEN MANAGEMENT
-// ════════════════════════════════════════
 export const saveToken = async (token) => {
   await SecureStore.setItemAsync('authToken', token);
 };
@@ -127,8 +107,16 @@ export const authAPI = {
   login: (email, password) =>
     api.post('/auth/login', { email, password }),
 
-  signup: (email, password, full_name) =>
-    api.post('/auth/signup', { email, password, full_name }),
+  signup: (email, password, fullName, phone, role, employeeId, photoUrl) =>
+    api.post('/auth/signup', { 
+      email, 
+      password, 
+      full_name: fullName,
+      phone,
+      role,
+      employee_id: employeeId,
+      photo_url: photoUrl,
+    }),
 
   getMe: () =>
     api.get('/auth/me'),
@@ -154,6 +142,19 @@ export const authAPI = {
 
   appleLogin: (email, full_name, identity_token) =>
     api.post('/auth/apple', { email, full_name, identity_token }),
+
+  deleteAccount: (password) =>
+    api.delete('/auth/account', {
+      data: { password }
+    }),
+
+  // Send verification code
+  sendVerificationCode: (email, fullName) =>
+    api.post('/auth/send-verification-code', { email, full_name: fullName }),
+
+  // Verify email code
+  verifyEmailCode: (email, code) =>
+    api.post('/auth/verify-email-code', { email, code }),
 };
 
 // ════════════════════════════════════════
@@ -196,6 +197,10 @@ export const complaintsAPI = {
   // Verify OTP — user (VerifyOTPScreen.js)
   verifyOTP: (complaintId, otp) =>
     api.post(`/complaints/${complaintId}/verify-otp`, { otp }),
+
+  //update
+  updateDescription: (complaintId, description) =>
+    api.put(`/complaints/${complaintId}/description`, { description }),
 };
 
 // ════════════════════════════════════════
@@ -211,6 +216,10 @@ export const assetsAPI = {
   getAll: (params) =>
     api.get('/assets', { params }),
 
+    // Get asset types — admin
+  getTypes: () =>
+    api.get('/assets/types'),
+
   // Create asset — admin
   create: (data) =>
     api.post('/assets', data),
@@ -218,12 +227,13 @@ export const assetsAPI = {
   // Update asset — admin
   update: (id, data) =>
     api.put(`/assets/${id}`, data),
+
+    // Toggle active/inactive — admin
+  toggleActive: (id) =>
+    api.put(`/assets/${id}/toggle-active`),
 };
 
-// ════════════════════════════════════════
 // USERS API
-// ════════════════════════════════════════
-
 export const usersAPI = {
   // Get all users — admin (ManageUsers.js)
   getAll: (params) =>
@@ -256,12 +266,16 @@ export const usersAPI = {
   // Self toggle leave — staff (StaffDashboard.js)
   toggleSelfLeave: () =>
     api.put('/users/self/toggle-leave'),
+
+   getDesignations: () =>
+    api.get('/users/designations'),
+  
+   // Delete user (admin only)
+  deleteUser: (userId) =>
+    api.delete(`/users/${userId}`),
 };
 
-// ════════════════════════════════════════
 // UPLOAD API
-// ════════════════════════════════════════
-
 export const uploadAPI = {
   // Upload profile photo (PhotoPicker.js)
   profilePhoto: async (photoUri) => {
@@ -296,14 +310,18 @@ export const uploadAPI = {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
+
+  uploadPhoto: (formData) => {
+    return api.post('/upload/photo', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+  },
 };
 
-// ════════════════════════════════════════
 // REPORTS API
-// ════════════════════════════════════════
 // New server-side reports (admin only)
-// ════════════════════════════════════════
-
 export const reportsAPI = {
   overview: () =>
     api.get('/reports/overview'),

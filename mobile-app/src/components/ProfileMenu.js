@@ -29,20 +29,12 @@ export default function ProfileMenu() {
 
   const handleProfilePress = () => {
     setVisible(false);
-    navigation.navigate('Dashboard', { screen: 'ProfileScreen' });
-    // Navigate based on role
-    // if (role === 'ADMIN') {
-    //   navigation.navigate('My Profile');
-    // } else if (role === 'STAFF') {
-    //   navigation.navigate('Profile');
-    // } else {
-    //   navigation.navigate('Profile');
-    // }
+    navigation.navigate('ProfileScreen');
   };
 
   return (
     <>
-      {/* Profile Button — Fixed top right */}
+      {/* Profile Button — NO absolute positioning */}
       <TouchableOpacity style={s.avatarBtn} onPress={() => setVisible(true)} activeOpacity={0.8}>
         {photoUrl ? (
           <Image source={{ uri: photoUrl }} style={s.avatarImg} />
@@ -86,16 +78,16 @@ export default function ProfileMenu() {
             </TouchableOpacity>
 
             {/* Theme Toggle */}
-            {/* <TouchableOpacity style={s.menuItem} onPress={toggleTheme}>
+            <TouchableOpacity style={s.menuItem} onPress={toggleTheme}>
               <Ionicons name={theme === 'light' ? 'moon-outline' : 'sunny-outline'} size={20} color={colors.textSec} />
               <Text style={[s.menuItemText, { color: colors.textPri }]}>{t('theme')}</Text>
               <View style={[s.toggleTrack, { backgroundColor: theme === 'dark' ? colors.active : '#E0E0E0' }]}>
                 <View style={[s.toggleThumb, { left: theme === 'dark' ? 20 : 2 }]} />
               </View>
-            </TouchableOpacity> */}
+            </TouchableOpacity>
 
             {/* Language */}
-            {/* <TouchableOpacity
+            <TouchableOpacity
               style={s.menuItem}
               onPress={() => setLanguage(language === 'en' ? 'hi' : 'en')}
             >
@@ -106,7 +98,7 @@ export default function ProfileMenu() {
                   {language === 'en' ? 'EN' : 'हि'}
                 </Text>
               </View>
-            </TouchableOpacity> */}
+            </TouchableOpacity>
 
             <View style={[s.menuDivider, { backgroundColor: colors.divider }]} />
 
@@ -126,11 +118,20 @@ export default function ProfileMenu() {
 }
 
 const s = StyleSheet.create({
+  // ════════════════════════════════════════
+  // Avatar button — relative positioning (no absolute)
+  // Sits naturally in the flex row of ScreenLayout header
+  // ════════════════════════════════════════
   avatarBtn: {
-    position: 'absolute', top: 46, right: 16, zIndex: 100,
-    width: 38, height: 38, borderRadius: 12, overflow: 'hidden',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15, shadowRadius: 4, elevation: 5,
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 5,
   },
   avatarImg: { width: 38, height: 38, borderRadius: 12 },
   avatarFallback: {
@@ -138,6 +139,8 @@ const s = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   avatarInitial: { color: '#FFF', fontSize: 16, fontWeight: '700' },
+
+  // Modal overlay
   overlay: {
     flex: 1, backgroundColor: 'rgba(0,0,0,0.3)',
     justifyContent: 'flex-start', alignItems: 'flex-end',

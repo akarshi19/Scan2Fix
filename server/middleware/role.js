@@ -1,16 +1,5 @@
-// ============================================
+
 // Role-Based Access Middleware
-// ============================================
-// Replaces Supabase's RLS policies like:
-//   "Allow only if role = 'ADMIN'"
-//
-// USAGE:
-//   router.get('/admin-only', protect, authorize('ADMIN'), handler)
-//   router.get('/staff-or-admin', protect, authorize('ADMIN','STAFF'), handler)
-//
-// Must be used AFTER the protect middleware
-// (because it needs req.user to exist)
-// ============================================
 
 const authorize = (...roles) => {
   return (req, res, next) => {

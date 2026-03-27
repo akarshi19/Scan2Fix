@@ -26,25 +26,29 @@ const {
   updateStatus,
   generateComplaintOTP,
   verifyOTP,
+  updateDescription,
 } = require('../controllers/complaintController');
 
 // ── User routes ──
 router.post('/', protect, authorize('USER', 'ADMIN'), createComplaint);
 router.get('/mine', protect, getMyComplaints);
 
+// ── USER generates OTP ──
+router.post('/:id/generate-otp', protect, authorize('USER'), generateComplaintOTP);
+
 // ── Staff routes ──
 router.get('/staff-jobs', protect, authorize('STAFF'), getStaffJobs);
 router.put('/:id/status', protect, authorize('STAFF', 'ADMIN'), updateStatus);
-router.post('/:id/generate-otp', protect, authorize('STAFF'), generateComplaintOTP);
 
-// ── User verification ──
-router.post('/:id/verify-otp', protect, verifyOTP);
+// ── STAFF verifies OTP ──
+router.post('/:id/verify-otp', protect, authorize('STAFF'), verifyOTP);
 
 // ── Admin routes ──
 router.get('/', protect, authorize('ADMIN'), getAllComplaints);
 router.put('/:id/assign', protect, authorize('ADMIN'), assignStaff);
 
-// ── Shared (any authenticated user) ──
+// ── Shared ──
 router.get('/:id', protect, getComplaintById);
+router.put('/:id/description', protect, updateDescription);
 
 module.exports = router;

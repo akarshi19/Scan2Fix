@@ -1,41 +1,151 @@
-import React, { useRef, useState, useCallback } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Alert, Platform,
+  TextInput, ActivityIndicator, Modal,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, AntDesign } from '@expo/vector-icons';
 import QRCode from 'react-native-qrcode-svg';
-import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { captureRef } from 'react-native-view-shot';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { assetsAPI } from '../../services/api';
 import { useTheme } from '../../context/ThemeContext';
 import ScreenLayout from '../../components/ScreenLayout';
 
-const TYPE_CONFIG = {
-  AC:             { icon: 'snow-outline',  color: '#2196F3', label: 'Air Conditioner' },
-  WATER_COOLER:   { icon: 'water-outline', color: '#00BCD4', label: 'Water Cooler' },
-  DESERT_COOLER:  { icon: 'leaf-outline',  color: '#FF9800', label: 'Desert Cooler' },
-};
+const ACTIVE_COLOR = '#5BA8D4';
+const TEXT_SEC = '#5A7A8A';
+const TEXT_MUT = '#9DB5C0';
 
-export default function AssetDetail({ route }) {
+export default function AssetDetail({ route, navigation }) {
   const { asset } = route.params;
   const { colors } = useTheme();
   const printableRef = useRef(null);
   const [downloading, setDownloading] = useState(false);
-  const config = TYPE_CONFIG[asset.type] || { icon: 'cube-outline', color: '#666', label: asset.type };
 
-  // Capture the branded QR card as image and share/save
+  // Editable state
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [location, setLocation] = useState(asset.location || '');
+  const [brand, setBrand] = useState(asset.brand || '');
+  const [model, setModel] = useState(asset.model || '');
+  const [installDate, setInstallDate] = useState(
+    asset.install_date ? new Date(asset.install_date) : null
+  );
+  const [isActive, setIsActive] = useState(asset.is_active !== false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [toggling, setToggling] = useState(false);
+
+  // Dynamic type label — handles custom types
+  const getTypeLabel = (typeKey) => {
+    const labels = {
+      'AC': 'Air Conditioner',
+      'WATER_COOLER': 'Water Cooler',
+      'DESERT_COOLER': 'Desert Cooler',
+    };
+    return labels[typeKey] || typeKey?.replace(/_/g, ' ') || 'Equipment';
+  };
+
+  const typeLabel = getTypeLabel(asset.type);
+
+  // Cancel editing
+  const handleCancelEdit = () => {
+    setLocation(asset.location || '');
+    setBrand(asset.brand || '');
+    setModel(asset.model || '');
+    setInstallDate(asset.install_date ? new Date(asset.install_date) : null);
+    setEditing(false);
+  };
+
+  // Save changes
+  const handleSave = async () => {
+    if (!location.trim()) {
+      Alert.alert('Error', 'Location is required');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const assetMongoId = asset._id || asset.id;
+      const response = await assetsAPI.update(assetMongoId, {
+        location: location.trim(),
+        brand: brand.trim(),
+        model: model.trim(),
+        install_date: installDate ? installDate.toISOString() : null,
+      });
+
+      if (response.data.success) {
+        asset.location = location.trim();
+        asset.brand = brand.trim();
+        asset.model = model.trim();
+        asset.install_date = installDate ? installDate.toISOString() : null;
+
+        setEditing(false);
+        Alert.alert('Success', 'Equipment details updated');
+      }
+    } catch (error) {
+      Alert.alert('Error', error.message || 'Failed to update asset');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Toggle active/inactive — separate API call
+  const handleToggleActive = () => {
+    const action = isActive ? 'Deactivate' : 'Activate';
+    const message = isActive
+      ? `This will mark ${asset.asset_id} as inactive. It won't appear in QR scans.`
+      : `This will mark ${asset.asset_id} as active again.`;
+
+    Alert.alert(
+      `${action} Equipment?`,
+      message,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: action,
+          style: isActive ? 'destructive' : 'default',
+          onPress: async () => {
+            setToggling(true);
+            try {
+              const assetMongoId = asset._id || asset.id;
+              const response = await assetsAPI.toggleActive(assetMongoId);
+              if (response.data.success) {
+                setIsActive(!isActive);
+                asset.is_active = !isActive;
+                Alert.alert('Success ✅', response.data.message);
+              }
+            } catch (error) {
+              Alert.alert('Error', error.message || 'Failed to toggle status');
+            } finally {
+              setToggling(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  // Date formatting
+  const formatDate = (date) => {
+    if (!date) return 'Not set';
+    return date.toLocaleDateString('en-GB', {
+      day: 'numeric', month: 'short', year: 'numeric',
+    });
+  };
+
+  const handleDateChange = (event, selectedDate) => {
+    if (Platform.OS === 'android') setShowDatePicker(false);
+    if (event.type === 'set' && selectedDate) setInstallDate(selectedDate);
+  };
+
+  // QR download
   const handleDownloadQR = async () => {
     setDownloading(true);
     try {
-      // Small delay to ensure the view is rendered
       await new Promise(resolve => setTimeout(resolve, 300));
-
       const uri = await captureRef(printableRef, {
-        format: 'png',
-        quality: 1,
-        result: 'tmpfile',
+        format: 'png', quality: 1, result: 'tmpfile',
       });
-
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(uri, {
           mimeType: 'image/png',
@@ -45,134 +155,266 @@ export default function AssetDetail({ route }) {
         Alert.alert('Saved', 'QR code image generated successfully');
       }
     } catch (error) {
-      console.error('Download error:', error);
-      Alert.alert('Error', 'Failed to generate QR image. ' + (error.message || ''));
+      Alert.alert('Error', 'Failed to generate QR image.');
     } finally {
       setDownloading(false);
     }
   };
 
-  const handleShareQR = async () => {
-    await handleDownloadQR(); // Same flow — share the branded image
-  };
-
-  return (
-    <ScreenLayout title={asset.asset_id} showBack={true}>
-      {/* Hero */}
-      <View style={s.hero}>
-        <View style={[s.heroIcon, { backgroundColor: `${config.color}20` }]}>
-          <Ionicons name={config.icon} size={48} color={config.color} />
+  return ( 
+    <ScreenLayout title="Equipment Details" showBack showDecor padBottom={90}>
+      {/* Details Card — Editable */}
+      <View style={[s.card, { backgroundColor: colors.cardBg }]}>
+        <View style={s.cardTitleRow}>
+          <Text style={[s.cardTitle, { color: colors.textPri }]}>Equipment Details</Text>
+          <TouchableOpacity
+            style={[s.editIconBtn, editing && s.editIconBtnActive]}
+            onPress={() => editing ? handleCancelEdit() : setEditing(true)}
+            activeOpacity={0.8}
+          >
+            {editing
+              ? <AntDesign name="close" size={13} color="#E53935" />
+              : <Ionicons name="pencil-outline" size={16} color={ACTIVE_COLOR} />
+            }
+          </TouchableOpacity>
         </View>
-        <Text style={[s.heroType, { color: config.color }]}>{config.label}</Text>
-        <View style={[s.statusPill, { backgroundColor: asset.is_active ? '#E8F5E9' : '#FFEBEE' }]}>
-          <View style={[s.statusDot, { backgroundColor: asset.is_active ? '#4CAF50' : '#F44336' }]} />
-          <Text style={{ fontSize: 12, fontWeight: '700', color: asset.is_active ? '#2E7D32' : '#C62828' }}>
-            {asset.is_active ? 'Active' : 'Inactive'}
-          </Text>
+
+        {!editing ? (
+          <>
+            <DetailRow icon="barcode-outline" label="Equipment ID:" value={asset.asset_id} colors={colors} />
+            <DetailRow icon="cube-outline" label="Type:" value={typeLabel} colors={colors} />
+            <DetailRow icon="location-outline" label="Location:" value={location} colors={colors} />
+            {brand ? <DetailRow icon="business-outline" label="Brand:" value={brand} colors={colors} /> : null}
+            {model ? <DetailRow icon="hardware-chip-outline" label="Model:" value={model} colors={colors} /> : null}
+            <DetailRow icon="calendar-outline" label="Installed On:" value={formatDate(installDate)} colors={colors} last />
+          </>
+        ) : (
+          <>
+            {/* Asset ID — not editable */}
+            <View style={s.readOnlyField}>
+              <Ionicons name="barcode-outline" size={16} color={TEXT_MUT} />
+              <Text style={s.readOnlyLabel}>Asset ID</Text>
+              <Text style={s.readOnlyValue}>{asset.asset_id}</Text>
+              <Ionicons name="lock-closed-outline" size={14} color={TEXT_MUT} />
+            </View>
+
+            {/* Type — not editable */}
+            <View style={s.readOnlyField}>
+              <Ionicons name="cube-outline" size={16} color={TEXT_MUT} />
+              <Text style={s.readOnlyLabel}>Type</Text>
+              <Text style={s.readOnlyValue}>{typeLabel}</Text>
+              <Ionicons name="lock-closed-outline" size={14} color={TEXT_MUT} />
+            </View>
+
+            <EditField
+              label="Location *"
+              icon="location-outline"
+              value={location}
+              onChangeText={setLocation}
+              placeholder="e.g., 3rd Floor, Room 301"
+              colors={colors}
+            />
+
+            <EditField
+              label="Brand"
+              icon="business-outline"
+              value={brand}
+              onChangeText={setBrand}
+              placeholder="e.g., Voltas, Daikin"
+              colors={colors}
+            />
+
+            <EditField
+              label="Model"
+              icon="hardware-chip-outline"
+              value={model}
+              onChangeText={setModel}
+              placeholder="e.g., 183V ADP"
+              colors={colors}
+            />
+
+            {/* Install Date */}
+            <Text style={[s.editLabel, { color: colors.textSec }]}>Installed Date</Text>
+            <TouchableOpacity
+              style={[s.dateBtn, { backgroundColor: colors.inputBg, borderColor: colors.inputBorder }]}
+              onPress={() => setShowDatePicker(true)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="calendar-outline" size={16} color={installDate ? ACTIVE_COLOR : TEXT_MUT} />
+              <Text style={[s.dateBtnText, { color: installDate ? colors.textPri : TEXT_MUT }]}>
+                {installDate ? formatDate(installDate) : 'Select date'}
+              </Text>
+              {installDate && (
+                <TouchableOpacity
+                  onPress={() => setInstallDate(null)}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Ionicons name="close-circle" size={16} color={TEXT_MUT} />
+                </TouchableOpacity>
+              )}
+            </TouchableOpacity>
+
+            {showDatePicker && (
+              Platform.OS === 'ios' ? (
+                <Modal transparent animationType="fade" onRequestClose={() => setShowDatePicker(false)}>
+                  <TouchableOpacity style={s.dateModalOverlay} activeOpacity={1} onPress={() => setShowDatePicker(false)}>
+                    <View style={[s.dateModalContent, { backgroundColor: colors.cardBg }]}>
+                      <View style={s.dateModalHeader}>
+                        <Text style={[s.dateModalTitle, { color: colors.textPri }]}>Select Date</Text>
+                        <TouchableOpacity onPress={() => setShowDatePicker(false)}>
+                          <Text style={[s.dateModalDone, { color: ACTIVE_COLOR }]}>Done</Text>
+                        </TouchableOpacity>
+                      </View>
+                      <DateTimePicker
+                        value={installDate || new Date()}
+                        mode="date"
+                        display="spinner"
+                        maximumDate={new Date()}
+                        onChange={(e, date) => { if (date) setInstallDate(date); }}
+                        style={{ height: 200 }}
+                      />
+                    </View>
+                  </TouchableOpacity>
+                </Modal>
+              ) : (
+                <DateTimePicker
+                  value={installDate || new Date()}
+                  mode="date"
+                  display="default"
+                  maximumDate={new Date()}
+                  onChange={handleDateChange}
+                />
+              )
+            )}
+
+            {/* Save / Cancel */}
+            <View style={s.editActions}>
+              <TouchableOpacity style={s.cancelBtn} onPress={handleCancelEdit}>
+                <Text style={s.cancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[s.saveBtn, saving && s.saveBtnDisabled]}
+                onPress={handleSave}
+                disabled={saving}
+                activeOpacity={0.85}
+              >
+                {saving ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <>
+                    <Ionicons name="checkmark-outline" size={17} color="#FFF" />
+                    <Text style={s.saveBtnText}>Save Changes</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
+      </View>
+      {/* Equipment Status Card */}
+      <View style={[s.card, { backgroundColor: colors.cardBg }]}>
+        <View style={s.statusRow}>
+          <View style={s.statusInfo}>
+            <View style={[
+              s.statusIndicator,
+              { backgroundColor: isActive ? '#E8F5E9' : '#FFEBEE' },
+            ]}>
+              <View style={[
+                s.statusDotLg,
+                { backgroundColor: isActive ? '#4CAF50' : '#F44336' },
+              ]} />
+            </View>
+            <View>
+              <Text style={[s.statusTitle, { color: colors.textPri }]}>
+                {isActive ? 'Active' : 'Inactive'}
+              </Text>
+              <Text style={[s.statusSubtext, { color: colors.textMut }]}>
+                {isActive ? 'Available for complaints' : 'Hidden from QR scans'}
+              </Text>
+            </View>
+          </View>
+
+          <TouchableOpacity
+            style={[
+              s.toggleBtn,
+              isActive ? s.toggleBtnDeactivate : s.toggleBtnActivate,
+            ]}
+            onPress={handleToggleActive}
+            disabled={toggling}
+            activeOpacity={0.8}
+          >
+            {toggling ? (
+              <ActivityIndicator size="small" color={isActive ? '#F44336' : '#4CAF50'} />
+            ) : (
+              <>
+                <Ionicons
+                  name={isActive ? 'close-circle-outline' : 'checkmark-circle-outline'}
+                  size={14}
+                  color={isActive ? '#F44336' : '#4CAF50'}
+                />
+                <Text style={[
+                  s.toggleBtnText,
+                  { color: isActive ? '#F44336' : '#4CAF50' },
+                ]}>
+                  {isActive ? ' Deactivate' : ' Activate'}
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
         </View>
       </View>
-
-      {/* Details Card */}
+      {/* QR Code Card  */}
       <View style={[s.card, { backgroundColor: colors.cardBg }]}>
-        <Text style={[s.cardTitle, { color: colors.textPri }]}>Equipment Details</Text>
-        <DetailRow icon="barcode-outline" label="Asset ID" value={asset.asset_id} colors={colors} />
-        <DetailRow icon="cube-outline" label="Type" value={config.label} colors={colors} />
-        <DetailRow icon="location-outline" label="Location" value={asset.location} colors={colors} />
-        {asset.brand && <DetailRow icon="business-outline" label="Brand" value={asset.brand} colors={colors} />}
-        {asset.model && <DetailRow icon="hardware-chip-outline" label="Model" value={asset.model} colors={colors} />}
-        <DetailRow icon="calendar-outline" label="Installed"
-          value={asset.install_date ? new Date(asset.install_date).toLocaleDateString('en-GB') : 'Not set'}
-          colors={colors} last
-        />
-      </View>
-
-      {/* QR Code Card — Visible on screen */}
-      <View style={[s.card, { backgroundColor: colors.cardBg }]}>
-        <Text style={[s.cardTitle, { color: colors.textPri }]}>QR Code</Text>
-
+        <Text style={[s.cardTitleSimple, { color: colors.textPri }]}>QR Code</Text>
         <View style={s.qrContainer}>
           <View style={s.qrWrapper}>
-            <QRCode
-              value={asset.asset_id}
-              size={180}
-              backgroundColor="#FFFFFF"
-              color="#1A1A2E"
-            />
+            <QRCode value={asset.asset_id} size={180} backgroundColor="#FFFFFF" color="#1A1A2E" />
           </View>
-          <Text style={[s.qrId, { color: colors.active }]}>{asset.asset_id}</Text>
+          <Text style={[s.qrId, { color: '#004e68' }]}>{asset.asset_id}</Text>
           <Text style={[s.qrHint, { color: colors.textMut }]}>
             Scan this QR code with Scan2Fix app to report issues
           </Text>
         </View>
-
-        {/* Action Buttons */}
         <View style={s.qrActions}>
           <TouchableOpacity
-            style={[s.qrBtn, { backgroundColor: colors.active }]}
+            style={[s.qrBtn, { backgroundColor: '#004e68' }]}
             onPress={handleDownloadQR}
             disabled={downloading}
             activeOpacity={0.85}
           >
-            <Ionicons name={downloading ? 'hourglass-outline' : 'download-outline'} size={20} color="#FFF" />
-            <Text style={s.qrBtnText}>{downloading ? 'Generating...' : 'Download QR'}</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[s.qrBtn, { backgroundColor: colors.inputBg, borderWidth: 1, borderColor: colors.inputBorder }]}
-            onPress={handleShareQR}
-            activeOpacity={0.85}
-          >
-            <Ionicons name="share-outline" size={20} color={colors.active} />
-            <Text style={[s.qrBtnText, { color: colors.active }]}>Share</Text>
+            <Ionicons
+              name={downloading ? 'hourglass-outline' : 'download-outline'}
+              size={20}
+              color="#FFF"
+            />
+            <Text style={s.qrBtnText}>
+              {downloading ? 'Generating...' : 'Get QR Code'}
+            </Text>
           </TouchableOpacity>
         </View>
       </View>
 
-      {/* ═══════════════════════════════════════════════ */}
-      {/* HIDDEN Printable QR Card — captured as image   */}
-      {/* This is positioned off-screen but rendered     */}
-      {/* so captureRef can capture it as a branded PNG  */}
-      {/* ═══════════════════════════════════════════════ */}
+      {/* Hidden Printable QR Card */}
       <View style={s.hiddenContainer} pointerEvents="none">
         <View ref={printableRef} style={s.printCard} collapsable={false}>
-          {/* Header */}
           <View style={s.printHeader}>
             <Text style={s.printLogo}>🔧 Scan2Fix</Text>
           </View>
-
-          {/* Type badge */}
-          <View style={[s.printTypeBadge, { backgroundColor: `${config.color}15` }]}>
-            <Ionicons name={config.icon} size={18} color={config.color} />
-            <Text style={[s.printTypeText, { color: config.color }]}> {config.label}</Text>
+          <View style={[s.printTypeBadge, { backgroundColor: `${ACTIVE_COLOR}15` }]}>
+            <Ionicons name="cube-outline" size={18} color={ACTIVE_COLOR} />
+            <Text style={[s.printTypeText, { color: ACTIVE_COLOR }]}> {typeLabel}</Text>
           </View>
-
-          {/* QR Code */}
           <View style={s.printQrWrap}>
-            <QRCode
-              value={asset.asset_id}
-              size={220}
-              backgroundColor="#FFFFFF"
-              color="#1A1A2E"
-            />
+            <QRCode value={asset.asset_id} size={220} backgroundColor="#FFFFFF" color="#1A1A2E" />
           </View>
-
-          {/* Asset ID */}
           <Text style={s.printAssetId}>{asset.asset_id}</Text>
-
-          {/* Location */}
           <View style={s.printLocationRow}>
             <Ionicons name="location" size={14} color="#5A7A8A" />
-            <Text style={s.printLocation}> {asset.location}</Text>
+            <Text style={s.printLocation}> {location}</Text>
           </View>
-
-          {/* Brand & Model */}
-          {(asset.brand || asset.model) && (
-            <Text style={s.printBrand}>
-              {[asset.brand, asset.model].filter(Boolean).join(' • ')}
-            </Text>
+          {(brand || model) && (
+            <Text style={s.printBrand}>{[brand, model].filter(Boolean).join(' • ')}</Text>
           )}
-
-          {/* Footer */}
           <View style={s.printFooter}>
             <View style={s.printFooterLine} />
             <Text style={s.printFooterText}>
@@ -185,6 +427,10 @@ export default function AssetDetail({ route }) {
   );
 }
 
+// ════════════════════════════════════════
+// Helper Components
+// ════════════════════════════════════════
+
 function DetailRow({ icon, label, value, colors, last }) {
   return (
     <View style={[ds.row, !last && { borderBottomWidth: 1, borderBottomColor: colors.divider }]}>
@@ -195,35 +441,287 @@ function DetailRow({ icon, label, value, colors, last }) {
   );
 }
 
+function EditField({ label, icon, value, onChangeText, placeholder, colors }) {
+  return (
+    <>
+      <Text style={[s.editLabel, { color: colors.textSec }]}>{label}</Text>
+      <View style={[s.editInputRow, { backgroundColor: colors.inputBg, borderColor: colors.inputBorder }]}>
+        <Ionicons name={icon} size={16} color={TEXT_MUT} />
+        <TextInput
+          style={[s.editInput, { color: colors.textPri }]}
+          value={value}
+          onChangeText={onChangeText}
+          placeholder={placeholder}
+          placeholderTextColor={TEXT_MUT}
+        />
+      </View>
+    </>
+  );
+}
+
+// ════════════════════════════════════════
+// Styles
+// ════════════════════════════════════════
+
 const ds = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12 },
-  label: { width: 90, fontSize: 13, fontWeight: '500' },
+  label: { width: 150, fontSize: 13, fontWeight: '500' },
   value: { flex: 1, fontSize: 14, fontWeight: '600' },
 });
 
 const s = StyleSheet.create({
-  hero: { alignItems: 'center', paddingVertical: 20, marginBottom: 16 },
-  heroIcon: { width: 96, height: 96, borderRadius: 48, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
-  heroType: { fontSize: 14, fontWeight: '600', marginTop: 4 },
-  statusPill: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, marginTop: 10, gap: 6 },
-  statusDot: { width: 8, height: 8, borderRadius: 4 },
-  card: { borderRadius: 16, padding: 18, marginBottom: 14, shadowColor: '#A0BDD0', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.12, shadowRadius: 8, elevation: 3 },
-  cardTitle: { fontSize: 15, fontWeight: '800', marginBottom: 16, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: '#EEF4F8' },
+  // Hero
+  hero: {
+    alignItems: 'center',
+    paddingVertical: 20,
+    marginBottom: 16,
+  },
+  heroIcon: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  heroType: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginTop: 4,
+  },
+  typeBadge: {
+    paddingHorizontal: 14,
+    paddingVertical: 5,
+    borderRadius: 10,
+    marginTop: 8,
+  },
+  typeBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+
+  // Card
+  card: {
+    borderRadius: 16,
+    padding: 18,
+    marginBottom: 14,
+    shadowColor: '#A0BDD0',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+
+  // Status Card
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  statusInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  statusIndicator: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statusDotLg: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+  },
+  statusTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  statusSubtext: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+  toggleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+  toggleBtnDeactivate: {
+    backgroundColor: '#FFEBEE',
+    borderWidth: 1,
+    borderColor: '#FFCDD2',
+  },
+  toggleBtnActivate: {
+    backgroundColor: '#E8F5E9',
+    borderWidth: 1,
+    borderColor: '#C8E6C9',
+  },
+  toggleBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+
+  // Card title
+  cardTitleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEF4F8',
+  },
+  cardTitle: { fontSize: 15, fontWeight: '800' },
+  cardTitleSimple: {
+    fontSize: 15,
+    fontWeight: '800',
+    marginBottom: 16,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEF4F8',
+  },
+
+  // Edit button
+  editIconBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: '#EEF6FB',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  editIconBtnActive: { backgroundColor: '#FDECEA' },
+
+  // Read-only fields
+  readOnlyField: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    backgroundColor: '#F5F8FA',
+    borderRadius: 10,
+    marginBottom: 8,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#E0EBF0',
+  },
+  readOnlyLabel: { width: 65, fontSize: 12, color: TEXT_MUT, fontWeight: '500' },
+  readOnlyValue: { flex: 1, fontSize: 14, color: TEXT_SEC, fontWeight: '600' },
+
+  // Edit fields
+  editLabel: { fontSize: 12, fontWeight: '600', marginBottom: 6, marginTop: 4 },
+  editInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    marginBottom: 8,
+    gap: 8,
+  },
+  editInput: { flex: 1, paddingVertical: 12, fontSize: 14 },
+
+  // Date picker
+  dateBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    borderWidth: 1,
+    marginBottom: 8,
+    gap: 10,
+  },
+  dateBtnText: { flex: 1, fontSize: 14 },
+  dateModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  dateModalContent: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingBottom: 34,
+    paddingTop: 16,
+    paddingHorizontal: 20,
+  },
+  dateModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  dateModalTitle: { fontSize: 18, fontWeight: '700' },
+  dateModalDone: { fontSize: 16, fontWeight: '700' },
+
+  // Save / Cancel
+  editActions: { flexDirection: 'row', gap: 10, marginTop: 10 },
+  cancelBtn: {
+    flex: 1,
+    backgroundColor: '#EEF4F8',
+    borderRadius: 10,
+    paddingVertical: 13,
+    alignItems: 'center',
+  },
+  cancelBtnText: { color: TEXT_SEC, fontWeight: '600', fontSize: 14 },
+  saveBtn: {
+    flex: 2,
+    backgroundColor: '#004e68',
+    borderRadius: 10,
+    paddingVertical: 13,
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 6,
+    shadowColor: ACTIVE_COLOR,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  saveBtnDisabled: { backgroundColor: '#B0CDD8', shadowOpacity: 0, elevation: 0 },
+  saveBtnText: { color: '#FFF', fontWeight: '700', fontSize: 14 },
+
+  // QR
   qrContainer: { alignItems: 'center', paddingVertical: 20 },
-  qrWrapper: { padding: 16, backgroundColor: '#FFF', borderRadius: 16, borderWidth: 2, borderColor: '#EEF4F8', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
+  qrWrapper: {
+    padding: 16,
+    backgroundColor: '#FFF',
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: '#EEF4F8',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
   qrId: { fontSize: 18, fontWeight: '800', marginTop: 12 },
   qrHint: { fontSize: 12, marginTop: 8, textAlign: 'center', lineHeight: 18 },
   qrActions: { flexDirection: 'row', gap: 10, marginTop: 10 },
-  qrBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 10, paddingVertical: 14, shadowColor: '#5BA8D4', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.2, shadowRadius: 6, elevation: 4 },
+  qrBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderRadius: 10,
+    paddingVertical: 14,
+    shadowColor: '#5BA8D4',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 4,
+  },
   qrBtnText: { color: '#FFF', fontWeight: '700', fontSize: 13 },
 
-  // Hidden printable card (positioned off-screen)
-  hiddenContainer: {
-    position: 'absolute',
-    left: -1000,
-    top: 0,
-    opacity: 1, // Must be visible for capture
-  },
+  // Hidden printable
+  hiddenContainer: { position: 'absolute', left: -1000, top: 0, opacity: 1 },
   printCard: {
     width: 350,
     backgroundColor: '#FFFFFF',
@@ -233,14 +731,8 @@ const s = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#E8EFF3',
   },
-  printHeader: {
-    marginBottom: 16,
-  },
-  printLogo: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: '#1A1A2E',
-  },
+  printHeader: { marginBottom: 16 },
+  printLogo: { fontSize: 24, fontWeight: '800', color: '#1A1A2E' },
   printTypeBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -249,10 +741,7 @@ const s = StyleSheet.create({
     borderRadius: 20,
     marginBottom: 20,
   },
-  printTypeText: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
+  printTypeText: { fontSize: 14, fontWeight: '600' },
   printQrWrap: {
     padding: 12,
     backgroundColor: '#FFFFFF',
@@ -268,36 +757,10 @@ const s = StyleSheet.create({
     letterSpacing: 1,
     marginBottom: 8,
   },
-  printLocationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  printLocation: {
-    fontSize: 14,
-    color: '#5A7A8A',
-    fontWeight: '500',
-  },
-  printBrand: {
-    fontSize: 12,
-    color: '#9DB5C0',
-    marginBottom: 16,
-  },
-  printFooter: {
-    alignItems: 'center',
-    marginTop: 10,
-    width: '100%',
-  },
-  printFooterLine: {
-    width: '80%',
-    height: 1,
-    backgroundColor: '#EEF4F8',
-    marginBottom: 12,
-  },
-  printFooterText: {
-    fontSize: 11,
-    color: '#9DB5C0',
-    textAlign: 'center',
-    lineHeight: 16,
-  },
+  printLocationRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
+  printLocation: { fontSize: 14, color: '#5A7A8A', fontWeight: '500' },
+  printBrand: { fontSize: 12, color: '#9DB5C0', marginBottom: 16 },
+  printFooter: { alignItems: 'center', marginTop: 10, width: '100%' },
+  printFooterLine: { width: '80%', height: 1, backgroundColor: '#EEF4F8', marginBottom: 12 },
+  printFooterText: { fontSize: 11, color: '#9DB5C0', textAlign: 'center', lineHeight: 16 },
 });

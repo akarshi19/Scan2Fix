@@ -16,7 +16,6 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, FontAwesome, AntDesign } from '@expo/vector-icons';
 import * as WebBrowser from 'expo-web-browser';
-import * as AuthSession from 'expo-auth-session';
 import {
   authAPI,
   saveToken,
@@ -80,148 +79,148 @@ export default function LoginScreen({ navigation }) {
   };
 
   // Social Login Handler
-  const handleSocialLoginSuccess = async (provider, tokenData) => {
-    try {
-      let response;
+  // const handleSocialLoginSuccess = async (provider, tokenData) => {
+  //   try {
+  //     let response;
 
-      switch (provider) {
-        case 'Google':
-          response = await authAPI.googleLogin(tokenData.access_token);
-          break;
-        case 'Microsoft':
-          response = await authAPI.microsoftLogin(tokenData.access_token);
-          break;
-        case 'Apple':
-          response = await authAPI.appleLogin(
-            tokenData.email,
-            tokenData.full_name,
-            tokenData.identity_token
-          );
-          break;
-        default:
-          throw new Error('Unknown provider');
-      }
+  //     switch (provider) {
+  //       case 'Google':
+  //         response = await authAPI.googleLogin(tokenData.access_token);
+  //         break;
+  //       case 'Microsoft':
+  //         response = await authAPI.microsoftLogin(tokenData.access_token);
+  //         break;
+  //       case 'Apple':
+  //         response = await authAPI.appleLogin(
+  //           tokenData.email,
+  //           tokenData.full_name,
+  //           tokenData.identity_token
+  //         );
+  //         break;
+  //       default:
+  //         throw new Error('Unknown provider');
+  //     }
 
-      if (response.data.success) {
-        const { token, user } = response.data.data;
+  //     if (response.data.success) {
+  //       const { token, user } = response.data.data;
 
-        // Save token and user data
-        await saveToken(token);
-        await saveUserData(user);
+  //       // Save token and user data
+  //       await saveToken(token);
+  //       await saveUserData(user);
 
-        // Refresh auth context — use getMe to update state
-        // This triggers the AuthContext to re-check and load the user
-        Alert.alert(
-          `Welcome! 👋`,
-          `Logged in as ${user.full_name || user.email}\n\nPlease restart the app to continue.`,
-          [{ text: 'OK' }]
-        );
-      }
-    } catch (error) {
-      console.error(`${provider} login error:`, error);
-      Alert.alert(
-        'Login Failed',
-        error.message || `${provider} login failed. Please try again.`
-      );
-    } finally {
-      setSocialLoading('');
-    }
-  };
+  //       // Refresh auth context — use getMe to update state
+  //       // This triggers the AuthContext to re-check and load the user
+  //       Alert.alert(
+  //         `Welcome! 👋`,
+  //         `Logged in as ${user.full_name || user.email}\n\nPlease restart the app to continue.`,
+  //         [{ text: 'OK' }]
+  //       );
+  //     }
+  //   } catch (error) {
+  //     console.error(`${provider} login error:`, error);
+  //     Alert.alert(
+  //       'Login Failed',
+  //       error.message || `${provider} login failed. Please try again.`
+  //     );
+  //   } finally {
+  //     setSocialLoading('');
+  //   }
+  // };
 
-  // Google Login 
-  const handleGoogleLogin = async () => {
-    if (GOOGLE_CLIENT_ID === 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com') {
-      Alert.alert(
-        'Setup Required',
-        'Google login requires OAuth setup.\n\nPlease use email/password login.',
-        [{ text: 'OK' }]
-      );
-      return;
-    }
+  // // Google Login 
+  // const handleGoogleLogin = async () => {
+  //   if (GOOGLE_CLIENT_ID === 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com') {
+  //     Alert.alert(
+  //       'Setup Required',
+  //       'Google login requires OAuth setup.\n\nPlease use email/password login.',
+  //       [{ text: 'OK' }]
+  //     );
+  //     return;
+  //   }
 
-    setSocialLoading('Google');
+  //   setSocialLoading('Google');
 
-    try {
-      // Use YOUR server as the redirect URI
-      const redirectUri = 'https://turgid-falcate-chun.ngrok-free.dev/auth/callback';
+  //   try {
+  //     // Use YOUR server as the redirect URI
+  //     const redirectUri = 'https://turgid-falcate-chun.ngrok-free.dev/auth/callback';
 
-      const authUrl =
-        'https://accounts.google.com/o/oauth2/v2/auth?' +
-        `client_id=${GOOGLE_CLIENT_ID}&` +
-        `redirect_uri=${encodeURIComponent(redirectUri)}&` +
-        'response_type=token&' +
-        `scope=${encodeURIComponent('openid email profile')}`;
+  //     const authUrl =
+  //       'https://accounts.google.com/o/oauth2/v2/auth?' +
+  //       `client_id=${GOOGLE_CLIENT_ID}&` +
+  //       `redirect_uri=${encodeURIComponent(redirectUri)}&` +
+  //       'response_type=token&' +
+  //       `scope=${encodeURIComponent('openid email profile')}`;
 
-      const result = await WebBrowser.openAuthSessionAsync(
-        authUrl,
-        'scan2fix://auth'  // This catches the deep link redirect back
-      );
+  //     const result = await WebBrowser.openAuthSessionAsync(
+  //       authUrl,
+  //       'scan2fix://auth'  // This catches the deep link redirect back
+  //     );
 
-      console.log('Auth result:', JSON.stringify(result));
+  //     console.log('Auth result:', JSON.stringify(result));
 
-      if (result.type === 'success' && result.url) {
-        // Extract access_token from the deep link URL
-        const url = result.url;
-        let accessToken = null;
+  //     if (result.type === 'success' && result.url) {
+  //       // Extract access_token from the deep link URL
+  //       const url = result.url;
+  //       let accessToken = null;
 
-        // Check query params (from our redirect page)
-        if (url.includes('access_token=')) {
-          const tokenMatch = url.match(/access_token=([^&]+)/);
-          if (tokenMatch) {
-            accessToken = decodeURIComponent(tokenMatch[1]);
-          }
-        }
+  //       // Check query params (from our redirect page)
+  //       if (url.includes('access_token=')) {
+  //         const tokenMatch = url.match(/access_token=([^&]+)/);
+  //         if (tokenMatch) {
+  //           accessToken = decodeURIComponent(tokenMatch[1]);
+  //         }
+  //       }
 
-        if (accessToken) {
-          await handleSocialLoginSuccess('Google', {
-            access_token: accessToken,
-          });
-        } else {
-          console.log('No token in URL:', url);
-          Alert.alert('Error', 'No access token received from Google');
-          setSocialLoading('');
-        }
-      } else if (result.type === 'cancel' || result.type === 'dismiss') {
-         console.log('Google login dismissed - this is normal in Expo Go');
-        Alert.alert(
-          'Note',
-          'Google login may not redirect back in Expo Go (development mode).\n\n' +
-          'It will work perfectly in the built APK.\n\n' +
-          'For now, please use email/password login.',
-          [{ text: 'OK' }]
-        );
-        setSocialLoading('');
-      } else {
-        console.log('Auth result:', result);
-        setSocialLoading('');
-      }
-    } catch (error) {
-      console.error('Google auth error:', error);
-      Alert.alert('Error', 'Google login failed. Please try email login.');
-      setSocialLoading('');
-    }
-  };
+  //       if (accessToken) {
+  //         await handleSocialLoginSuccess('Google', {
+  //           access_token: accessToken,
+  //         });
+  //       } else {
+  //         console.log('No token in URL:', url);
+  //         Alert.alert('Error', 'No access token received from Google');
+  //         setSocialLoading('');
+  //       }
+  //     } else if (result.type === 'cancel' || result.type === 'dismiss') {
+  //        console.log('Google login dismissed - this is normal in Expo Go');
+  //       Alert.alert(
+  //         'Note',
+  //         'Google login may not redirect back in Expo Go (development mode).\n\n' +
+  //         'It will work perfectly in the built APK.\n\n' +
+  //         'For now, please use email/password login.',
+  //         [{ text: 'OK' }]
+  //       );
+  //       setSocialLoading('');
+  //     } else {
+  //       console.log('Auth result:', result);
+  //       setSocialLoading('');
+  //     }
+  //   } catch (error) {
+  //     console.error('Google auth error:', error);
+  //     Alert.alert('Error', 'Google login failed. Please try email login.');
+  //     setSocialLoading('');
+  //   }
+  // };
 
-  // ════════════════════════════════════════
-  // Apple Login
-  // ════════════════════════════════════════
-  const handleAppleLogin = async () => {
-    if (Platform.OS !== 'ios') {
-      Alert.alert(
-        'iOS Only',
-        'Apple Sign-In is only available on iOS devices.\n\nPlease use email/password or Google login.',
-        [{ text: 'OK' }]
-      );
-      return;
-    }
+  // // ════════════════════════════════════════
+  // // Apple Login
+  // // ════════════════════════════════════════
+  // const handleAppleLogin = async () => {
+  //   if (Platform.OS !== 'ios') {
+  //     Alert.alert(
+  //       'iOS Only',
+  //       'Apple Sign-In is only available on iOS devices.\n\nPlease use email/password or Google login.',
+  //       [{ text: 'OK' }]
+  //     );
+  //     return;
+  //   }
 
-    Alert.alert(
-      'Setup Required',
-      'Apple Sign-In requires an Apple Developer Account ($99/year).\n\n' +
-      'For now, please use email/password login.',
-      [{ text: 'OK' }]
-    );
-  };
+  //   Alert.alert(
+  //     'Setup Required',
+  //     'Apple Sign-In requires an Apple Developer Account ($99/year).\n\n' +
+  //     'For now, please use email/password login.',
+  //     [{ text: 'OK' }]
+  //   );
+  // };
 
   // ════════════════════════════════════════
   // Render
@@ -234,7 +233,7 @@ export default function LoginScreen({ navigation }) {
       <View style={styles.topDecoration}>
         <View style={styles.shapeBack}>
           <LinearGradient
-            colors={['#94a3b8', '#64748b']}
+            colors={['#004e68', '#004e68']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.shapeGradient}
@@ -242,7 +241,7 @@ export default function LoginScreen({ navigation }) {
         </View>
         <View style={styles.shapeFront}>
           <LinearGradient
-            colors={['#7dd3fc', '#38bdf8']}
+            colors={['#8CD6F7', '#8CD6F7']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.shapeGradient}
@@ -333,7 +332,7 @@ export default function LoginScreen({ navigation }) {
             activeOpacity={0.8}
           >
             <LinearGradient
-              colors={loading ? ['#cbd5e1', '#94a3b8'] : ['#7dd3fc', '#64748b']}
+              colors={loading ? ['#cbd5e1', '#94a3b8'] : ['#8CD6F7', '#004e68']}
               start={{ x: 0, y: 0 }}
               end={{ x: 0, y: 1 }}
               style={styles.loginButton}
@@ -352,13 +351,12 @@ export default function LoginScreen({ navigation }) {
           {/* Divider */}
           <View style={styles.dividerSection}>
             <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>Or sign in using</Text>
+            {/* <Text style={styles.dividerText}>Or sign in using</Text> */}
             <View style={styles.dividerLine} />
           </View>
 
           {/* Social Buttons */}
-          <View style={styles.socialSection}>
-            {/* Google */}
+          {/* <View style={styles.socialSection}>
             <TouchableOpacity
               style={[styles.socialButton, socialLoading === 'Google' && styles.socialButtonActive]}
               onPress={handleGoogleLogin}
@@ -370,8 +368,6 @@ export default function LoginScreen({ navigation }) {
                 <AntDesign name="google" size={22}/>
               )}
             </TouchableOpacity>
-
-            {/* Apple */}
             <TouchableOpacity
               style={[styles.socialButton, socialLoading === 'Apple' && styles.socialButtonActive]}
               onPress={handleAppleLogin}
@@ -383,7 +379,7 @@ export default function LoginScreen({ navigation }) {
                 <AntDesign name="apple" size={22} color="#333" />
               )}
             </TouchableOpacity>
-          </View>
+          </View> */}
 
           {/* Sign Up */}
           <View style={styles.signupSection}>
@@ -423,9 +419,9 @@ const styles = StyleSheet.create({
   flexDirection: 'row',
   alignItems: 'center',
 },
-  logoText: { fontSize: 52, fontWeight: '300', color: '#7dd3fc', letterSpacing: 2 },
-  logoText2: { fontSize: 52, fontWeight: '700', color: '#38bdf8', letterSpacing: 2 },
-  logoUnderline: { width: 60, height: 3, backgroundColor: '#38bdf8', borderRadius: 2, marginTop: 5 },
+  logoText: { fontSize: 52, fontWeight: '300', color: '#8CD6F7', letterSpacing: 2 },
+  logoText2: { fontSize: 52, fontWeight: '700', color: '#004e68', letterSpacing: 2 },
+  logoUnderline: { width: 60, height: 3, backgroundColor: '#004e68', borderRadius: 2, marginTop: 5 },
 
   // Welcome
   welcomeSection: { alignItems: 'center', marginTop: 20, marginBottom: 30 },

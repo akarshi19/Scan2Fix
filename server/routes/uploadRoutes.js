@@ -1,13 +1,3 @@
-// ============================================
-// Upload Routes
-// ============================================
-// POST /api/upload/profile-photo     → Upload profile picture
-// POST /api/upload/complaint-photo   → Upload complaint photo
-//
-// Both routes require authentication (protect middleware)
-// Files are saved to server disk, not cloud storage
-// ============================================
-
 const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
@@ -15,10 +5,10 @@ const { upload, setUploadType, handleMulterError } = require('../middleware/uplo
 const {
   uploadProfilePhoto,
   uploadComplaintPhoto,
+  uploadGenericPhoto, 
 } = require('../controllers/uploadController');
 
-// Profile photo upload
-// Middleware chain: protect → setType → multer → errorHandler → controller
+// Profile photo upload (protected)
 router.post(
   '/profile-photo',
   protect,
@@ -28,7 +18,7 @@ router.post(
   uploadProfilePhoto
 );
 
-// Complaint photo upload
+// Complaint photo upload (protected)
 router.post(
   '/complaint-photo',
   protect,
@@ -36,6 +26,16 @@ router.post(
   upload.single('photo'),
   handleMulterError,
   uploadComplaintPhoto
+);
+
+// Generic photo upload (PUBLIC - no protect)
+// Used for signup/add user before authentication
+router.post(
+  '/photo',
+  setUploadType('general'), // Saves to uploads/general/
+  upload.single('photo'),
+  handleMulterError,
+  uploadGenericPhoto
 );
 
 module.exports = router;

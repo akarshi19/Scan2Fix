@@ -10,6 +10,7 @@ import LodgeComplaint from '../screens/user/LodgeComplaint';
 import MyComplaints from '../screens/user/MyComplaints';
 import VerifyOTPScreen from '../screens/user/VerifyOTPScreen';
 import ProfileScreen from '../screens/shared/ProfileScreen';
+import ComplaintDetail from '../screens/admin/ComplaintDetail';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -38,7 +39,8 @@ function ComplaintsStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="ComplaintsList" component={MyComplaints} />
-      <Stack.Screen name="VerifyOTP" component={VerifyOTPScreen} />
+      <Stack.Screen name="ComplaintDetail" component={ComplaintDetail} />
+      <Stack.Screen name="ProfileScreen" component={ProfileScreen} />
     </Stack.Navigator>
   );
 }

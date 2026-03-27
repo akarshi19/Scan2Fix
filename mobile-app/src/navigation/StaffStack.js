@@ -11,13 +11,14 @@ import ProfileScreen from '../screens/shared/ProfileScreen';
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
 
-const SKY = '#7DD3F0'; const ACTIVE = '#4CAF50'; const INACTIVE = '#A8C8DC';
+const SKY = '#7DD3F0'; const ACTIVE = '#5BA8D4'; const INACTIVE = '#A8C8DC';
 const NAVBAR_BG = '#EEF6FB';
 const CIRCLE = 56; const BAR_H = 70; const LIFT = 30;
 
 const TAB_CONFIG = [
   { name: 'NotStarted',  label: 'Not Started',  icon: 'clipboard-outline', iconActive: 'clipboard' },
   { name: 'InProgress',  label: 'In Progress',  icon: 'sync-outline',      iconActive: 'sync' },
+  { name: 'Finishing',   label: 'Finishing',    icon: 'flag-outline',      iconActive: 'flag' },
   { name: 'Completed',   label: 'Completed',    icon: 'checkmark-circle-outline', iconActive: 'checkmark-circle' },
 ];
 
@@ -36,6 +37,17 @@ function InProgressStack() {
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="StaffDashboardIP" component={StaffDashboard} initialParams={{ statusFilter: 'IN_PROGRESS' }} />
       <Stack.Screen name="JobDetailsIP" component={JobDetails} />
+       <Stack.Screen name="ProfileScreen" component={ProfileScreen} />
+    </Stack.Navigator>
+  );
+}
+
+function FinishingStack() {
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="StaffDashboardF" component={StaffDashboard} initialParams={{ statusFilter: 'FINISHING' }} />
+      <Stack.Screen name="JobDetailsF" component={JobDetails} />
+      <Stack.Screen name="ProfileScreen" component={ProfileScreen} />
     </Stack.Navigator>
   );
 }
@@ -45,6 +57,7 @@ function CompletedStack() {
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="StaffDashboardC" component={StaffDashboard} initialParams={{ statusFilter: 'CLOSED' }} />
       <Stack.Screen name="JobDetailsC" component={JobDetails} />
+       <Stack.Screen name="ProfileScreen" component={ProfileScreen} />
     </Stack.Navigator>
   );
 }
@@ -105,6 +118,7 @@ export default function StaffStack() {
     <Tab.Navigator tabBar={(props) => <CustomTabBar {...props} />} screenOptions={{ headerShown: false }}>
       <Tab.Screen name="NotStarted" component={NotStartedStack} />
       <Tab.Screen name="InProgress" component={InProgressStack} />
+      <Tab.Screen name="Finishing" component={FinishingStack} />
       <Tab.Screen name="Completed" component={CompletedStack} />
     </Tab.Navigator>
   );

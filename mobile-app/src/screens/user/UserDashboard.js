@@ -12,20 +12,15 @@ export default function UserDashboard({ navigation }) {
   const { t } = useLanguage();
 
   return (
-    <ScreenLayout>
-      {/* Welcome Section */}
-      <View style={{ marginBottom: 30, marginTop: 8 }}>
-        <Text style={[s.greeting, { color: colors.textPri }]}>{t('welcome')}! 👋</Text>
-        <Text style={[s.email, { color: colors.textSec }]}>{user?.email}</Text>
-      </View>
+   <ScreenLayout title={`${t('welcome')}, ${user?.full_name || 'User'}!`} showDecor>
 
       {/* Main Action - Scan QR */}
       <TouchableOpacity
-        style={[s.scanButton, { backgroundColor: colors.active }]}
+        style={[s.scanButton, { backgroundColor: colors.cardBg }]}
         onPress={() => navigation.navigate('ScanQR')}
         activeOpacity={0.85}
       >
-        <Ionicons name="qr-code-outline" size={50} color="#fff" />
+        <Ionicons name="qr-code-outline" size={50} color="#000" />
         <Text style={s.scanTitle}>{t('scanQR')}</Text>
         <Text style={s.scanSubtitle}>{t('reportIssue')}</Text>
       </TouchableOpacity>
@@ -54,15 +49,13 @@ function InfoStep({ icon, text, colors, last }) {
 }
 
 const s = StyleSheet.create({
-  greeting: { fontSize: 28, fontWeight: '800' },
-  email: { fontSize: 14, marginTop: 5 },
   scanButton: {
-    padding: 30, borderRadius: 18, alignItems: 'center', marginBottom: 24,
+    padding: 30, borderRadius: 18, alignItems: 'center', marginBottom: 24, borderColor: "#000", borderWidth: 1, marginTop: 10,
     shadowColor: '#5BA8D4', shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.3, shadowRadius: 12, elevation: 8,
+    shadowOpacity: 0.3, shadowRadius: 12, elevation: 8, 
   },
-  scanTitle: { fontSize: 22, fontWeight: '700', color: 'white', marginTop: 12 },
-  scanSubtitle: { fontSize: 14, color: 'rgba(255,255,255,0.8)', marginTop: 5 },
+  scanTitle: { fontSize: 18, fontWeight: '700', color: '#000', marginTop: 10 },
+  scanSubtitle: { fontSize: 8, color: '#000', marginTop: 5 },
   infoCard: {
     padding: 20, borderRadius: 16,
     shadowColor: '#A0BDD0', shadowOffset: { width: 0, height: 3 },

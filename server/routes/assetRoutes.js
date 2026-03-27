@@ -16,14 +16,20 @@ const {
   getAssetByQR,
   createAsset,
   updateAsset,
+  getAssetTypes,
+  toggleAssetActive,
 } = require('../controllers/assetController');
 
 // QR lookup — any authenticated user can scan
 router.get('/qr/:assetId', protect, getAssetByQR);
 
+// Asset types — admin
+router.get('/types', protect, authorize('ADMIN'), getAssetTypes);
+
 // Admin routes
 router.get('/', protect, authorize('ADMIN'), getAllAssets);
 router.post('/', protect, authorize('ADMIN'), createAsset);
 router.put('/:id', protect, authorize('ADMIN'), updateAsset);
+router.put('/:id/toggle-active', protect, authorize('ADMIN'), toggleAssetActive);
 
 module.exports = router;

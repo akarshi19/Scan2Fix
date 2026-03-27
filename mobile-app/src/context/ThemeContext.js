@@ -27,6 +27,7 @@ export const THEMES = {
     staffUnavailable: '#F44336',
     totalAssets: '#607D8B',
     closed: '#4CAF50',
+    black: '#000'
   },
   dark: {
     name: 'dark',

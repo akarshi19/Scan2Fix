@@ -42,7 +42,7 @@ const TRANSLATIONS = {
     closedComplaints: 'Closed Complaints',
     staffOnDuty: 'Staff on Duty',
     staffUnavailable: 'Staff Unavailable',
-    totalAssets: 'Total Assets',
+    totalEquipments: 'Total Equipments',
     quickActions: 'Quick Actions',
     viewAllComplaints: 'View All Complaints',
     needAssignment: 'Need Assignment',
@@ -51,7 +51,7 @@ const TRANSLATIONS = {
 
     // User
     scanQR: 'Scan QR Code',
-    reportIssue: 'Report an issue with AC/Cooler',
+    reportIssue: 'Report an issue of the Equipment',
     howItWorks: 'How it works:',
     step1: 'Scan QR code on the machine',
     step2: 'Describe the problem',
@@ -214,7 +214,7 @@ const TRANSLATIONS = {
     closedComplaints: 'बंद शिकायतें',
     staffOnDuty: 'ड्यूटी पर कर्मचारी',
     staffUnavailable: 'अनुपलब्ध कर्मचारी',
-    totalAssets: 'कुल उपकरण',
+    totalEquipments: 'कुल उपकरण',
     quickActions: 'त्वरित कार्य',
     viewAllComplaints: 'सभी शिकायतें देखें',
     needAssignment: 'सौंपना बाकी',
@@ -223,7 +223,7 @@ const TRANSLATIONS = {
 
     // User
     scanQR: 'QR कोड स्कैन करें',
-    reportIssue: 'AC/कूलर की समस्या रिपोर्ट करें',
+    reportIssue: 'उपकरण की समस्या रिपोर्ट करें',
     howItWorks: 'यह कैसे काम करता है:',
     step1: 'मशीन पर QR कोड स्कैन करें',
     step2: 'समस्या का वर्णन करें',

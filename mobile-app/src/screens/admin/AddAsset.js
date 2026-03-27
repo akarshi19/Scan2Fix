@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, Alert, TouchableOpacity,
-  TextInput, ActivityIndicator, Modal, FlatList,
+  TextInput, ActivityIndicator, Modal, Platform,
+  FlatList,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { assetsAPI } from '../../services/api';
 import { useTheme } from '../../context/ThemeContext';
 import { useLanguage } from '../../context/LanguageContext';
@@ -13,136 +15,281 @@ export default function AddAsset({ navigation }) {
   const { colors } = useTheme();
   const { t } = useLanguage();
   const [assetId, setAssetId] = useState('');
-  const [type, setType] = useState('AC');
+  const [type, setType] = useState('');
+  const [customType, setCustomType] = useState('');
   const [location, setLocation] = useState('');
   const [brand, setBrand] = useState('');
   const [model, setModel] = useState('');
+  const [installDate, setInstallDate] = useState(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [showTypeModal, setShowTypeModal] = useState(false);
+  const [existingTypes, setExistingTypes] = useState([]);
+  const [isAddingCustomType, setIsAddingCustomType] = useState(false);
 
-  const TYPES = [
-  { key: 'AC',            label: t('airConditioner'), icon: 'snow-outline',  color: '#82c1f5' },
-  { key: 'WATER_COOLER',  label: t('waterCooler'),    icon: 'water-outline', color: '#00BCD4' },
-  { key: 'DESERT_COOLER', label: t('desertCooler'),   icon: 'leaf-outline',  color: '#FF9800' },
-];
+  // Fetch existing asset types on mount
+  useEffect(() => {
+    fetchAssetTypes();
+  }, []);
 
-function DropdownSelect({ label, options, selected, onSelect, colors }) {
-  const [visible, setVisible] = useState(false);
-  const selectedOption = options.find(o => o.key === selected);
+  const fetchAssetTypes = async () => {
+    try {
+      const response = await assetsAPI.getTypes();
+      if (response.data.success) {
+        setExistingTypes(response.data.data || []);
+        // Auto-select first type if available
+        if (response.data.data?.length > 0 && !type) {
+          setType(response.data.data[0]);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching asset types:', error);
+      // Fallback defaults
+      setExistingTypes(['AC', 'WATER_COOLER', 'DESERT_COOLER']);
+      if (!type) setType('AC');
+    }
+  };
 
-  return (
-    <>
-      <Text style={[s.fieldLabel, { color: colors.textSec }]}>{label}</Text>
-      <TouchableOpacity
-        style={[s.dropdown, { backgroundColor: colors.inputBg, borderColor: colors.inputBorder }]}
-        onPress={() => setVisible(true)}
-        activeOpacity={0.8}
-      >
-        {selectedOption && (
-          <View style={[s.dropdownIcon, { backgroundColor: `${selectedOption.color}15` }]}>
-            <Ionicons name={selectedOption.icon} size={20} color={selectedOption.color} />
-          </View>
-        )}
-        <Text style={[s.dropdownText, { color: colors.textPri }]}>
-          {selectedOption?.label || 'Select...'}
-        </Text>
-        <Ionicons name="chevron-down" size={18} color={colors.textMut} />
-      </TouchableOpacity>
+  const getTypeLabel = (typeKey) => {
+    const labels = {
+      'AC': 'Air Conditioner',
+      'WATER_COOLER': 'Water Cooler',
+      'DESERT_COOLER': 'Desert Cooler',
+    };
+    return labels[typeKey] || typeKey.replace(/_/g, ' ');
+  };
 
-      <Modal visible={visible} transparent animationType="fade" onRequestClose={() => setVisible(false)}>
-        <TouchableOpacity style={s.modalOverlay} activeOpacity={1} onPress={() => setVisible(false)}>
-          <View style={[s.modalContent, { backgroundColor: colors.cardBg }]}>
-            <Text style={[s.modalTitle, { color: colors.textPri }]}>{label}</Text>
-            {options.map(option => (
-              <TouchableOpacity
-                key={option.key}
-                style={[
-                  s.modalOption,
-                  selected === option.key && { backgroundColor: `${option.color}10`, borderColor: option.color },
-                  { borderColor: colors.divider }
-                ]}
-                onPress={() => { onSelect(option.key); setVisible(false); }}
-                activeOpacity={0.8}
-              >
-                <View style={[s.modalOptionIcon, { backgroundColor: `${option.color}15` }]}>
-                  <Ionicons name={option.icon} size={22} color={option.color} />
-                </View>
-                <Text style={[s.modalOptionText, { color: colors.textPri }, selected === option.key && { color: option.color, fontWeight: '700' }]}>
-                  {option.label}
-                </Text>
-                {selected === option.key && (
-                  <Ionicons name="checkmark-circle" size={22} color={option.color} />
-                )}
-              </TouchableOpacity>
-            ))}
-          </View>
-        </TouchableOpacity>
-      </Modal>
-    </>
-  );
-}
+  const handleAddCustomType = () => {
+    const trimmed = customType.trim().toUpperCase().replace(/\s+/g, '_');
+    if (!trimmed) {
+      Alert.alert('Error', 'Please enter a type name');
+      return;
+    }
+    if (trimmed.length < 2) {
+      Alert.alert('Error', 'Type name must be at least 2 characters');
+      return;
+    }
+    if (existingTypes.includes(trimmed)) {
+      Alert.alert('Already Exists', 'This type already exists. Selecting it.');
+      setType(trimmed);
+      setCustomType('');
+      setIsAddingCustomType(false);
+      setShowTypeModal(false);
+      return;
+    }
+
+    // Add to local list and select it
+    setExistingTypes(prev => [...prev, trimmed]);
+    setType(trimmed);
+    setCustomType('');
+    setIsAddingCustomType(false);
+    setShowTypeModal(false);
+  };
+
+  const formatDate = (date) => {
+    if (!date) return '';
+    return date.toLocaleDateString('en-GB', {
+      day: 'numeric', month: 'short', year: 'numeric',
+    });
+  };
+
+  const handleDateChange = (event, selectedDate) => {
+    if (Platform.OS === 'android') {
+      setShowDatePicker(false);
+    }
+    if (event.type === 'set' && selectedDate) {
+      setInstallDate(selectedDate);
+    }
+  };
 
   const handleSubmit = async () => {
-    if (!assetId.trim()) { Alert.alert(t('error'), t('assetidalert')); return; }
-    if (!location.trim()) { Alert.alert(t('error'), t('locationalert')); return; }
+    if (!assetId.trim()) {
+      Alert.alert(t('error'), t('assetidalert'));
+      return;
+    }
+    if (!type) {
+      Alert.alert(t('error'), 'Please select an equipment type');
+      return;
+    }
+    if (!location.trim()) {
+      Alert.alert(t('error'), t('locationalert'));
+      return;
+    }
+
     setLoading(true);
     try {
       const response = await assetsAPI.create({
-        asset_id: assetId.trim().toUpperCase(), type,
-        location: location.trim(), brand: brand.trim(), model: model.trim(),
+        asset_id: assetId.trim().toUpperCase(),
+        type: type,
+        location: location.trim(),
+        brand: brand.trim(),
+        model: model.trim(),
+        install_date: installDate ? installDate.toISOString() : null,
       });
       if (response.data.success) {
         Alert.alert(
-  t('createalert'),
-  `${assetId.toUpperCase()} ${t('hasbeenadded')}`,
-  [
-    {
-      text: t('viewAsset'),
-      onPress: () =>
-        navigation.replace('AssetDetail', { asset: response.data.data }),
-    },
-  ]
-);
+          t('createalert'),
+          `${assetId.toUpperCase()} ${t('hasbeenadded')}`,
+          [
+            {
+              text: t('viewAsset'),
+              onPress: () =>
+                navigation.replace('AssetDetail', { asset: response.data.data }),
+            },
+          ]
+        );
       }
-    } catch (error) { Alert.alert('Error', error.message || 'Failed to create asset'); }
-    finally { setLoading(false); }
+    } catch (error) {
+      Alert.alert('Error', error.message || 'Failed to create asset');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <ScreenLayout title={`${t('addEquipment')}`} showBack={true}>
-      {/* Type Dropdown */}
+    <ScreenLayout title={t('addEquipment')} showBack>
+      {/* ════════════════════════════════════════ */}
+      {/* Equipment Type Card                      */}
+      {/* ════════════════════════════════════════ */}
       <View style={[s.card, { backgroundColor: colors.cardBg }]}>
         <Text style={[s.cardTitle, { color: colors.textPri }]}>{t('equipmentType')}</Text>
-        <DropdownSelect
-          label=""
-          options={TYPES}
-          selected={type}
-          onSelect={setType}
-          colors={colors}
-        />
+
+        <TouchableOpacity
+          style={[s.typeSelector, { backgroundColor: colors.inputBg, borderColor: colors.inputBorder }]}
+          onPress={() => setShowTypeModal(true)}
+          activeOpacity={0.8}
+        >
+          <View style={[s.typeSelectorIcon, { backgroundColor: type ? `${colors.active}15` : '#F2F6F8' }]}>
+            <Ionicons name="cube-outline" size={20} color={type ? colors.active : colors.textMut} />
+          </View>
+          <Text style={[s.typeSelectorText, { color: type ? colors.textPri : colors.textMut }]}>
+            {type ? getTypeLabel(type) : 'Select equipment type...'}
+          </Text>
+          <Ionicons name="chevron-down" size={18} color={colors.textMut} />
+        </TouchableOpacity>
+
+        {type && (
+          <View style={s.selectedTypeRow}>
+            <View style={[s.selectedTypePill, { backgroundColor: `${colors.active}10` }]}>
+              <Text style={[s.selectedTypeText, { color: colors.active }]}>
+                {type}
+              </Text>
+            </View>
+          </View>
+        )}
       </View>
 
-      {/* Details */}
+      {/* ════════════════════════════════════════ */}
+      {/* Equipment Details Card                   */}
+      {/* ════════════════════════════════════════ */}
       <View style={[s.card, { backgroundColor: colors.cardBg }]}>
         <Text style={[s.cardTitle, { color: colors.textPri }]}>Equipment Details</Text>
 
         <Text style={[s.fieldLabel, { color: colors.textSec }]}>Asset ID *</Text>
-        <TextInput style={[s.fieldInput, { backgroundColor: colors.inputBg, borderColor: colors.inputBorder, color: colors.textPri }]}
-          value={assetId} onChangeText={setAssetId} placeholder="e.g., AC-3F-001" placeholderTextColor={colors.textMut} autoCapitalize="characters" />
+        <TextInput
+          style={[s.fieldInput, { backgroundColor: colors.inputBg, borderColor: colors.inputBorder, color: colors.textPri }]}
+          value={assetId}
+          onChangeText={setAssetId}
+          placeholder="e.g., AC-3F-001"
+          placeholderTextColor={colors.textMut}
+          autoCapitalize="characters"
+        />
 
         <Text style={[s.fieldLabel, { color: colors.textSec }]}>Location *</Text>
-        <TextInput style={[s.fieldInput, { backgroundColor: colors.inputBg, borderColor: colors.inputBorder, color: colors.textPri }]}
-          value={location} onChangeText={setLocation} placeholder="e.g., 3rd Floor, Room 301" placeholderTextColor={colors.textMut} />
+        <TextInput
+          style={[s.fieldInput, { backgroundColor: colors.inputBg, borderColor: colors.inputBorder, color: colors.textPri }]}
+          value={location}
+          onChangeText={setLocation}
+          placeholder="e.g., 3rd Floor, Room 301"
+          placeholderTextColor={colors.textMut}
+        />
 
         <Text style={[s.fieldLabel, { color: colors.textSec }]}>Brand (Optional)</Text>
-        <TextInput style={[s.fieldInput, { backgroundColor: colors.inputBg, borderColor: colors.inputBorder, color: colors.textPri }]}
-          value={brand} onChangeText={setBrand} placeholder="e.g., Voltas, Daikin" placeholderTextColor={colors.textMut} />
+        <TextInput
+          style={[s.fieldInput, { backgroundColor: colors.inputBg, borderColor: colors.inputBorder, color: colors.textPri }]}
+          value={brand}
+          onChangeText={setBrand}
+          placeholder="e.g., Voltas, Daikin"
+          placeholderTextColor={colors.textMut}
+        />
 
         <Text style={[s.fieldLabel, { color: colors.textSec }]}>Model (Optional)</Text>
-        <TextInput style={[s.fieldInput, { backgroundColor: colors.inputBg, borderColor: colors.inputBorder, color: colors.textPri }]}
-          value={model} onChangeText={setModel} placeholder="e.g., 183V ADP" placeholderTextColor={colors.textMut} />
+        <TextInput
+          style={[s.fieldInput, { backgroundColor: colors.inputBg, borderColor: colors.inputBorder, color: colors.textPri }]}
+          value={model}
+          onChangeText={setModel}
+          placeholder="e.g., 183V ADP"
+          placeholderTextColor={colors.textMut}
+        />
+
+        {/* Install Date */}
+        <Text style={[s.fieldLabel, { color: colors.textSec }]}>Install Date (Optional)</Text>
+        <TouchableOpacity
+          style={[s.datePickerBtn, { backgroundColor: colors.inputBg, borderColor: colors.inputBorder }]}
+          onPress={() => setShowDatePicker(true)}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="calendar-outline" size={18} color={installDate ? colors.active : colors.textMut} />
+          <Text style={[s.datePickerText, { color: installDate ? colors.textPri : colors.textMut }]}>
+            {installDate ? formatDate(installDate) : 'Select install date'}
+          </Text>
+          {installDate && (
+            <TouchableOpacity
+              onPress={() => setInstallDate(null)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Ionicons name="close-circle" size={18} color={colors.textMut} />
+            </TouchableOpacity>
+          )}
+        </TouchableOpacity>
+
+        {showDatePicker && (
+          Platform.OS === 'ios' ? (
+            <Modal transparent animationType="fade" onRequestClose={() => setShowDatePicker(false)}>
+              <TouchableOpacity
+                style={s.dateModalOverlay}
+                activeOpacity={1}
+                onPress={() => setShowDatePicker(false)}
+              >
+                <View style={[s.dateModalContent, { backgroundColor: colors.cardBg }]}>
+                  <View style={s.dateModalHeader}>
+                    <Text style={[s.dateModalTitle, { color: colors.textPri }]}>Select Date</Text>
+                    <TouchableOpacity onPress={() => setShowDatePicker(false)}>
+                      <Text style={[s.dateModalDone, { color: colors.active }]}>Done</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <DateTimePicker
+                    value={installDate || new Date()}
+                    mode="date"
+                    display="spinner"
+                    maximumDate={new Date()}
+                    onChange={(event, date) => { if (date) setInstallDate(date); }}
+                    style={{ height: 200 }}
+                  />
+                </View>
+              </TouchableOpacity>
+            </Modal>
+          ) : (
+            <DateTimePicker
+              value={installDate || new Date()}
+              mode="date"
+              display="default"
+              maximumDate={new Date()}
+              onChange={handleDateChange}
+            />
+          )
+        )}
       </View>
 
-      <TouchableOpacity style={[s.submitBtn, loading && s.submitBtnDisabled]} onPress={handleSubmit} disabled={loading} activeOpacity={0.85}>
+      {/* ════════════════════════════════════════ */}
+      {/* Submit Button                            */}
+      {/* ════════════════════════════════════════ */}
+      <TouchableOpacity
+        style={[s.submitBtn, loading && s.submitBtnDisabled]}
+        onPress={handleSubmit}
+        disabled={loading}
+        activeOpacity={0.85}
+      >
         {loading ? (
           <ActivityIndicator size="small" color="#fff" />
         ) : (
@@ -152,25 +299,480 @@ function DropdownSelect({ label, options, selected, onSelect, colors }) {
           </>
         )}
       </TouchableOpacity>
+
+      {/* ════════════════════════════════════════ */}
+      {/* Type Selection Modal                     */}
+      {/* ════════════════════════════════════════ */}
+      <Modal
+        visible={showTypeModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          setShowTypeModal(false);
+          setIsAddingCustomType(false);
+          setCustomType('');
+        }}
+      >
+        <TouchableOpacity
+          style={s.modalOverlay}
+          activeOpacity={1}
+          onPress={() => {
+            setShowTypeModal(false);
+            setIsAddingCustomType(false);
+            setCustomType('');
+          }}
+        >
+          <View
+            style={[s.modalContent, { backgroundColor: colors.cardBg }]}
+            onStartShouldSetResponder={() => true}
+          >
+            <View style={s.modalHandle} />
+            <Text style={[s.modalTitle, { color: colors.textPri }]}>Select Equipment Type</Text>
+
+            {/* Existing Types List */}
+            <FlatList
+              data={existingTypes}
+              keyExtractor={(item) => item}
+              style={s.typesList}
+              showsVerticalScrollIndicator={false}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={[
+                    s.typeOption,
+                    type === item && s.typeOptionActive,
+                    { borderColor: colors.divider },
+                  ]}
+                  onPress={() => {
+                    setType(item);
+                    setShowTypeModal(false);
+                    setIsAddingCustomType(false);
+                    setCustomType('');
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <View style={[
+                    s.typeOptionIcon,
+                    { backgroundColor: type === item ? `${colors.active}15` : '#F2F6F8' },
+                  ]}>
+                    <Ionicons
+                      name="cube-outline"
+                      size={18}
+                      color={type === item ? colors.active : colors.textMut}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[
+                      s.typeOptionLabel,
+                      type === item && { fontWeight: '700', color: colors.active },
+                      { color: colors.textPri },
+                    ]}>
+                      {getTypeLabel(item)}
+                    </Text>
+                    <Text style={[s.typeOptionKey, { color: colors.textMut }]}>
+                      {item}
+                    </Text>
+                  </View>
+                  {type === item && (
+                    <Ionicons name="checkmark-circle" size={22} color={colors.active} />
+                  )}
+                </TouchableOpacity>
+              )}
+              ListEmptyComponent={
+                <View style={s.noTypes}>
+                  <Text style={[s.noTypesText, { color: colors.textMut }]}>
+                    No types yet. Add one below.
+                  </Text>
+                </View>
+              }
+            />
+
+            {/* Divider */}
+            <View style={[s.modalDivider, { backgroundColor: colors.divider }]} />
+
+            {/* Add Custom Type */}
+            {!isAddingCustomType ? (
+              <TouchableOpacity
+                style={s.addTypeBtn}
+                onPress={() => setIsAddingCustomType(true)}
+                activeOpacity={0.8}
+              >
+                <View style={[s.addTypeIcon, { backgroundColor: '#E8F5E9' }]}>
+                  <Ionicons name="add" size={20} color="#4CAF50" />
+                </View>
+                <Text style={[s.addTypeText, { color: '#4CAF50' }]}>
+                  Add New Type
+                </Text>
+              </TouchableOpacity>
+            ) : (
+              <View style={s.customTypeWrap}>
+                <Text style={[s.customTypeLabel, { color: colors.textSec }]}>
+                  New Type Name
+                </Text>
+                <View style={s.customTypeInputRow}>
+                  <TextInput
+                    style={[s.customTypeInput, {
+                      backgroundColor: colors.inputBg,
+                      borderColor: colors.active,
+                      color: colors.textPri,
+                    }]}
+                    value={customType}
+                    onChangeText={setCustomType}
+                    placeholder="e.g., FAN, PROJECTOR, UPS..."
+                    placeholderTextColor={colors.textMut}
+                    autoCapitalize="characters"
+                    autoFocus
+                  />
+                </View>
+                {customType.trim() && (
+                  <Text style={[s.customTypePreview, { color: colors.textMut }]}>
+                    Will be saved as: {customType.trim().toUpperCase().replace(/\s+/g, '_')}
+                  </Text>
+                )}
+                <View style={s.customTypeActions}>
+                  <TouchableOpacity
+                    style={s.customTypeCancelBtn}
+                    onPress={() => {
+                      setIsAddingCustomType(false);
+                      setCustomType('');
+                    }}
+                  >
+                    <Text style={s.customTypeCancelText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      s.customTypeAddBtn,
+                      !customType.trim() && s.customTypeAddBtnDisabled,
+                    ]}
+                    onPress={handleAddCustomType}
+                    disabled={!customType.trim()}
+                    activeOpacity={0.85}
+                  >
+                    <Ionicons name="checkmark" size={16} color="#FFF" />
+                    <Text style={s.customTypeAddText}> Add & Select</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+
+            {/* Close Button */}
+            <TouchableOpacity
+              style={[s.modalCloseBtn, { backgroundColor: '#F2F6F8' }]}
+              onPress={() => {
+                setShowTypeModal(false);
+                setIsAddingCustomType(false);
+                setCustomType('');
+              }}
+            >
+              <Text style={s.modalCloseBtnText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </ScreenLayout>
   );
 }
 
 const s = StyleSheet.create({
-  card: { borderRadius: 16, padding: 18, marginBottom: 14, shadowColor: '#A0BDD0', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.12, shadowRadius: 8, elevation: 3 },
-  cardTitle: { fontSize: 15, fontWeight: '800', marginBottom: 16 },
-  fieldLabel: { fontSize: 12, fontWeight: '600', marginBottom: 6, marginTop: 4 },
-  fieldInput: { borderRadius: 10, paddingHorizontal: 14, paddingVertical: 13, fontSize: 14, borderWidth: 1, marginBottom: 12 },
-  dropdown: { flexDirection: 'row', alignItems: 'center', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 14, borderWidth: 1, marginBottom: 12 },
-  dropdownIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
-  dropdownText: { flex: 1, fontSize: 14, fontWeight: '500' },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center', padding: 20 },
-  modalContent: { width: '100%', maxWidth: 340, borderRadius: 20, padding: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.15, shadowRadius: 20, elevation: 10 },
-  modalTitle: { fontSize: 18, fontWeight: '800', textAlign: 'center', marginBottom: 16 },
-  modalOption: { flexDirection: 'row', alignItems: 'center', padding: 14, borderRadius: 12, borderWidth: 2, marginBottom: 10 },
-  modalOptionIcon: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
-  modalOptionText: { flex: 1, fontSize: 15 },
-  submitBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#5BA8D4', borderRadius: 12, paddingVertical: 16, marginTop: 10, shadowColor: '#5BA8D4', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 8, elevation: 6 },
+  // ════════════════════════════════════════
+  // Cards
+  // ════════════════════════════════════════
+  card: {
+    borderRadius: 16,
+    padding: 18,
+    marginBottom: 14,
+    shadowColor: '#A0BDD0',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  cardTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    marginBottom: 14,
+  },
+
+  // ════════════════════════════════════════
+  // Type Selector Button
+  // ════════════════════════════════════════
+  typeSelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderWidth: 1,
+  },
+  typeSelectorIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  typeSelectorText: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  selectedTypeRow: {
+    marginTop: 10,
+  },
+  selectedTypePill: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  selectedTypeText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+
+  // ════════════════════════════════════════
+  // Form Fields
+  // ════════════════════════════════════════
+  fieldLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 6,
+    marginTop: 4,
+  },
+  fieldInput: {
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    fontSize: 14,
+    borderWidth: 1,
+    marginBottom: 2,
+  },
+
+  // ════════════════════════════════════════
+  // Date Picker
+  // ════════════════════════════════════════
+  datePickerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    borderWidth: 1,
+    marginBottom: 2,
+    gap: 10,
+  },
+  datePickerText: {
+    flex: 1,
+    fontSize: 14,
+  },
+  dateModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  dateModalContent: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingBottom: 34,
+    paddingTop: 16,
+    paddingHorizontal: 20,
+  },
+  dateModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  dateModalTitle: { fontSize: 18, fontWeight: '700' },
+  dateModalDone: { fontSize: 16, fontWeight: '700' },
+
+  // ════════════════════════════════════════
+  // Submit Button
+  // ════════════════════════════════════════
+  submitBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#5BA8D4',
+    borderRadius: 12,
+    paddingVertical: 16,
+    marginTop: 10,
+    shadowColor: '#5BA8D4',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 6,
+  },
   submitBtnDisabled: { backgroundColor: '#B0CDD8' },
   submitBtnText: { color: '#FFF', fontWeight: '700', fontSize: 16 },
+
+  // ════════════════════════════════════════
+  // Type Selection Modal
+  // ════════════════════════════════════════
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 20,
+    paddingBottom: 34,
+    paddingTop: 12,
+    maxHeight: '75%',
+  },
+  modalHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#DDD',
+    alignSelf: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    marginBottom: 16,
+  },
+  typesList: {
+    maxHeight: 280,
+  },
+  typeOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    marginBottom: 4,
+    gap: 12,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  typeOptionActive: {
+    backgroundColor: '#F0F8FF',
+  },
+  typeOptionIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  typeOptionLabel: {
+    fontSize: 15,
+    fontWeight: '500',
+  },
+  typeOptionKey: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+  noTypes: {
+    padding: 20,
+    alignItems: 'center',
+  },
+  noTypesText: {
+    fontSize: 13,
+  },
+
+  // Divider
+  modalDivider: {
+    height: 1,
+    marginVertical: 12,
+  },
+
+  // ════════════════════════════════════════
+  // Add Custom Type
+  // ════════════════════════════════════════
+  addTypeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    gap: 12,
+  },
+  addTypeIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addTypeText: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+
+  // Custom type input
+  customTypeWrap: {
+    marginBottom: 8,
+  },
+  customTypeLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  customTypeInputRow: {
+    marginBottom: 6,
+  },
+  customTypeInput: {
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 14,
+    borderWidth: 1.5,
+  },
+  customTypePreview: {
+    fontSize: 11,
+    marginBottom: 10,
+    marginLeft: 4,
+  },
+  customTypeActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  customTypeCancelBtn: {
+    flex: 1,
+    backgroundColor: '#F2F6F8',
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  customTypeCancelText: {
+    color: '#5A7A8A',
+    fontWeight: '600',
+    fontSize: 13,
+  },
+  customTypeAddBtn: {
+    flex: 1.5,
+    backgroundColor: '#4CAF50',
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+  },
+  customTypeAddBtnDisabled: {
+    backgroundColor: '#A5D6A7',
+  },
+  customTypeAddText: {
+    color: '#FFF',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+
+  // Close button
+  modalCloseBtn: {
+    marginTop: 12,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  modalCloseBtnText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#5A7A8A',
+  },
 });

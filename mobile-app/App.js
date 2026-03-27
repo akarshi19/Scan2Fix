@@ -1,6 +1,5 @@
 import React from 'react';
 import { registerRootComponent } from 'expo';
-import { PaperProvider } from 'react-native-paper';
 import { AuthProvider } from './src/context/AuthContext';
 import { ThemeProvider } from './src/context/ThemeContext';
 import { LanguageProvider } from './src/context/LanguageContext';
@@ -12,11 +11,9 @@ function App() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <ThemeProvider>
         <LanguageProvider>
-          <PaperProvider>
-            <AuthProvider>
-              <AppNavigator />
-            </AuthProvider>
-          </PaperProvider>
+          <AuthProvider>
+            <AppNavigator />
+          </AuthProvider>
         </LanguageProvider>
       </ThemeProvider>
     </GestureHandlerRootView>

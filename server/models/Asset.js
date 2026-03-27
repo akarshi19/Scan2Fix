@@ -1,7 +1,7 @@
 // ============================================
 // Asset Model
 // ============================================
-// Represents physical equipment: AC, Water Cooler, Desert Cooler
+// Represents physical equipment: AC, Water Cooler, Desert Cooler, etc.
 // Each asset has a QR code sticker on it
 //
 // SUPABASE CALLS THIS REPLACES:
@@ -12,10 +12,13 @@
 // The QR code on each machine contains the asset's `asset_id`
 // e.g., "AC-3F-017" or "WC-2F-005"
 // When scanned, the app calls GET /api/assets/qr/AC-3F-017
+//
+// CUSTOM TYPES:
+// Admin can now add custom equipment types (e.g., FAN, PROJECTOR, UPS)
+// Type field no longer restricted to enum — accepts any uppercase string
 // ============================================
 
 const mongoose = require('mongoose');
-const { ASSET_TYPES } = require('../config/constants');
 
 const assetSchema = new mongoose.Schema(
   {
@@ -31,13 +34,13 @@ const assetSchema = new mongoose.Schema(
     },
 
     // ── Type of Equipment ──
+    // No longer restricted to enum — admin can add custom types
+    // Examples: AC, WATER_COOLER, DESERT_COOLER, FAN, PROJECTOR, UPS
     type: {
       type: String,
       required: [true, 'Asset type is required'],
-      enum: {
-        values: Object.values(ASSET_TYPES),
-        message: 'Type must be AC, WATER_COOLER, or DESERT_COOLER',
-      },
+      uppercase: true,
+      trim: true,
     },
 
     // ── Physical Location ──
@@ -81,8 +84,8 @@ const assetSchema = new mongoose.Schema(
 // ════════════════════════════════════════
 // INDEXES
 // ════════════════════════════════════════
-//assetSchema.index({ asset_id: 1 }); // QR lookup must be fast
-assetSchema.index({ type: 1 }); // Filter by equipment type
+assetSchema.index({ type: 1 });     // Filter by equipment type
 assetSchema.index({ location: 1 }); // Filter by location
+assetSchema.index({ is_active: 1 }); // Filter active/inactive
 
 module.exports = mongoose.model('Asset', assetSchema);
