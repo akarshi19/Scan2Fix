@@ -6,6 +6,7 @@ import {
 import { Ionicons, AntDesign } from '@expo/vector-icons';
 import { authAPI, getFileUrl } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
+import { useLanguage } from '../../context/LanguageContext';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import PhotoPicker from '../../components/PhotoPicker';
 import ScreenLayout from '../../components/ScreenLayout';
@@ -19,6 +20,7 @@ const MASTER_ADMIN_EMAIL = 'adminscan2fix@gmail.com';
 
 export default function ProfileScreen() {
   const { user, role, signOut, refreshUser } = useAuth();
+  const { t } = useLanguage();
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [photoUrl, setPhotoUrl] = useState('');
@@ -64,33 +66,33 @@ export default function ProfileScreen() {
   };
 
   const handleSave = async () => {
-    if (!fullName.trim()) { 
-      Alert.alert('Error', 'Please enter your name'); 
-      return; 
+    if (!fullName.trim()) {
+      Alert.alert(t('error'), t('enterNameError'));
+      return;
     }
 
     // Phone validation
     if (phone) {
       const phoneDigits = phone.replace(/\D/g, '');
       if (phoneDigits.length !== 10) {
-        Alert.alert('Invalid Phone', 'Phone number must be exactly 10 digits');
+        Alert.alert(t('invalidPhone'), t('phoneMustBe10'));
         return;
       }
     }
 
     setSaving(true);
     try {
-      const r = await authAPI.updateProfile({ 
-        full_name: fullName.trim(), 
-        phone: phone.replace(/\D/g, '').trim() 
+      const r = await authAPI.updateProfile({
+        full_name: fullName.trim(),
+        phone: phone.replace(/\D/g, '').trim()
       });
       if (r.data.success) {
         await refreshUser();
         setEditing(false);
-        Alert.alert('Success', 'Profile updated successfully');
+        Alert.alert(t('success'), t('profileUpdated'));
       }
     } catch (e) {
-      Alert.alert('Error', e.message || 'Failed to update profile');
+      Alert.alert(t('error'), e.message || t('profileUpdateFailed'));
     } finally {
       setSaving(false);
     }
@@ -98,19 +100,19 @@ export default function ProfileScreen() {
 
   const handleChangePassword = async () => {
     if (!currentPassword) {
-      Alert.alert('Error', 'Please enter your current password');
+      Alert.alert(t('error'), t('currentPasswordRequired'));
       return;
     }
     if (!newPassword || newPassword.length < 6) {
-      Alert.alert('Error', 'New password must be at least 6 characters');
+      Alert.alert(t('error'), t('passwordMin'));
       return;
     }
     if (!/[A-Za-z]/.test(newPassword) || !/[0-9]/.test(newPassword)) {
-      Alert.alert('Weak Password', 'Password must contain at least one letter and one number');
+      Alert.alert(t('weakPassword'), t('passwordRules'));
       return;
     }
     if (newPassword !== confirmNewPassword) {
-      Alert.alert('Error', 'New passwords do not match');
+      Alert.alert(t('error'), t('passwordMismatch'));
       return;
     }
 
@@ -118,14 +120,14 @@ export default function ProfileScreen() {
     try {
       const response = await authAPI.changePassword(currentPassword, newPassword);
       if (response.data.success) {
-        Alert.alert('Success ✅', 'Password changed successfully');
+        Alert.alert(`${t('success')} ✅`, t('passwordChanged'));
         setShowChangePassword(false);
         setCurrentPassword('');
         setNewPassword('');
         setConfirmNewPassword('');
       }
     } catch (error) {
-      Alert.alert('Error', error.message || 'Failed to change password');
+      Alert.alert(t('error'), error.message || t('passwordChangeFailed'));
     } finally {
       setChangingPassword(false);
     }
@@ -133,17 +135,17 @@ export default function ProfileScreen() {
 
   const handleDeleteAccount = async () => {
     if (!deletePassword) {
-      Alert.alert('Error', 'Please enter your password to confirm deletion');
+      Alert.alert(t('error'), t('enterPasswordToConfirm'));
       return;
     }
 
     Alert.alert(
-      '⚠️ Final Confirmation',
-      'Are you absolutely sure? This action cannot be undone.\n\nYour account and all associated data will be permanently deleted.',
+      t('finalConfirmation'),
+      t('deleteConfirmMsg'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('cancel'), style: 'cancel' },
         {
-          text: 'Delete Forever',
+          text: t('deleteForever'),
           style: 'destructive',
           onPress: async () => {
             setDeleting(true);
@@ -151,18 +153,18 @@ export default function ProfileScreen() {
               const response = await authAPI.deleteAccount(deletePassword);
               if (response.data.success) {
                 Alert.alert(
-                  'Account Deleted',
-                  'Your account has been permanently deleted.',
+                  t('accountDeleted'),
+                  t('accountDeletedMsg'),
                   [
                     {
-                      text: 'OK',
+                      text: t('ok'),
                       onPress: () => signOut()
                     }
                   ]
                 );
               }
             } catch (error) {
-              Alert.alert('Error', error.message || 'Failed to delete account');
+              Alert.alert(t('error'), error.message || t('deleteFailed'));
             } finally {
               setDeleting(false);
               setDeletePassword('');
@@ -183,7 +185,7 @@ export default function ProfileScreen() {
   if (loading) {
     return (
       <View style={s.loadingWrap}>
-        <Text style={s.loadingText}>Loading profile…</Text>
+        <Text style={s.loadingText}>{t('loadingProfile')}</Text>
       </View>
     );
   }
@@ -210,13 +212,13 @@ export default function ProfileScreen() {
           userId={user?.id}
           onPhotoUploaded={(newUrl) => { setPhotoUrl(newUrl); refreshUser(); }}
         />
-        <Text style={s.heroName}>{fullName || 'User'}</Text>
+        <Text style={s.heroName}>{fullName || t('user')}</Text>
       </View>
 
       {/* Profile card */}
       <View style={s.card}>
         <View style={s.cardTitleRow}>
-          <Text style={s.cardTitle}>Profile Information</Text>
+          <Text style={s.cardTitle}>{t('profileInformation')}</Text>
           <TouchableOpacity
             style={[s.editIconBtn, editing && s.editIconBtnActive]}
             onPress={() => editing ? handleCancelEdit() : setEditing(true)}
@@ -231,65 +233,64 @@ export default function ProfileScreen() {
 
         {!editing ? (
           <>
-            <InfoRow icon="person-outline" label="Full Name" value={fullName || '—'} />
-            <InfoRow icon="mail-outline" label="Email" value={user?.email || '—'} />
-            <InfoRow icon="call-outline" label="Phone" value={phone || 'Not provided'} />
-            <InfoRow icon="shield-outline" label="Role" value={role || 'USER'} last />
+            <InfoRow icon="person-outline" label={t('fullName')} value={fullName || '—'} />
+            <InfoRow icon="mail-outline" label={t('email')} value={user?.email || '—'} />
+            <InfoRow icon="call-outline" label={t('phone')} value={phone || t('notProvided')} />
+            <InfoRow icon="shield-outline" label={t('role')} value={role || t('user')} last />
           </>
         ) : (
           <>
-            <EditField 
-              label="Full Name" 
-              value={fullName} 
-              onChangeText={setFullName} 
-              placeholder="Enter your name" 
-              icon="person-outline" 
+            <EditField
+              label={t('fullName')}
+              value={fullName}
+              onChangeText={setFullName}
+              placeholder={t('enterName')}
+              icon="person-outline"
             />
-            <EditField 
-              label="Email" 
-              value={user?.email || ''} 
-              editable={false} 
-              icon="mail-outline" 
+            <EditField
+              label={t('email')}
+              value={user?.email || ''}
+              editable={false}
+              icon="mail-outline"
             />
-            <EditField 
-              label="Phone (10 digits)" 
-              value={phone} 
+            <EditField
+              label={`${t('phone')} (10 ${t('digitsCount')})`}
+              value={phone}
               onChangeText={(text) => {
-                // Only allow digits
                 const digits = text.replace(/\D/g, '');
                 if (digits.length <= 10) {
                   setPhone(digits);
                 }
               }}
-              placeholder="Enter 10-digit phone number" 
-              keyboardType="phone-pad" 
+              placeholder={t('phonePlaceholderProfile')}
+              keyboardType="phone-pad"
               icon="call-outline"
               maxLength={10}
             />
             {phone && phone.length > 0 && (
               <View style={s.phoneValidation}>
-                <Ionicons 
-                  name={phone.length === 10 ? 'checkmark-circle' : 'alert-circle'} 
-                  size={14} 
-                  color={phone.length === 10 ? '#4CAF50' : '#FF9800'} 
+                <Ionicons
+                  name={phone.length === 10 ? 'checkmark-circle' : 'alert-circle'}
+                  size={14}
+                  color={phone.length === 10 ? '#4CAF50' : '#FF9800'}
                 />
                 <Text style={[
                   s.phoneValidationText,
                   { color: phone.length === 10 ? '#4CAF50' : '#FF9800' }
                 ]}>
-                  {phone.length === 10 ? 'Valid phone number' : `${phone.length}/10 digits`}
+                  {phone.length === 10 ? t('validPhone') : `${phone.length}/10 ${t('digitsCount')}`}
                 </Text>
               </View>
             )}
-            <EditField 
-              label="Role" 
-              value={role || 'USER'} 
-              editable={false} 
-              icon="shield-outline" 
+            <EditField
+              label={t('role')}
+              value={role || t('user')}
+              editable={false}
+              icon="shield-outline"
             />
             <View style={s.editActions}>
               <TouchableOpacity style={s.cancelBtn} onPress={handleCancelEdit}>
-                <Text style={s.cancelBtnText}>Cancel</Text>
+                <Text style={s.cancelBtnText}>{t('cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[s.saveBtn, saving && s.saveBtnDisabled]}
@@ -298,7 +299,7 @@ export default function ProfileScreen() {
                 activeOpacity={0.85}
               >
                 <Ionicons name="checkmark-outline" size={17} color="#FFF" />
-                <Text style={s.saveBtnText}>{saving ? 'Saving…' : 'Save Changes'}</Text>
+                <Text style={s.saveBtnText}>{saving ? t('saving') : t('saveChanges')}</Text>
               </TouchableOpacity>
             </View>
           </>
@@ -313,7 +314,7 @@ export default function ProfileScreen() {
           activeOpacity={0.7}
         >
           <Ionicons name="key-outline" size={20} color="#FF9800" style={{ marginRight: 15 }} />
-          <Text style={s.menuText}>Change Password</Text>
+          <Text style={s.menuText}>{t('changePassword')}</Text>
           <Ionicons
             name={showChangePassword ? 'chevron-up' : 'chevron-down'}
             size={18}
@@ -327,7 +328,7 @@ export default function ProfileScreen() {
               <Ionicons name="lock-closed-outline" size={16} color={TEXT_MUT} style={{ marginRight: 10 }} />
               <RNTextInput
                 style={s.passInput}
-                placeholder="Current Password"
+                placeholder={t('currentPassword')}
                 placeholderTextColor="#9ca3af"
                 value={currentPassword}
                 onChangeText={setCurrentPassword}
@@ -342,7 +343,7 @@ export default function ProfileScreen() {
               <Ionicons name="lock-open-outline" size={16} color={TEXT_MUT} style={{ marginRight: 10 }} />
               <RNTextInput
                 style={s.passInput}
-                placeholder="New Password (min 6, letter + number)"
+                placeholder={t('newPassword')}
                 placeholderTextColor="#9ca3af"
                 value={newPassword}
                 onChangeText={setNewPassword}
@@ -367,8 +368,8 @@ export default function ProfileScreen() {
                   color: newPassword.length < 6 ? '#ef4444' :
                     (!/[A-Za-z]/.test(newPassword) || !/[0-9]/.test(newPassword)) ? '#f59e0b' : '#22c55e',
                 }]}>
-                  {newPassword.length < 6 ? 'Too short' :
-                    (!/[A-Za-z]/.test(newPassword) || !/[0-9]/.test(newPassword)) ? 'Add letter + number' : 'Strong ✓'}
+                  {newPassword.length < 6 ? t('tooShort') :
+                    (!/[A-Za-z]/.test(newPassword) || !/[0-9]/.test(newPassword)) ? t('addLetterNumber') : t('strong')}
                 </Text>
               </View>
             )}
@@ -377,7 +378,7 @@ export default function ProfileScreen() {
               <Ionicons name="lock-closed-outline" size={16} color={TEXT_MUT} style={{ marginRight: 10 }} />
               <RNTextInput
                 style={s.passInput}
-                placeholder="Confirm New Password"
+                placeholder={t('confirmNewPassword')}
                 placeholderTextColor="#9ca3af"
                 value={confirmNewPassword}
                 onChangeText={setConfirmNewPassword}
@@ -396,7 +397,7 @@ export default function ProfileScreen() {
                   fontSize: 11, marginLeft: 4,
                   color: newPassword === confirmNewPassword ? '#4CAF50' : '#F44336',
                 }}>
-                  {newPassword === confirmNewPassword ? 'Passwords match' : 'Passwords do not match'}
+                  {newPassword === confirmNewPassword ? t('passwordsMatch') : t('passwordsNotMatch')}
                 </Text>
               </View>
             )}
@@ -409,7 +410,7 @@ export default function ProfileScreen() {
             >
               <Ionicons name="shield-checkmark-outline" size={18} color="#FFF" />
               <Text style={s.changePassBtnText}>
-                {changingPassword ? 'Updating…' : 'Update Password'}
+                {changingPassword ? t('updating') : t('updatePassword')}
               </Text>
             </TouchableOpacity>
 
@@ -422,7 +423,7 @@ export default function ProfileScreen() {
                 setConfirmNewPassword('');
               }}
             >
-              <Text style={s.changePassCancelText}>Cancel</Text>
+              <Text style={s.changePassCancelText}>{t('cancel')}</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -437,7 +438,7 @@ export default function ProfileScreen() {
             activeOpacity={0.7}
           >
             <Ionicons name="trash-outline" size={20} color="#E53935" style={{ marginRight: 15 }} />
-            <Text style={[s.menuText, { color: '#E53935' }]}>Delete Account</Text>
+            <Text style={[s.menuText, { color: '#E53935' }]}>{t('deleteAccount')}</Text>
             <Ionicons
               name={showDeleteAccount ? 'chevron-up' : 'chevron-down'}
               size={18}
@@ -450,7 +451,7 @@ export default function ProfileScreen() {
               <View style={s.dangerWarning}>
                 <Ionicons name="warning-outline" size={24} color="#E53935" />
                 <Text style={s.dangerWarningText}>
-                  This action is permanent and cannot be undone. All your data will be deleted.
+                  {t('deleteAccountWarning')}
                 </Text>
               </View>
 
@@ -458,7 +459,7 @@ export default function ProfileScreen() {
                 <Ionicons name="lock-closed-outline" size={16} color="#E53935" style={{ marginRight: 10 }} />
                 <RNTextInput
                   style={s.passInput}
-                  placeholder="Enter your password to confirm"
+                  placeholder={t('enterPasswordToConfirm')}
                   placeholderTextColor="#9ca3af"
                   value={deletePassword}
                   onChangeText={setDeletePassword}
@@ -477,7 +478,7 @@ export default function ProfileScreen() {
               >
                 <Ionicons name="trash-outline" size={18} color="#FFF" />
                 <Text style={s.deleteAccountBtnText}>
-                  {deleting ? 'Deleting…' : 'Delete My Account Forever'}
+                  {deleting ? t('deleting') : t('deleteAccountForever')}
                 </Text>
               </TouchableOpacity>
 
@@ -488,7 +489,7 @@ export default function ProfileScreen() {
                   setDeletePassword('');
                 }}
               >
-                <Text style={s.changePassCancelText}>Cancel</Text>
+                <Text style={s.changePassCancelText}>{t('cancel')}</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -500,7 +501,7 @@ export default function ProfileScreen() {
         <View style={s.masterAdminNotice}>
           <Ionicons name="shield-checkmark" size={20} color="#4CAF50" />
           <Text style={s.masterAdminText}>
-            Master Admin account is protected and cannot be deleted
+            {t('masterAdminProtected')}
           </Text>
         </View>
       )}
@@ -508,18 +509,18 @@ export default function ProfileScreen() {
       {/* App info */}
       <View style={s.appInfo}>
         <Ionicons name="construct-outline" size={18} color={TEXT_SEC} />
-        <Text style={s.appName}>  Scan2Fix</Text>
-        <Text style={s.appVersion}>Version 1.0.0</Text>
+        <Text style={s.appName}>  {t('appName')}</Text>
+        <Text style={s.appVersion}>{t('version')} 1.0.0</Text>
       </View>
 
       <View style={{ height: 120 }} />
 
       <ConfirmDialog
         visible={showLogout}
-        title="Logout"
-        message="Are you sure you want to logout?"
-        confirmText="Logout"
-        cancelText="Cancel"
+        title={t('logout')}
+        message={t('logoutConfirm')}
+        confirmText={t('logout')}
+        cancelText={t('cancel')}
         type="danger"
         onConfirm={() => { setShowLogout(false); signOut(); }}
         onCancel={() => setShowLogout(false)}
@@ -574,19 +575,19 @@ const s = StyleSheet.create({
   },
   heroName: { fontSize: 22, fontWeight: '800', color: TEXT_PRI, marginTop: 14, marginBottom: 4 },
 
-  card: { 
-    backgroundColor: CARD_BG, borderRadius: 16, padding: 18, marginBottom: 14, 
-    shadowColor: '#A0BDD0', shadowOffset: { width: 0, height: 3 }, 
-    shadowOpacity: 0.12, shadowRadius: 8, elevation: 3 
+  card: {
+    backgroundColor: CARD_BG, borderRadius: 16, padding: 18, marginBottom: 14,
+    shadowColor: '#A0BDD0', shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.12, shadowRadius: 8, elevation: 3
   },
-  cardTitleRow: { 
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', 
-    marginBottom: 16, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: '#EEF4F8' 
+  cardTitleRow: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    marginBottom: 16, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: '#EEF4F8'
   },
   cardTitle: { fontSize: 15, fontWeight: '800', color: TEXT_PRI },
-  editIconBtn: { 
-    width: 34, height: 34, borderRadius: 10, backgroundColor: '#EEF6FB', 
-    alignItems: 'center', justifyContent: 'center' 
+  editIconBtn: {
+    width: 34, height: 34, borderRadius: 10, backgroundColor: '#EEF6FB',
+    alignItems: 'center', justifyContent: 'center'
   },
   editIconBtnActive: { backgroundColor: '#FDECEA' },
 
@@ -597,66 +598,65 @@ const s = StyleSheet.create({
 
   fieldWrap: { marginBottom: 12 },
   fieldLabel: { fontSize: 12, fontWeight: '600', color: TEXT_SEC, marginBottom: 5 },
-  fieldRow: { 
-    flexDirection: 'row', alignItems: 'center', backgroundColor: '#EEF6FB', 
-    borderRadius: 10, borderWidth: 1, borderColor: `${SKY}60`, paddingHorizontal: 12 
+  fieldRow: {
+    flexDirection: 'row', alignItems: 'center', backgroundColor: '#EEF6FB',
+    borderRadius: 10, borderWidth: 1, borderColor: `${SKY}60`, paddingHorizontal: 12
   },
   fieldRowDisabled: { backgroundColor: '#F5F8FA', borderColor: '#E0EBF0' },
   fieldInput: { flex: 1, paddingVertical: 12, fontSize: 14, color: TEXT_PRI, marginLeft: 8 },
   fieldInputDisabled: { color: TEXT_MUT },
-  
-  phoneValidation: { 
-    flexDirection: 'row', alignItems: 'center', marginTop: -8, marginBottom: 8, marginLeft: 4 
+
+  phoneValidation: {
+    flexDirection: 'row', alignItems: 'center', marginTop: -8, marginBottom: 8, marginLeft: 4
   },
   phoneValidationText: { fontSize: 11, fontWeight: '500', marginLeft: 4 },
 
   editActions: { flexDirection: 'row', gap: 10, marginTop: 6 },
-  saveBtn: { 
-    flex: 2, backgroundColor: ACTIVE, borderRadius: 10, paddingVertical: 13, 
-    alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 6, 
-    shadowColor: ACTIVE, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, 
-    shadowRadius: 8, elevation: 5 
+  saveBtn: {
+    flex: 2, backgroundColor: ACTIVE, borderRadius: 10, paddingVertical: 13,
+    alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 6,
+    shadowColor: ACTIVE, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3,
+    shadowRadius: 8, elevation: 5
   },
   saveBtnDisabled: { backgroundColor: '#B0CDD8', shadowOpacity: 0, elevation: 0 },
   saveBtnText: { color: '#FFF', fontWeight: '700', fontSize: 14 },
-  cancelBtn: { 
-    flex: 1, backgroundColor: '#EEF4F8', borderRadius: 10, paddingVertical: 13, 
-    alignItems: 'center' 
+  cancelBtn: {
+    flex: 1, backgroundColor: '#EEF4F8', borderRadius: 10, paddingVertical: 13,
+    alignItems: 'center'
   },
   cancelBtnText: { color: TEXT_SEC, fontWeight: '600', fontSize: 14 },
 
   menuItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12 },
   menuText: { flex: 1, fontSize: 15, color: TEXT_PRI, fontWeight: '600' },
 
-  passInputWrap: { 
-    flexDirection: 'row', alignItems: 'center', backgroundColor: '#f4f4f5', 
-    borderRadius: 10, marginBottom: 12, paddingHorizontal: 14, borderWidth: 1, 
-    borderColor: '#E8EFF3' 
+  passInputWrap: {
+    flexDirection: 'row', alignItems: 'center', backgroundColor: '#f4f4f5',
+    borderRadius: 10, marginBottom: 12, paddingHorizontal: 14, borderWidth: 1,
+    borderColor: '#E8EFF3'
   },
   passInput: { flex: 1, fontSize: 14, color: TEXT_PRI, paddingVertical: 14 },
-  
+
   strengthRow: { flexDirection: 'row', alignItems: 'center', marginTop: -6, marginBottom: 10 },
-  strengthBar: { 
-    width: 80, height: 4, backgroundColor: '#e5e7eb', borderRadius: 2, 
-    marginRight: 8, overflow: 'hidden' 
+  strengthBar: {
+    width: 80, height: 4, backgroundColor: '#e5e7eb', borderRadius: 2,
+    marginRight: 8, overflow: 'hidden'
   },
   strengthFill: { height: '100%', borderRadius: 2 },
   strengthText: { fontSize: 11, fontWeight: '500' },
-  
+
   matchRow: { flexDirection: 'row', alignItems: 'center', marginTop: -6, marginBottom: 12 },
-  
-  changePassBtn: { 
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, 
-    backgroundColor: '#FF9800', borderRadius: 10, paddingVertical: 14, marginTop: 4, 
-    shadowColor: '#FF9800', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.25, 
-    shadowRadius: 6, elevation: 4 
+
+  changePassBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: '#FF9800', borderRadius: 10, paddingVertical: 14, marginTop: 4,
+    shadowColor: '#FF9800', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.25,
+    shadowRadius: 6, elevation: 4
   },
   changePassBtnDisabled: { backgroundColor: '#FFCC80', shadowOpacity: 0 },
   changePassBtnText: { color: '#FFF', fontWeight: '700', fontSize: 14 },
   changePassCancel: { alignItems: 'center', paddingVertical: 10, marginTop: 4 },
   changePassCancelText: { color: TEXT_SEC, fontSize: 13, fontWeight: '500' },
 
-  // Delete account styles
   dangerWarning: {
     flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFEBEE',
     borderRadius: 10, padding: 12, marginBottom: 12, gap: 10,

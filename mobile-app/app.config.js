@@ -31,23 +31,6 @@ export default {
         "READ_EXTERNAL_STORAGE",
         "WRITE_EXTERNAL_STORAGE"
       ],
-
-      // ════════════════════════════════════════
-      // ADD THIS - Required for deep link redirect
-      // ════════════════════════════════════════
-      intentFilters: [
-        {
-          action: "VIEW",
-          autoVerify: true,
-          data: [
-            {
-              scheme: "scan2fix",
-              host: "auth",
-            }
-          ],
-          category: ["BROWSABLE", "DEFAULT"]
-        }
-      ],
     },
 
     web: {

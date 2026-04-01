@@ -10,6 +10,7 @@ import { captureRef } from 'react-native-view-shot';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { assetsAPI } from '../../services/api';
 import { useTheme } from '../../context/ThemeContext';
+import { useLanguage } from '../../context/LanguageContext';
 import ScreenLayout from '../../components/ScreenLayout';
 
 const ACTIVE_COLOR = '#5BA8D4';
@@ -19,6 +20,7 @@ const TEXT_MUT = '#9DB5C0';
 export default function AssetDetail({ route, navigation }) {
   const { asset } = route.params;
   const { colors } = useTheme();
+  const { t } = useLanguage();
   const printableRef = useRef(null);
   const [downloading, setDownloading] = useState(false);
 
@@ -38,11 +40,11 @@ export default function AssetDetail({ route, navigation }) {
   // Dynamic type label — handles custom types
   const getTypeLabel = (typeKey) => {
     const labels = {
-      'AC': 'Air Conditioner',
-      'WATER_COOLER': 'Water Cooler',
-      'DESERT_COOLER': 'Desert Cooler',
+      'AC': t('airConditioners'),
+      'WATER_COOLER': t('waterCoolers'),
+      'DESERT_COOLER': t('desertCoolers'),
     };
-    return labels[typeKey] || typeKey?.replace(/_/g, ' ') || 'Equipment';
+    return labels[typeKey] || typeKey?.replace(/_/g, ' ') || t('equipment');
   };
 
   const typeLabel = getTypeLabel(asset.type);
@@ -59,7 +61,7 @@ export default function AssetDetail({ route, navigation }) {
   // Save changes
   const handleSave = async () => {
     if (!location.trim()) {
-      Alert.alert('Error', 'Location is required');
+      Alert.alert(t('error'), t('locationRequired'));
       return;
     }
 
@@ -80,10 +82,10 @@ export default function AssetDetail({ route, navigation }) {
         asset.install_date = installDate ? installDate.toISOString() : null;
 
         setEditing(false);
-        Alert.alert('Success', 'Equipment details updated');
+        Alert.alert(t('success'), t('updateSuccess'));
       }
     } catch (error) {
-      Alert.alert('Error', error.message || 'Failed to update asset');
+      Alert.alert(t('error'), error.message || t('updateFailed'));
     } finally {
       setSaving(false);
     }
@@ -91,16 +93,14 @@ export default function AssetDetail({ route, navigation }) {
 
   // Toggle active/inactive — separate API call
   const handleToggleActive = () => {
-    const action = isActive ? 'Deactivate' : 'Activate';
-    const message = isActive
-      ? `This will mark ${asset.asset_id} as inactive. It won't appear in QR scans.`
-      : `This will mark ${asset.asset_id} as active again.`;
+    const action = isActive ? t('deactivate') : t('activate');
+    const message = isActive ? t('deactivateMessage') : t('activateMessage');
 
     Alert.alert(
-      `${action} Equipment?`,
+      isActive ? t('deactivateEquipment') : t('activateEquipment'),
       message,
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('cancel'), style: 'cancel' },
         {
           text: action,
           style: isActive ? 'destructive' : 'default',
@@ -112,10 +112,10 @@ export default function AssetDetail({ route, navigation }) {
               if (response.data.success) {
                 setIsActive(!isActive);
                 asset.is_active = !isActive;
-                Alert.alert('Success ✅', response.data.message);
+                Alert.alert(t('success'), response.data.message);
               }
             } catch (error) {
-              Alert.alert('Error', error.message || 'Failed to toggle status');
+              Alert.alert(t('error'), error.message || t('toggleFailed'));
             } finally {
               setToggling(false);
             }
@@ -127,7 +127,7 @@ export default function AssetDetail({ route, navigation }) {
 
   // Date formatting
   const formatDate = (date) => {
-    if (!date) return 'Not set';
+    if (!date) return t('notSet');
     return date.toLocaleDateString('en-GB', {
       day: 'numeric', month: 'short', year: 'numeric',
     });
@@ -152,21 +152,21 @@ export default function AssetDetail({ route, navigation }) {
           dialogTitle: `QR Code - ${asset.asset_id}`,
         });
       } else {
-        Alert.alert('Saved', 'QR code image generated successfully');
+        Alert.alert(t('success'), t('qrSaved'));
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to generate QR image.');
+      Alert.alert(t('error'), t('qrFailed'));
     } finally {
       setDownloading(false);
     }
   };
 
   return ( 
-    <ScreenLayout title="Equipment Details" showBack showDecor padBottom={90}>
+    <ScreenLayout title={t('equipmentId')} showBack showDecor padBottom={90}>
       {/* Details Card — Editable */}
       <View style={[s.card, { backgroundColor: colors.cardBg }]}>
         <View style={s.cardTitleRow}>
-          <Text style={[s.cardTitle, { color: colors.textPri }]}>Equipment Details</Text>
+          <Text style={[s.cardTitle, { color: colors.textPri }]}>{t('equipmentDetails')}</Text>
           <TouchableOpacity
             style={[s.editIconBtn, editing && s.editIconBtnActive]}
             onPress={() => editing ? handleCancelEdit() : setEditing(true)}
@@ -181,19 +181,19 @@ export default function AssetDetail({ route, navigation }) {
 
         {!editing ? (
           <>
-            <DetailRow icon="barcode-outline" label="Equipment ID:" value={asset.asset_id} colors={colors} />
-            <DetailRow icon="cube-outline" label="Type:" value={typeLabel} colors={colors} />
-            <DetailRow icon="location-outline" label="Location:" value={location} colors={colors} />
-            {brand ? <DetailRow icon="business-outline" label="Brand:" value={brand} colors={colors} /> : null}
-            {model ? <DetailRow icon="hardware-chip-outline" label="Model:" value={model} colors={colors} /> : null}
-            <DetailRow icon="calendar-outline" label="Installed On:" value={formatDate(installDate)} colors={colors} last />
+            <DetailRow icon="barcode-outline" label={t('equipmentId')} value={asset.asset_id} colors={colors} t={t} />
+            <DetailRow icon="cube-outline" label={t('type')} value={typeLabel} colors={colors} t={t} />
+            <DetailRow icon="location-outline" label={t('location')} value={location} colors={colors} t={t} />
+            {brand ? <DetailRow icon="business-outline" label={t('brand')} value={brand} colors={colors} t={t} /> : null}
+            {model ? <DetailRow icon="hardware-chip-outline" label={t('model')} value={model} colors={colors} t={t} /> : null}
+            <DetailRow icon="calendar-outline" label={t('installedOn')} value={formatDate(installDate)} colors={colors} t={t} last />
           </>
         ) : (
           <>
             {/* Asset ID — not editable */}
             <View style={s.readOnlyField}>
               <Ionicons name="barcode-outline" size={16} color={TEXT_MUT} />
-              <Text style={s.readOnlyLabel}>Asset ID</Text>
+              <Text style={s.readOnlyLabel}>{t('assetId')}</Text>
               <Text style={s.readOnlyValue}>{asset.asset_id}</Text>
               <Ionicons name="lock-closed-outline" size={14} color={TEXT_MUT} />
             </View>
@@ -201,40 +201,43 @@ export default function AssetDetail({ route, navigation }) {
             {/* Type — not editable */}
             <View style={s.readOnlyField}>
               <Ionicons name="cube-outline" size={16} color={TEXT_MUT} />
-              <Text style={s.readOnlyLabel}>Type</Text>
+              <Text style={s.readOnlyLabel}>{t('type')}</Text>
               <Text style={s.readOnlyValue}>{typeLabel}</Text>
               <Ionicons name="lock-closed-outline" size={14} color={TEXT_MUT} />
             </View>
 
             <EditField
-              label="Location *"
+              label={t('editLocation')}
               icon="location-outline"
               value={location}
               onChangeText={setLocation}
-              placeholder="e.g., 3rd Floor, Room 301"
+              placeholder={t('locationPlaceholder')}
               colors={colors}
+              t={t}
             />
 
             <EditField
-              label="Brand"
+              label={t('editBrand')}
               icon="business-outline"
               value={brand}
               onChangeText={setBrand}
-              placeholder="e.g., Voltas, Daikin"
+              placeholder={t('brandPlaceholder')}
               colors={colors}
+              t={t}
             />
 
             <EditField
-              label="Model"
+              label={t('editModel')}
               icon="hardware-chip-outline"
               value={model}
               onChangeText={setModel}
-              placeholder="e.g., 183V ADP"
+              placeholder={t('modelPlaceholder')}
               colors={colors}
+              t={t}
             />
 
             {/* Install Date */}
-            <Text style={[s.editLabel, { color: colors.textSec }]}>Installed Date</Text>
+            <Text style={[s.editLabel, { color: colors.textSec }]}>{t('installedDate')}</Text>
             <TouchableOpacity
               style={[s.dateBtn, { backgroundColor: colors.inputBg, borderColor: colors.inputBorder }]}
               onPress={() => setShowDatePicker(true)}
@@ -242,7 +245,7 @@ export default function AssetDetail({ route, navigation }) {
             >
               <Ionicons name="calendar-outline" size={16} color={installDate ? ACTIVE_COLOR : TEXT_MUT} />
               <Text style={[s.dateBtnText, { color: installDate ? colors.textPri : TEXT_MUT }]}>
-                {installDate ? formatDate(installDate) : 'Select date'}
+                {installDate ? formatDate(installDate) : t('selectInstallDate')}
               </Text>
               {installDate && (
                 <TouchableOpacity
@@ -260,9 +263,9 @@ export default function AssetDetail({ route, navigation }) {
                   <TouchableOpacity style={s.dateModalOverlay} activeOpacity={1} onPress={() => setShowDatePicker(false)}>
                     <View style={[s.dateModalContent, { backgroundColor: colors.cardBg }]}>
                       <View style={s.dateModalHeader}>
-                        <Text style={[s.dateModalTitle, { color: colors.textPri }]}>Select Date</Text>
+                        <Text style={[s.dateModalTitle, { color: colors.textPri }]}>{t('selectDateTitle')}</Text>
                         <TouchableOpacity onPress={() => setShowDatePicker(false)}>
-                          <Text style={[s.dateModalDone, { color: ACTIVE_COLOR }]}>Done</Text>
+                          <Text style={[s.dateModalDone, { color: ACTIVE_COLOR }]}>{t('done')}</Text>
                         </TouchableOpacity>
                       </View>
                       <DateTimePicker
@@ -290,7 +293,7 @@ export default function AssetDetail({ route, navigation }) {
             {/* Save / Cancel */}
             <View style={s.editActions}>
               <TouchableOpacity style={s.cancelBtn} onPress={handleCancelEdit}>
-                <Text style={s.cancelBtnText}>Cancel</Text>
+                <Text style={s.cancelBtnText}>{t('cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[s.saveBtn, saving && s.saveBtnDisabled]}
@@ -303,7 +306,7 @@ export default function AssetDetail({ route, navigation }) {
                 ) : (
                   <>
                     <Ionicons name="checkmark-outline" size={17} color="#FFF" />
-                    <Text style={s.saveBtnText}>Save Changes</Text>
+                    <Text style={s.saveBtnText}>{t('saveChanges')}</Text>
                   </>
                 )}
               </TouchableOpacity>
@@ -311,6 +314,7 @@ export default function AssetDetail({ route, navigation }) {
           </>
         )}
       </View>
+
       {/* Equipment Status Card */}
       <View style={[s.card, { backgroundColor: colors.cardBg }]}>
         <View style={s.statusRow}>
@@ -326,10 +330,10 @@ export default function AssetDetail({ route, navigation }) {
             </View>
             <View>
               <Text style={[s.statusTitle, { color: colors.textPri }]}>
-                {isActive ? 'Active' : 'Inactive'}
+                {isActive ? t('active') : t('inactiveStatus')}
               </Text>
               <Text style={[s.statusSubtext, { color: colors.textMut }]}>
-                {isActive ? 'Available for complaints' : 'Hidden from QR scans'}
+                {isActive ? t('availableForComplaints') : t('hiddenFromQR')}
               </Text>
             </View>
           </View>
@@ -356,23 +360,24 @@ export default function AssetDetail({ route, navigation }) {
                   s.toggleBtnText,
                   { color: isActive ? '#F44336' : '#4CAF50' },
                 ]}>
-                  {isActive ? ' Deactivate' : ' Activate'}
+                  {isActive ? ` ${t('deactivate')}` : ` ${t('activate')}`}
                 </Text>
               </>
             )}
           </TouchableOpacity>
         </View>
       </View>
+
       {/* QR Code Card  */}
       <View style={[s.card, { backgroundColor: colors.cardBg }]}>
-        <Text style={[s.cardTitleSimple, { color: colors.textPri }]}>QR Code</Text>
+        <Text style={[s.cardTitleSimple, { color: colors.textPri }]}>{t('qrCode')}</Text>
         <View style={s.qrContainer}>
           <View style={s.qrWrapper}>
             <QRCode value={asset.asset_id} size={180} backgroundColor="#FFFFFF" color="#1A1A2E" />
           </View>
           <Text style={[s.qrId, { color: '#004e68' }]}>{asset.asset_id}</Text>
           <Text style={[s.qrHint, { color: colors.textMut }]}>
-            Scan this QR code with Scan2Fix app to report issues
+            {t('scanHint')}
           </Text>
         </View>
         <View style={s.qrActions}>
@@ -388,7 +393,7 @@ export default function AssetDetail({ route, navigation }) {
               color="#FFF"
             />
             <Text style={s.qrBtnText}>
-              {downloading ? 'Generating...' : 'Get QR Code'}
+              {downloading ? t('generating') : t('getQrCode')}
             </Text>
           </TouchableOpacity>
         </View>
@@ -418,7 +423,7 @@ export default function AssetDetail({ route, navigation }) {
           <View style={s.printFooter}>
             <View style={s.printFooterLine} />
             <Text style={s.printFooterText}>
-              Scan this QR code with the Scan2Fix app to report issues
+              {t('scanHint')}
             </Text>
           </View>
         </View>
@@ -431,17 +436,17 @@ export default function AssetDetail({ route, navigation }) {
 // Helper Components
 // ════════════════════════════════════════
 
-function DetailRow({ icon, label, value, colors, last }) {
+function DetailRow({ icon, label, value, colors, t, last }) {
   return (
     <View style={[ds.row, !last && { borderBottomWidth: 1, borderBottomColor: colors.divider }]}>
       <Ionicons name={icon} size={16} color={colors.textMut} style={{ marginRight: 12 }} />
       <Text style={[ds.label, { color: colors.textMut }]}>{label}</Text>
-      <Text style={[ds.value, { color: colors.textPri }]}>{value || 'N/A'}</Text>
+      <Text style={[ds.value, { color: colors.textPri }]}>{value || t('na')}</Text>
     </View>
   );
 }
 
-function EditField({ label, icon, value, onChangeText, placeholder, colors }) {
+function EditField({ label, icon, value, onChangeText, placeholder, colors, t }) {
   return (
     <>
       <Text style={[s.editLabel, { color: colors.textSec }]}>{label}</Text>
@@ -460,7 +465,7 @@ function EditField({ label, icon, value, onChangeText, placeholder, colors }) {
 }
 
 // ════════════════════════════════════════
-// Styles
+// Styles (remain exactly the same)
 // ════════════════════════════════════════
 
 const ds = StyleSheet.create({
@@ -470,7 +475,6 @@ const ds = StyleSheet.create({
 });
 
 const s = StyleSheet.create({
-  // Hero
   hero: {
     alignItems: 'center',
     paddingVertical: 20,
@@ -499,8 +503,6 @@ const s = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
   },
-
-  // Card
   card: {
     borderRadius: 16,
     padding: 18,
@@ -511,8 +513,6 @@ const s = StyleSheet.create({
     shadowRadius: 8,
     elevation: 3,
   },
-
-  // Status Card
   statusRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -565,8 +565,6 @@ const s = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
   },
-
-  // Card title
   cardTitleRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -585,8 +583,6 @@ const s = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#EEF4F8',
   },
-
-  // Edit button
   editIconBtn: {
     width: 34,
     height: 34,
@@ -596,8 +592,6 @@ const s = StyleSheet.create({
     justifyContent: 'center',
   },
   editIconBtnActive: { backgroundColor: '#FDECEA' },
-
-  // Read-only fields
   readOnlyField: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -612,8 +606,6 @@ const s = StyleSheet.create({
   },
   readOnlyLabel: { width: 65, fontSize: 12, color: TEXT_MUT, fontWeight: '500' },
   readOnlyValue: { flex: 1, fontSize: 14, color: TEXT_SEC, fontWeight: '600' },
-
-  // Edit fields
   editLabel: { fontSize: 12, fontWeight: '600', marginBottom: 6, marginTop: 4 },
   editInputRow: {
     flexDirection: 'row',
@@ -625,8 +617,6 @@ const s = StyleSheet.create({
     gap: 8,
   },
   editInput: { flex: 1, paddingVertical: 12, fontSize: 14 },
-
-  // Date picker
   dateBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -658,8 +648,6 @@ const s = StyleSheet.create({
   },
   dateModalTitle: { fontSize: 18, fontWeight: '700' },
   dateModalDone: { fontSize: 16, fontWeight: '700' },
-
-  // Save / Cancel
   editActions: { flexDirection: 'row', gap: 10, marginTop: 10 },
   cancelBtn: {
     flex: 1,
@@ -686,8 +674,6 @@ const s = StyleSheet.create({
   },
   saveBtnDisabled: { backgroundColor: '#B0CDD8', shadowOpacity: 0, elevation: 0 },
   saveBtnText: { color: '#FFF', fontWeight: '700', fontSize: 14 },
-
-  // QR
   qrContainer: { alignItems: 'center', paddingVertical: 20 },
   qrWrapper: {
     padding: 16,
@@ -719,8 +705,6 @@ const s = StyleSheet.create({
     elevation: 4,
   },
   qrBtnText: { color: '#FFF', fontWeight: '700', fontSize: 13 },
-
-  // Hidden printable
   hiddenContainer: { position: 'absolute', left: -1000, top: 0, opacity: 1 },
   printCard: {
     width: 350,

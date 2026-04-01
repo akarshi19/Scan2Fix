@@ -1,12 +1,13 @@
 import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList, RefreshControl,
-  TouchableOpacity, TextInput, Image, Modal,Share
+  TouchableOpacity, TextInput, Image, Modal, Share, Alert
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { complaintsAPI, getFileUrl } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
+import { useLanguage } from '../../context/LanguageContext';
 import ScreenLayout from '../../components/ScreenLayout';
 
 const ACTIVE = '#5BA8D4';
@@ -24,17 +25,9 @@ const STATUS_COLORS = {
   CLOSED: '#4CAF50',
 };
 
-const SORT_OPTIONS = [
-  { key: 'ALL', label: 'All Complaints', icon: 'list-outline' },
-  { key: 'OPEN', label: 'Open', icon: 'alert-circle-outline' },
-  { key: 'ASSIGNED', label: 'Assigned', icon: 'person-outline' },
-  { key: 'IN_PROGRESS', label: 'In Progress', icon: 'time-outline' },
-  { key: 'FINISHING', label: 'Finishing', icon: 'flag-outline' },
-  { key: 'CLOSED', label: 'Closed', icon: 'checkmark-circle-outline' },
-];
-
 export default function MyComplaints() {
   const { user } = useAuth();
+  const { t } = useLanguage();
   const navigation = useNavigation();
   const [complaints, setComplaints] = useState([]);
   const [filtered, setFiltered] = useState([]);
@@ -46,6 +39,16 @@ export default function MyComplaints() {
   const [showOTPModal, setShowOTPModal] = useState(false);
   const [generatedOTP, setGeneratedOTP] = useState(null);
   const [otpComplaint, setOtpComplaint] = useState(null);
+
+  // Dynamic sort options using translations
+  const SORT_OPTIONS = [
+    { key: 'ALL', label: t('allComplaints'), icon: 'list-outline' },
+    { key: 'OPEN', label: t('open'), icon: 'alert-circle-outline' },
+    { key: 'ASSIGNED', label: t('assigned'), icon: 'person-outline' },
+    { key: 'IN_PROGRESS', label: t('inProgress'), icon: 'time-outline' },
+    { key: 'FINISHING', label: t('finishing'), icon: 'flag-outline' },
+    { key: 'CLOSED', label: t('closed'), icon: 'checkmark-circle-outline' },
+  ];
 
   useFocusEffect(
     useCallback(() => {
@@ -98,14 +101,14 @@ export default function MyComplaints() {
         setShowOTPModal(true);
       }
     } catch (error) {
-      Alert.alert('Error', error.message || 'Failed to generate OTP');
+      Alert.alert(t('error'), error.message || t('generateOtpFailed'));
     }
   };
 
   const shareOTP = async () => {
     try {
       await Share.share({
-        message: `Scan2Fix Completion OTP\n\nComplaint: ${otpComplaint.asset_id}\nYour OTP is: ${generatedOTP}\n\nValid for 5 minutes.\n\nShare this code with the technician to verify completion.`,
+        message: `Scan2Fix ${t('completionOtp')}\n\n${t('complaintNo')} ${otpComplaint.asset_id}\n${t('enterOtp')}: ${generatedOTP}\n\n${t('validFor')}\n\n${t('otpNoteUser')}`,
       });
     } catch (error) {
       console.error('Share error:', error);
@@ -113,18 +116,29 @@ export default function MyComplaints() {
   };
 
   const getActiveFilterLabel = () => {
-    return SORT_OPTIONS.find(o => o.key === activeFilter)?.label || 'All';
+    return SORT_OPTIONS.find(o => o.key === activeFilter)?.label || t('all');
   };
 
-  // Fixed Header — 
+  // Get translated status label
+  const getStatusLabel = (status) => {
+    const statusMap = {
+      'OPEN': t('open'),
+      'ASSIGNED': t('assigned'),
+      'IN_PROGRESS': t('inProgress'),
+      'FINISHING': t('finishing'),
+      'CLOSED': t('closed'),
+    };
+    return statusMap[status] || status.replace('_', ' ');
+  };
+
+  // Fixed Header
   const fixedHeaderContent = (
     <View style={s.headerRow}>
-      {/* Search bar */}
       <View style={s.searchWrap}>
         <Ionicons name="search-outline" size={18} color={TEXT_MUT} style={{ marginRight: 8 }} />
         <TextInput
           style={s.searchInput}
-          placeholder="Search by Asset ID or description"
+          placeholder={t('searchComplaints')}
           placeholderTextColor={TEXT_MUT}
           value={searchQuery}
           onChangeText={setSearchQuery}
@@ -136,7 +150,6 @@ export default function MyComplaints() {
         )}
       </View>
 
-      {/* Sort button */}
       <TouchableOpacity
         style={[s.sortButton, activeFilter !== 'ALL' && s.sortButtonActive]}
         onPress={() => setShowSortModal(true)}
@@ -151,7 +164,7 @@ export default function MyComplaints() {
     </View>
   );
 
-const renderComplaint = ({ item }) => {
+  const renderComplaint = ({ item }) => {
     const isClosed = item.status === 'CLOSED';
     const isFinishing = item.status === 'FINISHING';
     return (
@@ -165,7 +178,7 @@ const renderComplaint = ({ item }) => {
           <View style={[s.statusPill, { backgroundColor: `${STATUS_COLORS[item.status]}20` }]}>
             <View style={[s.statusDot, { backgroundColor: STATUS_COLORS[item.status] }]} />
             <Text style={[s.statusLabel, { color: STATUS_COLORS[item.status] }]}>
-              {item.status.replace('_', ' ')}
+              {getStatusLabel(item.status)}
             </Text>
           </View>
         </View>
@@ -175,7 +188,7 @@ const renderComplaint = ({ item }) => {
         <View style={s.locationRow}>
           <Ionicons name="location-outline" size={13} color={isClosed ? TEXT_MUT : ACTIVE} />
           <Text style={[s.location, isClosed && { color: TEXT_MUT }]}>
-            {' '}{item.assets?.location || 'Unknown'}
+            {' '}{item.assets?.location || t('unknown')}
           </Text>
         </View>
 
@@ -187,16 +200,16 @@ const renderComplaint = ({ item }) => {
         {!isClosed && item.photo_url && (
           <TouchableOpacity onPress={() => setSelectedImage(getFileUrl(item.photo_url))}>
             <Image source={{ uri: getFileUrl(item.photo_url) }} style={s.thumbnail} />
-            <Text style={s.tapToViewImage}>Tap to view full image</Text>
+            <Text style={s.tapToViewImage}>{t('tapToViewImage')}</Text>
           </TouchableOpacity>
         )}
 
-        {/* Assigned staff — styled bar for active, plain text for closed */}
+        {/* Assigned staff */}
         {isClosed ? (
           item.profiles && (
             <View style={s.closedStaffRow}>
               <Ionicons name="person-outline" size={13} color={TEXT_MUT} />
-              <Text style={s.closedStaffLabel}>  Handled by: </Text>
+              <Text style={s.closedStaffLabel}>  {t('handledBy')} </Text>
               <Text style={s.closedStaffName}>
                 {item.profiles.full_name || item.profiles.email}
               </Text>
@@ -218,7 +231,7 @@ const renderComplaint = ({ item }) => {
                 </View>
               )}
               <View style={{ flex: 1 }}>
-                <Text style={s.assignedLabel}>Assigned To:</Text>
+                <Text style={s.assignedLabel}>{t('assignedTo')}</Text>
                 <Text style={s.assignedName}>
                   {item.profiles.full_name || item.profiles.email}
                 </Text>
@@ -228,18 +241,19 @@ const renderComplaint = ({ item }) => {
           ) : (
             <View style={s.unassignedBar}>
               <Ionicons name="warning-outline" size={14} color="#E65100" />
-              <Text style={s.unassignedText}>  Not assigned yet</Text>
+              <Text style={s.unassignedText}>  {t('notAssigned')}</Text>
             </View>
           )
         )}
-        {/* OTP button — only for non-closed */}
+
+        {/* OTP button — only for finishing */}
         {!isClosed && isFinishing && (
           <TouchableOpacity
             style={s.generateOtpButton}
             onPress={() => handleGenerateOTP(item)}
           >
             <Ionicons name="key-outline" size={16} color="#FFF" />
-            <Text style={s.generateOtpButtonText}>  Generate OTP for Completion</Text>
+            <Text style={s.generateOtpButtonText}>  {t('generateOtp')}</Text>
           </TouchableOpacity>
         )}
 
@@ -248,7 +262,7 @@ const renderComplaint = ({ item }) => {
           <View style={s.finishingNotice}>
             <Ionicons name="flag-outline" size={14} color="#FF9800" />
             <Text style={s.finishingNoticeText}>
-              Work completed by staff. Generate OTP to verify and close.
+              {t('otpHelpNote')}
             </Text>
           </View>
         )}
@@ -258,7 +272,7 @@ const renderComplaint = ({ item }) => {
           <View style={s.closedRow}>
             <Ionicons name="checkmark-done-circle" size={14} color={TEXT_MUT} />
             <Text style={s.closedDate}>
-              {' '}Resolved on: {new Date(item.closed_at).toLocaleDateString('en-GB', {
+              {' '}{t('resolvedOn')} {new Date(item.closed_at).toLocaleDateString('en-GB', {
                 day: 'numeric', month: 'short', year: 'numeric',
               })}
             </Text>
@@ -276,7 +290,7 @@ const renderComplaint = ({ item }) => {
             </Text>
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Text style={s.tapHint}>Tap to view  </Text>
+            <Text style={s.tapHint}>{t('tapToView')}  </Text>
             <Ionicons name="chevron-forward" size={13} color={TEXT_MUT} />
           </View>
         </View>
@@ -285,7 +299,14 @@ const renderComplaint = ({ item }) => {
   };
 
   return (
-    <ScreenLayout title="My Complaints" scroll={false} fixedHeader={fixedHeaderContent} showDecor  transparentFixedHeader padBottom={0}>
+    <ScreenLayout 
+      title={t('myComplaints')} 
+      scroll={false} 
+      fixedHeader={fixedHeaderContent} 
+      showDecor 
+      transparentFixedHeader 
+      padBottom={0}
+    >
       {activeFilter !== 'ALL' && (
         <View style={s.activeFilterRow}>
           <View style={[s.activeFilterPill, { backgroundColor: `${STATUS_COLORS[activeFilter]}15` }]}>
@@ -300,15 +321,14 @@ const renderComplaint = ({ item }) => {
               <Ionicons name="close-circle" size={16} color={STATUS_COLORS[activeFilter]} />
             </TouchableOpacity>
           </View>
-          <Text style={s.countText}>{filtered.length} results</Text>
+          <Text style={s.countText}>{filtered.length} {t('results')}</Text>
         </View>
       )}
 
       {activeFilter === 'ALL' && (
-        <Text style={s.countTextAll}>Total complaints — {filtered.length}</Text>
+        <Text style={s.countTextAll}>{t('totalComplaintsLabel')} {filtered.length}</Text>
       )}
 
-      {/* FlatList starts here — scrolling begins after the count text */}
       <FlatList
         data={filtered}
         keyExtractor={item => item.id?.toString() || item._id?.toString()}
@@ -324,13 +344,13 @@ const renderComplaint = ({ item }) => {
             <Ionicons name="mail-open-outline" size={50} color={TEXT_MUT} />
             <Text style={s.emptyTitle}>
               {activeFilter === 'ALL'
-                ? 'No Complaints Yet'
-                : `No ${activeFilter.replace('_', ' ')} Complaints`}
+                ? t('noComplaintsYet')
+                : `${t('noFilteredComplaints')}`}
             </Text>
             <Text style={s.emptyText}>
               {activeFilter === 'ALL'
-                ? 'Your submitted complaints will appear here'
-                : `Complaints with "${activeFilter.replace('_', ' ')}" status will appear here`}
+                ? t('noComplaintsDesc')
+                : t('noFilteredDesc')}
             </Text>
           </View>
         }
@@ -350,7 +370,7 @@ const renderComplaint = ({ item }) => {
         >
           <View style={s.sortModalContent}>
             <View style={s.sortModalHandle} />
-            <Text style={s.sortModalTitle}>Filter by Status</Text>
+            <Text style={s.sortModalTitle}>{t('filterByStatus')}</Text>
 
             {SORT_OPTIONS.map(option => (
               <TouchableOpacity
@@ -415,7 +435,7 @@ const renderComplaint = ({ item }) => {
               style={s.sortCloseBtn}
               onPress={() => setShowSortModal(false)}
             >
-              <Text style={s.sortCloseBtnText}>Close</Text>
+              <Text style={s.sortCloseBtnText}>{t('close')}</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
@@ -438,7 +458,7 @@ const renderComplaint = ({ item }) => {
             style={s.fullImage}
             resizeMode="contain"
           />
-          <Text style={s.closeHint}>Tap anywhere to close</Text>
+          <Text style={s.closeHint}>{t('tapToClose')}</Text>
         </TouchableOpacity>
       </Modal>
 
@@ -457,9 +477,9 @@ const renderComplaint = ({ item }) => {
               <Ionicons name="key" size={32} color="#004e68" />
             </View>
 
-            <Text style={s.otpTitle}>Completion OTP</Text>
+            <Text style={s.otpTitle}>{t('completionOtp')}</Text>
             <Text style={s.otpSubtitle}>
-              Share this OTP with the technician to verify completion
+              {t('otpSubtitleUser')}
             </Text>
 
             <View style={s.otpDisplay}>
@@ -472,7 +492,7 @@ const renderComplaint = ({ item }) => {
 
             <View style={s.validityRow}>
               <Ionicons name="time-outline" size={14} color="#FF9800" />
-              <Text style={s.validityText}> Valid for 5 minutes</Text>
+              <Text style={s.validityText}> {t('validFor')}</Text>
             </View>
 
             <TouchableOpacity
@@ -481,7 +501,7 @@ const renderComplaint = ({ item }) => {
               activeOpacity={0.85}
             >
               <Ionicons name="share-social-outline" size={18} color="#FFF" />
-              <Text style={s.shareBtnText}>  Share OTP</Text>
+              <Text style={s.shareBtnText}>  {t('shareOtp')}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -489,13 +509,13 @@ const renderComplaint = ({ item }) => {
               onPress={() => setShowOTPModal(false)}
               activeOpacity={0.8}
             >
-              <Text style={s.closeOtpBtnText}>Close</Text>
+              <Text style={s.closeOtpBtnText}>{t('close')}</Text>
             </TouchableOpacity>
 
             <View style={s.noteRow}>
               <Ionicons name="information-circle-outline" size={14} color={TEXT_MUT} />
               <Text style={s.noteText}>
-                Technician will enter this OTP in their app to confirm the issue is resolved
+                {t('otpNoteUser')}
               </Text>
             </View>
           </View>
@@ -505,7 +525,9 @@ const renderComplaint = ({ item }) => {
   );
 }
 
+// Styles remain the same
 const s = StyleSheet.create({
+  // ... (keep all your existing styles unchanged)
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -521,7 +543,6 @@ const s = StyleSheet.create({
     paddingHorizontal: 14,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.4)',
-    // No shadow or elevation
   },
   searchInput: {
     flex: 1,
@@ -537,15 +558,11 @@ const s = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.4)',
-    // No shadow or elevation
   },
   sortButtonActive: {
     backgroundColor: ACTIVE,
     borderColor: ACTIVE,
   },
-  // ════════════════════════════════════════
-  // Active filter indicator
-  // ════════════════════════════════════════
   activeFilterRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -581,10 +598,6 @@ const s = StyleSheet.create({
     marginBottom: 8,
     marginTop: 4,
   },
-
-  // ════════════════════════════════════════
-  // Sort Modal
-  // ════════════════════════════════════════
   sortModalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.4)',
@@ -663,10 +676,6 @@ const s = StyleSheet.create({
     fontWeight: '600',
     color: TEXT_SEC,
   },
-
-  // ════════════════════════════════════════
-  // Complaint Cards
-  // ════════════════════════════════════════
   card: {
     backgroundColor: CARD_BG,
     borderRadius: 14,
@@ -729,14 +738,8 @@ const s = StyleSheet.create({
     justifyContent: 'center',
   },
   unassignedText: { color: '#E65100', fontSize: 13, fontWeight: '600' },
-  verifyButton: {
-    backgroundColor: '#004e68', padding: 12, borderRadius: 8,
-    alignItems: 'center', marginBottom: 10, flexDirection: 'row',
-    justifyContent: 'center',
-  },
-  verifyButtonText: { color: '#FFF', fontWeight: '700', fontSize: 13 },
   closedRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
-  closedDate: { fontSize: 12, color: TEXT_MUT, },
+  closedDate: { fontSize: 12, color: TEXT_MUT },
   footer: {
     flexDirection: 'row', justifyContent: 'space-between',
     alignItems: 'center', marginTop: 4,
@@ -749,17 +752,12 @@ const s = StyleSheet.create({
   },
   emptyTitle: { fontSize: 16, fontWeight: '700', color: TEXT_SEC },
   emptyText: { color: TEXT_MUT, fontSize: 13, textAlign: 'center' },
-
-  // Image modal
   imageModalOverlay: {
     flex: 1, backgroundColor: 'rgba(0,0,0,0.9)',
     justifyContent: 'center', alignItems: 'center',
   },
   fullImage: { width: '95%', height: '70%' },
   closeHint: { color: 'white', marginTop: 20, fontSize: 14 },
-  // ════════════════════════════════════════
-  // Closed complaint — plain text staff row
-  // ════════════════════════════════════════
   closedStaffRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -776,68 +774,65 @@ const s = StyleSheet.create({
     flex: 1,
   },
   generateOtpButton: {
-  backgroundColor: '#004e68', padding: 12, borderRadius: 8,
-  alignItems: 'center', marginBottom: 10, flexDirection: 'row',
-  justifyContent: 'center', shadowColor: '#004e68',
-  shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.25,
-  shadowRadius: 6, elevation: 4,
-},
-generateOtpButtonText: { color: '#FFF', fontWeight: '700', fontSize: 13 },
-
-finishingNotice: {
-  flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF8E1',
-  borderRadius: 8, padding: 10, marginBottom: 10, gap: 8,
-},
-finishingNoticeText: {
-  flex: 1, fontSize: 12, color: '#FF9800', fontWeight: '500', lineHeight: 18,
-},
-
-// OTP Modal styles (same as before)
-otpModalOverlay: {
-  flex: 1, backgroundColor: 'rgba(0,0,0,0.4)',
-  justifyContent: 'center', alignItems: 'center', padding: 20,
-},
-otpModalContent: {
-  borderRadius: 24, padding: 28, width: '100%', maxWidth: 360,
-  alignItems: 'center', backgroundColor: CARD_BG,
-  shadowColor: '#000', shadowOffset: { width: 0, height: 10 },
-  shadowOpacity: 0.2, shadowRadius: 20, elevation: 15,
-},
-otpHandle: {
-  width: 40, height: 4, borderRadius: 2, backgroundColor: '#DDD', marginBottom: 20,
-},
-otpIconWrap: {
-  width: 64, height: 64, borderRadius: 32, backgroundColor: '#004e6812',
-  alignItems: 'center', justifyContent: 'center', marginBottom: 16,
-},
-otpTitle: { fontSize: 20, fontWeight: '800', marginBottom: 6, color: TEXT_PRI },
-otpSubtitle: { fontSize: 13, textAlign: 'center', marginBottom: 24, lineHeight: 19, color: TEXT_SEC },
-otpDisplay: { flexDirection: 'row', gap: 10, marginBottom: 16 },
-otpDigitBox: {
-  width: 48, height: 56, borderRadius: 12, backgroundColor: '#EEF6FB',
-  borderWidth: 2, borderColor: '#5BA8D4', alignItems: 'center', justifyContent: 'center',
-},
-otpDigit: { fontSize: 28, fontWeight: '800', color: '#004e68' },
-validityRow: {
-  flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF8E1',
-  paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, marginBottom: 24,
-},
-validityText: { fontSize: 12, fontWeight: '600', color: '#FF9800' },
-shareBtn: {
-  flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-  backgroundColor: '#004e68', borderRadius: 12, paddingVertical: 14,
-  width: '100%', shadowColor: '#004e68', shadowOffset: { width: 0, height: 4 },
-  shadowOpacity: 0.3, shadowRadius: 8, elevation: 5, marginBottom: 10,
-},
-shareBtnText: { color: '#FFF', fontWeight: '700', fontSize: 15 },
-closeOtpBtn: {
-  backgroundColor: '#F2F6F8', borderRadius: 12, paddingVertical: 14,
-  width: '100%', alignItems: 'center', marginBottom: 16,
-},
-closeOtpBtnText: { color: '#5A7A8A', fontWeight: '600', fontSize: 14 },
-noteRow: {
-  flexDirection: 'row', alignItems: 'flex-start', backgroundColor: '#F8FAFB',
-  borderRadius: 10, padding: 12, gap: 8,
-},
-noteText: { flex: 1, fontSize: 11, lineHeight: 17, color: TEXT_MUT },
+    backgroundColor: '#004e68', padding: 12, borderRadius: 8,
+    alignItems: 'center', marginBottom: 10, flexDirection: 'row',
+    justifyContent: 'center', shadowColor: '#004e68',
+    shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.25,
+    shadowRadius: 6, elevation: 4,
+  },
+  generateOtpButtonText: { color: '#FFF', fontWeight: '700', fontSize: 13 },
+  finishingNotice: {
+    flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF8E1',
+    borderRadius: 8, padding: 10, marginBottom: 10, gap: 8,
+  },
+  finishingNoticeText: {
+    flex: 1, fontSize: 12, color: '#FF9800', fontWeight: '500', lineHeight: 18,
+  },
+  otpModalOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center', alignItems: 'center', padding: 20,
+  },
+  otpModalContent: {
+    borderRadius: 24, padding: 28, width: '100%', maxWidth: 360,
+    alignItems: 'center', backgroundColor: CARD_BG,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.2, shadowRadius: 20, elevation: 15,
+  },
+  otpHandle: {
+    width: 40, height: 4, borderRadius: 2, backgroundColor: '#DDD', marginBottom: 20,
+  },
+  otpIconWrap: {
+    width: 64, height: 64, borderRadius: 32, backgroundColor: '#004e6812',
+    alignItems: 'center', justifyContent: 'center', marginBottom: 16,
+  },
+  otpTitle: { fontSize: 20, fontWeight: '800', marginBottom: 6, color: TEXT_PRI },
+  otpSubtitle: { fontSize: 13, textAlign: 'center', marginBottom: 24, lineHeight: 19, color: TEXT_SEC },
+  otpDisplay: { flexDirection: 'row', gap: 10, marginBottom: 16 },
+  otpDigitBox: {
+    width: 48, height: 56, borderRadius: 12, backgroundColor: '#EEF6FB',
+    borderWidth: 2, borderColor: '#5BA8D4', alignItems: 'center', justifyContent: 'center',
+  },
+  otpDigit: { fontSize: 28, fontWeight: '800', color: '#004e68' },
+  validityRow: {
+    flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF8E1',
+    paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, marginBottom: 24,
+  },
+  validityText: { fontSize: 12, fontWeight: '600', color: '#FF9800' },
+  shareBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: '#004e68', borderRadius: 12, paddingVertical: 14,
+    width: '100%', shadowColor: '#004e68', shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3, shadowRadius: 8, elevation: 5, marginBottom: 10,
+  },
+  shareBtnText: { color: '#FFF', fontWeight: '700', fontSize: 15 },
+  closeOtpBtn: {
+    backgroundColor: '#F2F6F8', borderRadius: 12, paddingVertical: 14,
+    width: '100%', alignItems: 'center', marginBottom: 16,
+  },
+  closeOtpBtnText: { color: '#5A7A8A', fontWeight: '600', fontSize: 14 },
+  noteRow: {
+    flexDirection: 'row', alignItems: 'flex-start', backgroundColor: '#F8FAFB',
+    borderRadius: 10, padding: 12, gap: 8,
+  },
+  noteText: { flex: 1, fontSize: 11, lineHeight: 17, color: TEXT_MUT },
 });

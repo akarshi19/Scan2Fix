@@ -52,15 +52,13 @@ export default function StaffDashboard({ navigation, route }) {
   };
 
   const toggleLeaveStatus = async () => {
-    const title = !isOnLeave ? '🏖️ Go On Leave?' : 'Come Back?';
-    const message = !isOnLeave
-      ? 'You will NOT receive new task assignments while on leave.\n\nYour existing tasks will remain assigned to you until reassigned by Admin.'
-      : 'You will start receiving new task assignments again.';
+    const title = !isOnLeave ? t('goOnLeaveTitle') : t('comeBackTitle');
+    const message = !isOnLeave ? t('goOnLeaveMsg') : t('comeBackMsg');
 
     Alert.alert(title, message, [
       { text: t('cancel'), style: 'cancel' },
       {
-        text: !isOnLeave ? 'Yes, Go On Leave' : 'Yes, I\'m Available',
+        text: !isOnLeave ? t('yesGoOnLeave') : t('yesAvailable'),
         style: !isOnLeave ? 'destructive' : 'default',
         onPress: async () => {
           setLeaveLoading(true);
@@ -69,7 +67,7 @@ export default function StaffDashboard({ navigation, route }) {
             if (response.data.success) {
               setIsOnLeave(!isOnLeave);
               Alert.alert(
-                !isOnLeave ? '🏖️ On Leave' : 'Welcome Back!',
+                !isOnLeave ? t('onLeaveSuccess') : `${t('welcome')}!`,
                 response.data.message
               );
             }
@@ -112,7 +110,7 @@ export default function StaffDashboard({ navigation, route }) {
       {item.photo_url && (
         <View style={s.photoIndicator}>
           <Ionicons name="image-outline" size={14} color={colors.textMut} />
-          <Text style={[s.photoText, { color: colors.textMut }]}> Has attached photo</Text>
+          <Text style={[s.photoText, { color: colors.textMut }]}> {t('hasPhoto')}</Text>
         </View>
       )}
       <View style={[s.cardFooter, { borderTopColor: colors.divider }]}>
@@ -122,7 +120,7 @@ export default function StaffDashboard({ navigation, route }) {
           })}
         </Text>
         <View style={s.tapHintRow}>
-          <Text style={[s.tapHint, { color: colors.active }]}>View details</Text>
+          <Text style={[s.tapHint, { color: colors.active }]}>{t('viewDetails')}</Text>
           <Ionicons name="chevron-forward" size={14} color={colors.active} />
         </View>
       </View>
@@ -152,13 +150,10 @@ export default function StaffDashboard({ navigation, route }) {
             </View>
             <View style={s.statusTextWrap}>
               <Text style={[s.statusTitle, { color: colors.textPri }]}>
-                {isOnLeave ? 'On Leave' : 'Available'}
+                {isOnLeave ? t('onLeave') : t('available')}
               </Text>
               <Text style={[s.statusSubtext, { color: colors.textMut }]}>
-                {isOnLeave
-                  ? 'Not receiving new tasks'
-                  : 'Receiving task assignments'
-                }
+                {isOnLeave ? t('notReceivingTasks') : t('receivingTasks')}
               </Text>
             </View>
           </View>
@@ -186,7 +181,7 @@ export default function StaffDashboard({ navigation, route }) {
                   s.leaveToggleText,
                   { color: isOnLeave ? '#FFF' : '#5BA8D4' },
                 ]}>
-                  {isOnLeave ? ' Come Back' : ' Go On Leave'}
+                  {isOnLeave ? ` ${t('comeBack')}` : ` ${t('goOnLeave')}`}
                 </Text>
               </>
             )}
@@ -199,7 +194,7 @@ export default function StaffDashboard({ navigation, route }) {
       {/* ════════════════════════════════════════ */}
       <View style={s.countRow}>
         <Text style={[s.countText, { color: colors.textMut }]}>
-          {loading ? 'Loading...' : `${jobs.length} ${jobs.length === 1 ? 'job' : 'jobs'}`}
+          {loading ? t('loading') : `${jobs.length} ${jobs.length === 1 ? t('job') : t('jobs')}`}
         </Text>
         <TouchableOpacity onPress={fetchJobs} style={s.refreshBtn} activeOpacity={0.7}>
           <Ionicons name="refresh-outline" size={16} color={colors.active} />
@@ -210,7 +205,7 @@ export default function StaffDashboard({ navigation, route }) {
 
   return (
     <ScreenLayout
-      title={`${t('welcome')}, ${user?.full_name || 'Staff'}!`}
+      title={`${t('welcome')}, ${user?.full_name || t('staff')}!`}
       showDecor
       scroll={false}
       padBottom={40}
@@ -249,14 +244,14 @@ export default function StaffDashboard({ navigation, route }) {
                 color={colors.textMut}
               />
               <Text style={[s.emptyTitle, { color: colors.textPri }]}>
-                {statusFilter === 'ASSIGNED' && 'No new tasks'}
-                {statusFilter === 'IN_PROGRESS' && 'No tasks in progress'}
-                {statusFilter === 'CLOSED' && 'No completed tasks yet'}
+                {statusFilter === 'ASSIGNED' && t('noNewTasks')}
+                {statusFilter === 'IN_PROGRESS' && t('noTasksInProgress')}
+                {statusFilter === 'CLOSED' && t('noCompletedTasks')}
               </Text>
               <Text style={[s.emptySubtitle, { color: colors.textMut }]}>
-                {statusFilter === 'ASSIGNED' && 'New assigned tasks will appear here'}
-                {statusFilter === 'IN_PROGRESS' && "Tasks you're working on will appear here"}
-                {statusFilter === 'CLOSED' && 'Completed tasks will appear here'}
+                {statusFilter === 'ASSIGNED' && t('newTasksHint')}
+                {statusFilter === 'IN_PROGRESS' && t('inProgressHint')}
+                {statusFilter === 'CLOSED' && t('completedHint')}
               </Text>
             </View>
           )
@@ -267,9 +262,6 @@ export default function StaffDashboard({ navigation, route }) {
 }
 
 const s = StyleSheet.create({
-  // ════════════════════════════════════════
-  // Status Card — Leave Toggle
-  // ════════════════════════════════════════
   statusCard: {
     borderRadius: 14,
     padding: 16,
@@ -316,8 +308,6 @@ const s = StyleSheet.create({
     fontSize: 11,
     marginTop: 2,
   },
-
-  // Leave toggle button
   leaveToggle: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -344,10 +334,6 @@ const s = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
   },
-
-  // ════════════════════════════════════════
-  // Count Row
-  // ════════════════════════════════════════
   countRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -366,10 +352,6 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-
-  // ════════════════════════════════════════
-  // List & Cards
-  // ════════════════════════════════════════
   listContent: { paddingBottom: 140 },
   card: {
     borderRadius: 14,
@@ -405,10 +387,6 @@ const s = StyleSheet.create({
   date: { fontSize: 12 },
   tapHintRow: { flexDirection: 'row', alignItems: 'center' },
   tapHint: { fontSize: 12, fontWeight: '500' },
-
-  // ════════════════════════════════════════
-  // Empty State
-  // ════════════════════════════════════════
   empty: {
     flex: 1,
     justifyContent: 'center',

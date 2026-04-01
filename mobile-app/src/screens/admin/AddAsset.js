@@ -52,9 +52,9 @@ export default function AddAsset({ navigation }) {
 
   const getTypeLabel = (typeKey) => {
     const labels = {
-      'AC': 'Air Conditioner',
-      'WATER_COOLER': 'Water Cooler',
-      'DESERT_COOLER': 'Desert Cooler',
+      'AC': t('airConditioners'),
+      'WATER_COOLER': t('waterCoolers'),
+      'DESERT_COOLER': t('desertCoolers'),
     };
     return labels[typeKey] || typeKey.replace(/_/g, ' ');
   };
@@ -62,15 +62,15 @@ export default function AddAsset({ navigation }) {
   const handleAddCustomType = () => {
     const trimmed = customType.trim().toUpperCase().replace(/\s+/g, '_');
     if (!trimmed) {
-      Alert.alert('Error', 'Please enter a type name');
+      Alert.alert(t('error'), t('enterTypeName'));
       return;
     }
     if (trimmed.length < 2) {
-      Alert.alert('Error', 'Type name must be at least 2 characters');
+      Alert.alert(t('error'), t('typeMinLength'));
       return;
     }
     if (existingTypes.includes(trimmed)) {
-      Alert.alert('Already Exists', 'This type already exists. Selecting it.');
+      Alert.alert(t('error'), t('alreadyExists'));
       setType(trimmed);
       setCustomType('');
       setIsAddingCustomType(false);
@@ -108,7 +108,7 @@ export default function AddAsset({ navigation }) {
       return;
     }
     if (!type) {
-      Alert.alert(t('error'), 'Please select an equipment type');
+      Alert.alert(t('error'), t('selectEquipmentType'));
       return;
     }
     if (!location.trim()) {
@@ -140,7 +140,7 @@ export default function AddAsset({ navigation }) {
         );
       }
     } catch (error) {
-      Alert.alert('Error', error.message || 'Failed to create asset');
+      Alert.alert(t('error'), error.message || t('failedToCreate'));
     } finally {
       setLoading(false);
     }
@@ -148,9 +148,7 @@ export default function AddAsset({ navigation }) {
 
   return (
     <ScreenLayout title={t('addEquipment')} showBack>
-      {/* ════════════════════════════════════════ */}
-      {/* Equipment Type Card                      */}
-      {/* ════════════════════════════════════════ */}
+      {/* Equipment Type Card */}
       <View style={[s.card, { backgroundColor: colors.cardBg }]}>
         <Text style={[s.cardTitle, { color: colors.textPri }]}>{t('equipmentType')}</Text>
 
@@ -163,7 +161,7 @@ export default function AddAsset({ navigation }) {
             <Ionicons name="cube-outline" size={20} color={type ? colors.active : colors.textMut} />
           </View>
           <Text style={[s.typeSelectorText, { color: type ? colors.textPri : colors.textMut }]}>
-            {type ? getTypeLabel(type) : 'Select equipment type...'}
+            {type ? getTypeLabel(type) : t('selectEquipmentType')}
           </Text>
           <Ionicons name="chevron-down" size={18} color={colors.textMut} />
         </TouchableOpacity>
@@ -172,7 +170,7 @@ export default function AddAsset({ navigation }) {
           <View style={s.selectedTypeRow}>
             <View style={[s.selectedTypePill, { backgroundColor: `${colors.active}10` }]}>
               <Text style={[s.selectedTypeText, { color: colors.active }]}>
-                {type}
+                {t('selectedType')}: {type}
               </Text>
             </View>
           </View>
@@ -183,47 +181,47 @@ export default function AddAsset({ navigation }) {
       {/* Equipment Details Card                   */}
       {/* ════════════════════════════════════════ */}
       <View style={[s.card, { backgroundColor: colors.cardBg }]}>
-        <Text style={[s.cardTitle, { color: colors.textPri }]}>Equipment Details</Text>
+        <Text style={[s.cardTitle, { color: colors.textPri }]}>{t('equipmentDetails')}</Text>
 
-        <Text style={[s.fieldLabel, { color: colors.textSec }]}>Asset ID *</Text>
+        <Text style={[s.fieldLabel, { color: colors.textSec }]}>{t('assetId')} *</Text>
         <TextInput
           style={[s.fieldInput, { backgroundColor: colors.inputBg, borderColor: colors.inputBorder, color: colors.textPri }]}
           value={assetId}
           onChangeText={setAssetId}
-          placeholder="e.g., AC-3F-001"
+          placeholder={t('assetIdPlaceholder')}
           placeholderTextColor={colors.textMut}
           autoCapitalize="characters"
         />
 
-        <Text style={[s.fieldLabel, { color: colors.textSec }]}>Location *</Text>
+        <Text style={[s.fieldLabel, { color: colors.textSec }]}>{t('location')} *</Text>
         <TextInput
           style={[s.fieldInput, { backgroundColor: colors.inputBg, borderColor: colors.inputBorder, color: colors.textPri }]}
           value={location}
           onChangeText={setLocation}
-          placeholder="e.g., 3rd Floor, Room 301"
+          placeholder={t('locationPlaceholder')}
           placeholderTextColor={colors.textMut}
         />
 
-        <Text style={[s.fieldLabel, { color: colors.textSec }]}>Brand (Optional)</Text>
+        <Text style={[s.fieldLabel, { color: colors.textSec }]}>{t('brand')}</Text>
         <TextInput
           style={[s.fieldInput, { backgroundColor: colors.inputBg, borderColor: colors.inputBorder, color: colors.textPri }]}
           value={brand}
           onChangeText={setBrand}
-          placeholder="e.g., Voltas, Daikin"
+          placeholder={t('brandPlaceholder')}
           placeholderTextColor={colors.textMut}
         />
 
-        <Text style={[s.fieldLabel, { color: colors.textSec }]}>Model (Optional)</Text>
+        <Text style={[s.fieldLabel, { color: colors.textSec }]}>{t('model')}</Text>
         <TextInput
           style={[s.fieldInput, { backgroundColor: colors.inputBg, borderColor: colors.inputBorder, color: colors.textPri }]}
           value={model}
           onChangeText={setModel}
-          placeholder="e.g., 183V ADP"
+          placeholder={t('modelPlaceholder')}
           placeholderTextColor={colors.textMut}
         />
 
         {/* Install Date */}
-        <Text style={[s.fieldLabel, { color: colors.textSec }]}>Install Date (Optional)</Text>
+        <Text style={[s.fieldLabel, { color: colors.textSec }]}>{t('installDate')}</Text>
         <TouchableOpacity
           style={[s.datePickerBtn, { backgroundColor: colors.inputBg, borderColor: colors.inputBorder }]}
           onPress={() => setShowDatePicker(true)}
@@ -231,7 +229,7 @@ export default function AddAsset({ navigation }) {
         >
           <Ionicons name="calendar-outline" size={18} color={installDate ? colors.active : colors.textMut} />
           <Text style={[s.datePickerText, { color: installDate ? colors.textPri : colors.textMut }]}>
-            {installDate ? formatDate(installDate) : 'Select install date'}
+            {installDate ? formatDate(installDate) : t('selectInstallDate')}
           </Text>
           {installDate && (
             <TouchableOpacity
@@ -253,9 +251,9 @@ export default function AddAsset({ navigation }) {
               >
                 <View style={[s.dateModalContent, { backgroundColor: colors.cardBg }]}>
                   <View style={s.dateModalHeader}>
-                    <Text style={[s.dateModalTitle, { color: colors.textPri }]}>Select Date</Text>
+                    <Text style={[s.dateModalTitle, { color: colors.textPri }]}>{t('selectDate')}</Text>
                     <TouchableOpacity onPress={() => setShowDatePicker(false)}>
-                      <Text style={[s.dateModalDone, { color: colors.active }]}>Done</Text>
+                      <Text style={[s.dateModalDone, { color: colors.active }]}>{t('done')}</Text>
                     </TouchableOpacity>
                   </View>
                   <DateTimePicker
@@ -295,7 +293,7 @@ export default function AddAsset({ navigation }) {
         ) : (
           <>
             <Ionicons name="add-circle-outline" size={20} color="#FFF" />
-            <Text style={s.submitBtnText}>Create Equipment</Text>
+            <Text style={s.submitBtnText}>{t('createEquipment')}</Text>
           </>
         )}
       </TouchableOpacity>
@@ -327,7 +325,7 @@ export default function AddAsset({ navigation }) {
             onStartShouldSetResponder={() => true}
           >
             <View style={s.modalHandle} />
-            <Text style={[s.modalTitle, { color: colors.textPri }]}>Select Equipment Type</Text>
+            <Text style={[s.modalTitle, { color: colors.textPri }]}>{t('selectEquipmentTypeTitle')}</Text>
 
             {/* Existing Types List */}
             <FlatList
@@ -380,7 +378,7 @@ export default function AddAsset({ navigation }) {
               ListEmptyComponent={
                 <View style={s.noTypes}>
                   <Text style={[s.noTypesText, { color: colors.textMut }]}>
-                    No types yet. Add one below.
+                    {t('noTypes')}
                   </Text>
                 </View>
               }
@@ -400,13 +398,13 @@ export default function AddAsset({ navigation }) {
                   <Ionicons name="add" size={20} color="#4CAF50" />
                 </View>
                 <Text style={[s.addTypeText, { color: '#4CAF50' }]}>
-                  Add New Type
+                  {t('addNewType')}
                 </Text>
               </TouchableOpacity>
             ) : (
               <View style={s.customTypeWrap}>
                 <Text style={[s.customTypeLabel, { color: colors.textSec }]}>
-                  New Type Name
+                  {t('newTypeName')}
                 </Text>
                 <View style={s.customTypeInputRow}>
                   <TextInput
@@ -417,7 +415,7 @@ export default function AddAsset({ navigation }) {
                     }]}
                     value={customType}
                     onChangeText={setCustomType}
-                    placeholder="e.g., FAN, PROJECTOR, UPS..."
+                    placeholder={t('customTypePlaceholder')}
                     placeholderTextColor={colors.textMut}
                     autoCapitalize="characters"
                     autoFocus
@@ -425,7 +423,7 @@ export default function AddAsset({ navigation }) {
                 </View>
                 {customType.trim() && (
                   <Text style={[s.customTypePreview, { color: colors.textMut }]}>
-                    Will be saved as: {customType.trim().toUpperCase().replace(/\s+/g, '_')}
+                    {t('willBeSavedAs')} {customType.trim().toUpperCase().replace(/\s+/g, '_')}
                   </Text>
                 )}
                 <View style={s.customTypeActions}>
@@ -436,7 +434,7 @@ export default function AddAsset({ navigation }) {
                       setCustomType('');
                     }}
                   >
-                    <Text style={s.customTypeCancelText}>Cancel</Text>
+                    <Text style={s.customTypeCancelText}>{t('cancel')}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[
@@ -448,7 +446,7 @@ export default function AddAsset({ navigation }) {
                     activeOpacity={0.85}
                   >
                     <Ionicons name="checkmark" size={16} color="#FFF" />
-                    <Text style={s.customTypeAddText}> Add & Select</Text>
+                    <Text style={s.customTypeAddText}> {t('addAndSelect')}</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -463,7 +461,7 @@ export default function AddAsset({ navigation }) {
                 setCustomType('');
               }}
             >
-              <Text style={s.modalCloseBtnText}>Close</Text>
+              <Text style={s.modalCloseBtnText}>{t('close')}</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
@@ -472,10 +470,8 @@ export default function AddAsset({ navigation }) {
   );
 }
 
+// Styles remain exactly the same
 const s = StyleSheet.create({
-  // ════════════════════════════════════════
-  // Cards
-  // ════════════════════════════════════════
   card: {
     borderRadius: 16,
     padding: 18,
@@ -491,10 +487,6 @@ const s = StyleSheet.create({
     fontWeight: '800',
     marginBottom: 14,
   },
-
-  // ════════════════════════════════════════
-  // Type Selector Button
-  // ════════════════════════════════════════
   typeSelector: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -529,10 +521,6 @@ const s = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
   },
-
-  // ════════════════════════════════════════
-  // Form Fields
-  // ════════════════════════════════════════
   fieldLabel: {
     fontSize: 12,
     fontWeight: '600',
@@ -547,10 +535,6 @@ const s = StyleSheet.create({
     borderWidth: 1,
     marginBottom: 2,
   },
-
-  // ════════════════════════════════════════
-  // Date Picker
-  // ════════════════════════════════════════
   datePickerBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -585,10 +569,6 @@ const s = StyleSheet.create({
   },
   dateModalTitle: { fontSize: 18, fontWeight: '700' },
   dateModalDone: { fontSize: 16, fontWeight: '700' },
-
-  // ════════════════════════════════════════
-  // Submit Button
-  // ════════════════════════════════════════
   submitBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -606,10 +586,6 @@ const s = StyleSheet.create({
   },
   submitBtnDisabled: { backgroundColor: '#B0CDD8' },
   submitBtnText: { color: '#FFF', fontWeight: '700', fontSize: 16 },
-
-  // ════════════════════════════════════════
-  // Type Selection Modal
-  // ════════════════════════════════════════
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.4)',
@@ -675,16 +651,10 @@ const s = StyleSheet.create({
   noTypesText: {
     fontSize: 13,
   },
-
-  // Divider
   modalDivider: {
     height: 1,
     marginVertical: 12,
   },
-
-  // ════════════════════════════════════════
-  // Add Custom Type
-  // ════════════════════════════════════════
   addTypeBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -704,8 +674,6 @@ const s = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
   },
-
-  // Custom type input
   customTypeWrap: {
     marginBottom: 8,
   },
@@ -762,8 +730,6 @@ const s = StyleSheet.create({
     fontWeight: '700',
     fontSize: 13,
   },
-
-  // Close button
   modalCloseBtn: {
     marginTop: 12,
     paddingVertical: 14,

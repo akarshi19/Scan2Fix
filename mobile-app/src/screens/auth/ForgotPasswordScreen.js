@@ -7,11 +7,13 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { authAPI } from '../../services/api';
+import { useLanguage } from '../../context/LanguageContext';
 
 const { width } = Dimensions.get('window');
 
 export default function ForgotPasswordScreen({ navigation }) {
-  const [step, setStep] = useState(1); // 1=email, 2=code, 3=new password
+  const { t } = useLanguage();
+  const [step, setStep] = useState(1);
   const [email, setEmail] = useState('');
   const [resetCode, setResetCode] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -26,11 +28,14 @@ export default function ForgotPasswordScreen({ navigation }) {
 
   // Step 1: Request reset code
   const handleRequestCode = async () => {
-    if (!email.trim()) { Alert.alert('Error', 'Please enter your email'); return; }
+    if (!email.trim()) {
+      Alert.alert(t('error'), t('enterEmail'));
+      return;
+    }
 
     const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
     if (!emailRegex.test(email.trim())) {
-      Alert.alert('Invalid Email', 'Please enter a valid email address');
+      Alert.alert(t('invalidEmail'), t('enterValidEmail'));
       return;
     }
 
@@ -39,13 +44,13 @@ export default function ForgotPasswordScreen({ navigation }) {
       const response = await authAPI.forgotPassword(email.trim());
       if (response.data.success) {
         Alert.alert(
-          'Code Sent! 📧',
-          'A reset code has been generated.\n\nFor office use: Contact your admin for the code.\n\nDev mode: Check server console.',
-          [{ text: 'OK', onPress: () => setStep(2) }]
+          t('codeSent'),
+          t('codeSentForgot'),
+          [{ text: t('ok'), onPress: () => setStep(2) }]
         );
       }
     } catch (error) {
-      Alert.alert('Error', error.message || 'Failed to send reset code');
+      Alert.alert(t('error'), error.message || t('failedToSendCode'));
     } finally {
       setLoading(false);
     }
@@ -54,7 +59,7 @@ export default function ForgotPasswordScreen({ navigation }) {
   // Step 2: Verify code
   const handleVerifyCode = () => {
     if (!resetCode || resetCode.length !== 6) {
-      Alert.alert('Error', 'Please enter the 6-digit reset code');
+      Alert.alert(t('error'), t('enterCodeError'));
       return;
     }
     setStep(3);
@@ -63,15 +68,15 @@ export default function ForgotPasswordScreen({ navigation }) {
   // Step 3: Set new password
   const handleResetPassword = async () => {
     if (!newPassword || newPassword.length < 6) {
-      Alert.alert('Error', 'Password must be at least 6 characters');
+      Alert.alert(t('error'), t('passwordTooShort'));
       return;
     }
     if (!/[A-Za-z]/.test(newPassword) || !/[0-9]/.test(newPassword)) {
-      Alert.alert('Weak Password', 'Password must contain at least one letter and one number');
+      Alert.alert(t('weakPassword'), t('passwordRequirements'));
       return;
     }
     if (newPassword !== confirmPassword) {
-      Alert.alert('Error', 'Passwords do not match');
+      Alert.alert(t('error'), t('passwordMismatch'));
       return;
     }
 
@@ -80,13 +85,13 @@ export default function ForgotPasswordScreen({ navigation }) {
       const response = await authAPI.resetPassword(email.trim(), resetCode, newPassword);
       if (response.data.success) {
         Alert.alert(
-          'Password Reset! ✅',
-          'You can now login with your new password.',
-          [{ text: 'Login', onPress: () => navigation.navigate('Login') }]
+          t('passwordReset'),
+          t('passwordResetMsg'),
+          [{ text: t('login'), onPress: () => navigation.navigate('Login') }]
         );
       }
     } catch (error) {
-      Alert.alert('Error', error.message || 'Failed to reset password');
+      Alert.alert(t('error'), error.message || t('failedToReset'));
     } finally {
       setLoading(false);
     }
@@ -121,12 +126,12 @@ export default function ForgotPasswordScreen({ navigation }) {
           {/* Title */}
           <View style={s.titleSection}>
             <Text style={s.title}>
-              {step === 1 ? 'Forgot Password?' : step === 2 ? 'Enter Reset Code' : 'New Password'}
+              {step === 1 ? t('forgotPassword') : step === 2 ? t('enterResetCode') : t('newPasswordTitle')}
             </Text>
             <Text style={s.subtitle}>
-              {step === 1 && "Enter your email and we'll send a reset code"}
-              {step === 2 && 'Enter the 6-digit code from your admin'}
-              {step === 3 && 'Create a strong new password'}
+              {step === 1 && t('enterEmailSubtitle')}
+              {step === 2 && t('enterCodeSubtitle')}
+              {step === 3 && t('createPasswordSubtitle')}
             </Text>
           </View>
 
@@ -143,7 +148,7 @@ export default function ForgotPasswordScreen({ navigation }) {
               <View style={[s.inputContainer, emailFocused && s.inputContainerFocused]}>
                 <Ionicons name="mail-outline" size={20} color={emailFocused ? '#38bdf8' : '#9ca3af'} style={{ marginRight: 10 }} />
                 <TextInput
-                  style={s.input} placeholder="Email address" placeholderTextColor="#9ca3af"
+                  style={s.input} placeholder={t('emailPlaceholder')} placeholderTextColor="#9ca3af"
                   value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none"
                   onFocus={() => setEmailFocused(true)} onBlur={() => setEmailFocused(false)}
                 />
@@ -154,7 +159,7 @@ export default function ForgotPasswordScreen({ navigation }) {
               <View style={[s.inputContainer, s.codeInput, codeFocused && s.inputContainerFocused]}>
                 <TextInput
                   style={[s.input, { textAlign: 'center', fontSize: 28, letterSpacing: 10, fontWeight: 'bold' }]}
-                  placeholder="000000" placeholderTextColor="#d1d5db"
+                  placeholder={t('codePlaceholder')} placeholderTextColor="#d1d5db"
                   value={resetCode} onChangeText={setResetCode}
                   keyboardType="number-pad" maxLength={6}
                   onFocus={() => setCodeFocused(true)} onBlur={() => setCodeFocused(false)}
@@ -167,7 +172,7 @@ export default function ForgotPasswordScreen({ navigation }) {
                 <View style={[s.inputContainer, passFocused && s.inputContainerFocused]}>
                   <Ionicons name="lock-closed-outline" size={20} color={passFocused ? '#38bdf8' : '#9ca3af'} style={{ marginRight: 10 }} />
                   <TextInput
-                    style={s.input} placeholder="New Password" placeholderTextColor="#9ca3af"
+                    style={s.input} placeholder={t('newPasswordPlaceholder')} placeholderTextColor="#9ca3af"
                     value={newPassword} onChangeText={setNewPassword}
                     secureTextEntry={!showPassword}
                     onFocus={() => setPassFocused(true)} onBlur={() => setPassFocused(false)}
@@ -186,7 +191,7 @@ export default function ForgotPasswordScreen({ navigation }) {
                       }]} />
                     </View>
                     <Text style={{ fontSize: 11, color: newPassword.length < 6 ? '#ef4444' : (!/[A-Za-z]/.test(newPassword) || !/[0-9]/.test(newPassword)) ? '#f59e0b' : '#22c55e', fontWeight: '500' }}>
-                      {newPassword.length < 6 ? 'Too short' : (!/[A-Za-z]/.test(newPassword) || !/[0-9]/.test(newPassword)) ? 'Add letter + number' : 'Strong ✓'}
+                      {newPassword.length < 6 ? t('tooShort') : (!/[A-Za-z]/.test(newPassword) || !/[0-9]/.test(newPassword)) ? t('addLetterNumber') : t('strong')}
                     </Text>
                   </View>
                 )}
@@ -194,7 +199,7 @@ export default function ForgotPasswordScreen({ navigation }) {
                 <View style={[s.inputContainer, confirmFocused && s.inputContainerFocused]}>
                   <Ionicons name="lock-open-outline" size={20} color={confirmFocused ? '#38bdf8' : '#9ca3af'} style={{ marginRight: 10 }} />
                   <TextInput
-                    style={s.input} placeholder="Confirm Password" placeholderTextColor="#9ca3af"
+                    style={s.input} placeholder={t('confirmPasswordPlaceholder')} placeholderTextColor="#9ca3af"
                     value={confirmPassword} onChangeText={setConfirmPassword}
                     secureTextEntry={!showPassword}
                     onFocus={() => setConfirmFocused(true)} onBlur={() => setConfirmFocused(false)}
@@ -205,7 +210,7 @@ export default function ForgotPasswordScreen({ navigation }) {
                   <View style={s.matchRow}>
                     <Ionicons name={newPassword === confirmPassword ? 'checkmark-circle' : 'close-circle'} size={14} color={newPassword === confirmPassword ? '#22c55e' : '#ef4444'} />
                     <Text style={{ fontSize: 11, color: newPassword === confirmPassword ? '#22c55e' : '#ef4444', marginLeft: 4 }}>
-                      {newPassword === confirmPassword ? 'Passwords match' : 'Passwords do not match'}
+                      {newPassword === confirmPassword ? t('passwordsMatch') : t('passwordsNotMatch')}
                     </Text>
                   </View>
                 )}
@@ -224,7 +229,7 @@ export default function ForgotPasswordScreen({ navigation }) {
                 <ActivityIndicator size="small" color="#fff" />
               ) : (
                 <Text style={s.actionBtnText}>
-                  {step === 1 ? 'SEND RESET CODE' : step === 2 ? 'VERIFY CODE' : 'RESET PASSWORD'}
+                  {step === 1 ? t('sendResetCode') : step === 2 ? t('verifyCode') : t('resetPassword')}
                 </Text>
               )}
             </LinearGradient>
@@ -236,7 +241,7 @@ export default function ForgotPasswordScreen({ navigation }) {
             else navigation.navigate('Login');
           }}>
             <Ionicons name="arrow-back" size={16} color="#6b7280" />
-            <Text style={s.backLinkText}> {step > 1 ? 'Previous Step' : 'Back to Login'}</Text>
+            <Text style={s.backLinkText}> {step > 1 ? t('previousStep') : t('backToLogin')}</Text>
           </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>

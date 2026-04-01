@@ -12,7 +12,7 @@ export default function UserDashboard({ navigation }) {
   const { t } = useLanguage();
 
   return (
-   <ScreenLayout title={`${t('welcome')}, ${user?.full_name || 'User'}!`} showDecor>
+    <ScreenLayout title={`${t('welcome')}, ${user?.full_name || t('user')}!`} showDecor>
 
       {/* Main Action - Scan QR */}
       <TouchableOpacity
@@ -52,7 +52,7 @@ const s = StyleSheet.create({
   scanButton: {
     padding: 30, borderRadius: 18, alignItems: 'center', marginBottom: 24, borderColor: "#000", borderWidth: 1, marginTop: 10,
     shadowColor: '#5BA8D4', shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.3, shadowRadius: 12, elevation: 8, 
+    shadowOpacity: 0.3, shadowRadius: 12, elevation: 8,
   },
   scanTitle: { fontSize: 18, fontWeight: '700', color: '#000', marginTop: 10 },
   scanSubtitle: { fontSize: 8, color: '#000', marginTop: 5 },

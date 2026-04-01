@@ -20,15 +20,12 @@ import { Ionicons, AntDesign } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { authAPI, uploadAPI, saveToken, saveUserData } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
+import { useLanguage } from '../../context/LanguageContext';
 
 const { width } = Dimensions.get('window');
 
-const ROLES = [
-  { key: 'USER', label: 'User', icon: 'person-outline', color: '#2196F3', desc: 'Report issues' },
-  { key: 'STAFF', label: 'Staff', icon: 'build-outline', color: '#5BA8D4', desc: 'Fix issues' },
-];
-
 export default function SignupScreen({ navigation }) {
+  const { t } = useLanguage();
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -40,6 +37,11 @@ export default function SignupScreen({ navigation }) {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const { signIn } = useAuth();
+
+  const ROLES = [
+    { key: 'USER', label: t('user'), icon: 'person-outline', color: '#2196F3', desc: t('reportIssuesDesc') },
+    { key: 'STAFF', label: t('staff'), icon: 'build-outline', color: '#5BA8D4', desc: t('fixIssuesDesc') },
+  ];
 
   // Photo upload states
   const [photoUri, setPhotoUri] = useState(null);
@@ -85,13 +87,12 @@ export default function SignupScreen({ navigation }) {
 
     if (cameraPermission.status !== 'granted' || mediaPermission.status !== 'granted') {
       Alert.alert(
-        'Permissions Required',
-        'Camera and photo library access is needed to upload profile pictures.',
+        t('permissionsRequired'),
+        t('cameraPermissionMsg'),
       );
     }
   };
 
-  // Photo picker options modal
   const handlePhotoOptionPress = (option) => {
     setShowPhotoOptions(false);
     if (option === 'camera') {
@@ -115,7 +116,7 @@ export default function SignupScreen({ navigation }) {
       }
     } catch (error) {
       console.error('Camera error:', error);
-      Alert.alert('Error', 'Failed to take photo');
+      Alert.alert(t('error'), t('photoUploadFailed'));
     }
   };
 
@@ -134,7 +135,7 @@ export default function SignupScreen({ navigation }) {
       }
     } catch (error) {
       console.error('Photo picker error:', error);
-      Alert.alert('Error', 'Failed to pick photo');
+      Alert.alert(t('error'), t('photoUploadFailed'));
     }
   };
 
@@ -151,11 +152,11 @@ export default function SignupScreen({ navigation }) {
       const response = await uploadAPI.uploadPhoto(formData);
       if (response.data.success) {
         setUploadedPhotoUrl(response.data.data.url);
-        Alert.alert('Success', 'Photo uploaded successfully!');
+        Alert.alert(t('success'), t('photoUploaded'));
       }
     } catch (error) {
       console.error('Photo upload error:', error);
-      Alert.alert('Error', 'Failed to upload photo. Please try again.');
+      Alert.alert(t('error'), t('photoUploadFailed'));
       setPhotoUri(null);
     } finally {
       setUploadingPhoto(false);
@@ -164,15 +165,12 @@ export default function SignupScreen({ navigation }) {
 
   const validateEmail = () => {
     if (!email.trim()) {
-      Alert.alert('Error', 'Please enter your email');
+      Alert.alert(t('error'), t('enterEmail'));
       return false;
     }
     const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
     if (!emailRegex.test(email.trim())) {
-      Alert.alert(
-        'Invalid Email',
-        'Please enter a valid email address.\n\nExamples:\n• user@gmail.com\n• staff@company.com',
-      );
+      Alert.alert(t('invalidEmail'), t('enterValidEmail'));
       return false;
     }
     return true;
@@ -182,7 +180,7 @@ export default function SignupScreen({ navigation }) {
     if (!validateEmail()) return;
 
     if (!fullName.trim()) {
-      Alert.alert('Error', 'Please enter your full name first');
+      Alert.alert(t('error'), t('enterFullName'));
       return;
     }
 
@@ -192,23 +190,20 @@ export default function SignupScreen({ navigation }) {
       if (response.data.success) {
         setShowVerification(true);
         setCountdown(60);
-        Alert.alert(
-          'Code Sent! 📧',
-          'A 6-digit verification code has been sent to your email.\n\nPlease check your inbox (and spam folder).',
-        );
+        Alert.alert(t('codeSent'), t('codeSentMsg'));
       }
     } catch (error) {
       if (error.message.includes('already registered')) {
         Alert.alert(
-          'Email Already Registered',
-          'This email is already associated with an account. Please login instead.',
+          t('emailExists'),
+          error.message,
           [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Go to Login', onPress: () => navigation.navigate('Login') },
+            { text: t('cancel'), style: 'cancel' },
+            { text: t('goToLogin'), onPress: () => navigation.navigate('Login') },
           ]
         );
       } else {
-        Alert.alert('Error', error.message || 'Failed to send verification code');
+        Alert.alert(t('error'), error.message || t('failedToSendCode'));
       }
     } finally {
       setSendingCode(false);
@@ -217,7 +212,7 @@ export default function SignupScreen({ navigation }) {
 
   const handleVerifyCode = async () => {
     if (!verificationCode || verificationCode.length !== 6) {
-      Alert.alert('Error', 'Please enter the 6-digit verification code');
+      Alert.alert(t('error'), t('enterCode6'));
       return;
     }
 
@@ -227,16 +222,13 @@ export default function SignupScreen({ navigation }) {
       if (response.data.success) {
         setIsEmailVerified(true);
         setShowVerification(false);
-        Alert.alert('Success! ✅', 'Email verified successfully. You can now complete your signup.');
+        Alert.alert(`${t('success')} ✅`, t('emailVerified'));
       }
     } catch (error) {
       if (error.response?.data?.attemptsLeft !== undefined) {
-        Alert.alert(
-          'Invalid Code',
-          `Incorrect verification code.\n\nAttempts remaining: ${error.response.data.attemptsLeft}`,
-        );
+        Alert.alert(t('invalidCode'), error.message);
       } else {
-        Alert.alert('Error', error.message || 'Failed to verify code');
+        Alert.alert(t('error'), error.message || t('verificationFailed'));
       }
     } finally {
       setVerifyingCode(false);
@@ -244,58 +236,48 @@ export default function SignupScreen({ navigation }) {
   };
 
   const handleSignup = async () => {
-    // Check email verification
     if (!isEmailVerified) {
-      Alert.alert(
-        'Email Not Verified',
-        'Please verify your email address first by clicking "Send Verification Code".',
-      );
+      Alert.alert(t('emailNotVerified'), t('verifyEmailFirst'));
       return;
     }
 
     if (!fullName.trim()) {
-      Alert.alert('Error', 'Please enter your full name');
+      Alert.alert(t('error'), t('enterFullName'));
       return;
     }
     if (fullName.trim().length < 2) {
-      Alert.alert('Error', 'Name must be at least 2 characters');
+      Alert.alert(t('error'), t('nameMin'));
       return;
     }
 
     if (!validateEmail()) return;
 
     if (!password) {
-      Alert.alert('Error', 'Please enter a password');
+      Alert.alert(t('error'), t('passwordRequired'));
       return;
     }
     if (password.length < 6) {
-      Alert.alert('Error', 'Password must be at least 6 characters');
+      Alert.alert(t('error'), t('passwordMin'));
       return;
     }
     if (!/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) {
-      Alert.alert(
-        'Weak Password',
-        'Password must contain at least:\n• One letter (a-z)\n• One number (0-9)\n\nExample: mypass123',
-      );
+      Alert.alert(t('weakPassword'), t('passwordRules'));
       return;
     }
     if (password !== confirmPassword) {
-      Alert.alert('Error', 'Passwords do not match');
+      Alert.alert(t('error'), t('passwordMismatch'));
       return;
     }
 
-    // Phone validation (Indian)
+    // Phone validation
     if (phone) {
       const phoneDigits = phone.replace(/\D/g, '');
       if (phoneDigits.length !== 10) {
-        Alert.alert('Invalid Phone', 'Phone number must be exactly 10 digits');
+        Alert.alert(t('invalidPhone'), t('phoneDigits'));
         return;
       }
       if (!/^[6-9]/.test(phoneDigits)) {
-        Alert.alert(
-          'Invalid Phone Number',
-          'Indian mobile numbers must start with 6, 7, 8, or 9.\n\nExample: 9876543210'
-        );
+        Alert.alert(t('invalidPhone'), t('phoneStart'));
         return;
       }
     }
@@ -303,11 +285,11 @@ export default function SignupScreen({ navigation }) {
     // Staff-specific validations
     if (role === 'STAFF') {
       if (!employeeId.trim()) {
-        Alert.alert('Error', 'Employee ID is required for staff members');
+        Alert.alert(t('error'), t('employeeIdRequiredSignup'));
         return;
       }
       if (!uploadedPhotoUrl) {
-        Alert.alert('Photo Required', 'Please upload a photo. This is mandatory for staff members.');
+        Alert.alert(t('photoRequiredTitle'), t('photoRequired'));
         return;
       }
     }
@@ -330,11 +312,11 @@ export default function SignupScreen({ navigation }) {
         await saveUserData(user);
 
         Alert.alert(
-          'Account Created! 🎉',
-          `Welcome to Scan2Fix${role === 'STAFF' ? ' as a Staff Member' : ''}!`,
+          t('accountCreated'),
+          `${t('welcome')} Scan2Fix!`,
           [
             {
-              text: 'OK',
+              text: t('ok'),
               onPress: async () => {
                 await signIn(email.trim(), password);
               },
@@ -344,13 +326,10 @@ export default function SignupScreen({ navigation }) {
       }
     } catch (error) {
       if (error.message.includes('verify your email')) {
-        Alert.alert(
-          'Verification Required',
-          'Please verify your email first by entering the code sent to your inbox.',
-        );
+        Alert.alert(t('verificationRequired'), t('verifyEmailFirst'));
         setShowVerification(true);
       } else {
-        Alert.alert('Signup Failed', error.message || 'Please try again');
+        Alert.alert(t('signupFailed'), error.message);
       }
     } finally {
       setLoading(false);
@@ -402,16 +381,16 @@ export default function SignupScreen({ navigation }) {
 
           {/* Welcome Text */}
           <View style={styles.welcomeSection}>
-            <Text style={styles.welcomeTitle}>Create Account</Text>
+            <Text style={styles.welcomeTitle}>{t('createAccount')}</Text>
             <Text style={styles.welcomeSubtitle}>
-              Join Scan2Fix to {role === 'STAFF' ? 'fix' : 'report'} issues
+              {t('joinScan2Fix')} {role === 'STAFF' ? t('fixIssues') : t('reportIssues')}
             </Text>
           </View>
 
           {/* Form */}
           <View style={styles.formSection}>
             {/* Role Selection */}
-            <Text style={styles.sectionLabel}>I want to join as</Text>
+            <Text style={styles.sectionLabel}>{t('selectRolePrompt')}</Text>
             <TouchableOpacity
               style={styles.roleSelector}
               onPress={() => setShowRoleModal(true)}
@@ -432,9 +411,9 @@ export default function SignupScreen({ navigation }) {
               <View style={styles.photoSection}>
                 <View style={styles.photoHeader}>
                   <Text style={styles.sectionLabel}>
-                    Profile Photo <Text style={{ color: '#F44336' }}>*</Text>
+                    {t('profilePhoto')} <Text style={{ color: '#F44336' }}>*</Text>
                   </Text>
-                  <Text style={styles.requiredBadge}>Required for Staff</Text>
+                  <Text style={styles.requiredBadge}>{t('requiredForStaff')}</Text>
                 </View>
 
                 {photoUri ? (
@@ -443,7 +422,7 @@ export default function SignupScreen({ navigation }) {
                     {uploadingPhoto && (
                       <View style={styles.uploadingOverlay}>
                         <ActivityIndicator size="large" color="#fff" />
-                        <Text style={styles.uploadingText}>Uploading...</Text>
+                        <Text style={styles.uploadingText}>{t('uploading')}</Text>
                       </View>
                     )}
                     <TouchableOpacity
@@ -463,8 +442,8 @@ export default function SignupScreen({ navigation }) {
                     activeOpacity={0.7}
                   >
                     <Ionicons name="camera-outline" size={40} color="#9ca3af" />
-                    <Text style={styles.photoPlaceholderText}>Tap to add photo</Text>
-                    <Text style={styles.photoPlaceholderSubtext}>Camera or Gallery</Text>
+                    <Text style={styles.photoPlaceholderText}>{t('tapToAddPhoto')}</Text>
+                    <Text style={styles.photoPlaceholderSubtext}>{t('cameraOrGallery')}</Text>
                   </TouchableOpacity>
                 )}
               </View>
@@ -477,7 +456,7 @@ export default function SignupScreen({ navigation }) {
               </View>
               <TextInput
                 style={styles.input}
-                placeholder="Full Name"
+                placeholder={t('fullName')}
                 placeholderTextColor="#9ca3af"
                 value={fullName}
                 onChangeText={setFullName}
@@ -494,7 +473,7 @@ export default function SignupScreen({ navigation }) {
                 </View>
                 <TextInput
                   style={styles.input}
-                  placeholder="Employee ID (e.g., EMP001)"
+                  placeholder={t('employeeIdSignup')}
                   placeholderTextColor="#9ca3af"
                   value={employeeId}
                   onChangeText={setEmployeeId}
@@ -511,7 +490,7 @@ export default function SignupScreen({ navigation }) {
               </View>
               <TextInput
                 style={styles.input}
-                placeholder="Email address"
+                placeholder={t('emailPlaceholder')}
                 placeholderTextColor="#9ca3af"
                 value={email}
                 onChangeText={setEmail}
@@ -537,13 +516,13 @@ export default function SignupScreen({ navigation }) {
                 {sendingCode ? (
                   <>
                     <ActivityIndicator size="small" color="#fff" />
-                    <Text style={styles.verifyButtonText}>  Sending...</Text>
+                    <Text style={styles.verifyButtonText}>  {t('sending')}</Text>
                   </>
                 ) : (
                   <>
                     <Ionicons name="mail-outline" size={18} color="#fff" />
                     <Text style={styles.verifyButtonText}>
-                      {countdown > 0 ? `  Resend in ${countdown}s` : '  Send Verification Code'}
+                      {countdown > 0 ? `  ${t('resendIn')} ${countdown}s` : `  ${t('sendVerificationCode')}`}
                     </Text>
                   </>
                 )}
@@ -553,9 +532,9 @@ export default function SignupScreen({ navigation }) {
             {/* Verification Code Input */}
             {showVerification && !isEmailVerified && (
               <View style={styles.verificationBox}>
-                <Text style={styles.verificationTitle}>Enter Verification Code</Text>
+                <Text style={styles.verificationTitle}>{t('enterVerificationCodePrompt')}</Text>
                 <Text style={styles.verificationSubtitle}>
-                  Check your email for the 6-digit code
+                  {t('checkEmailCode')}
                 </Text>
                 <View style={[styles.inputContainer, codeFocused && styles.inputContainerFocused, { marginTop: 12 }]}>
                   <View style={styles.inputIconContainer}>
@@ -563,7 +542,7 @@ export default function SignupScreen({ navigation }) {
                   </View>
                   <TextInput
                     style={styles.input}
-                    placeholder="6-digit code"
+                    placeholder={t('enterCode')}
                     placeholderTextColor="#9ca3af"
                     value={verificationCode}
                     onChangeText={(text) => {
@@ -590,12 +569,12 @@ export default function SignupScreen({ navigation }) {
                   {verifyingCode ? (
                     <>
                       <ActivityIndicator size="small" color="#fff" />
-                      <Text style={styles.verifyCodeButtonText}>  Verifying...</Text>
+                      <Text style={styles.verifyCodeButtonText}>  {t('verifying')}</Text>
                     </>
                   ) : (
                     <>
                       <Ionicons name="shield-checkmark-outline" size={18} color="#fff" />
-                      <Text style={styles.verifyCodeButtonText}>  Verify Code</Text>
+                      <Text style={styles.verifyCodeButtonText}>  {t('verifyCode')}</Text>
                     </>
                   )}
                 </TouchableOpacity>
@@ -609,7 +588,7 @@ export default function SignupScreen({ navigation }) {
               </View>
               <TextInput
                 style={styles.input}
-                placeholder="Phone (10 digits, optional)"
+                placeholder={t('phonePlaceholder')}
                 placeholderTextColor="#9ca3af"
                 value={phone}
                 onChangeText={(text) => {
@@ -636,12 +615,12 @@ export default function SignupScreen({ navigation }) {
 
             {phone.length > 0 && phone.length < 10 && (
               <Text style={styles.phoneHint}>
-                {phone.length}/10 digits
+                {phone.length}/10 {t('digitsCount')}
               </Text>
             )}
             {phone.length > 0 && phone.length === 10 && !/^[6-9]/.test(phone) && (
               <Text style={styles.phoneError}>
-                Indian numbers must start with 6, 7, 8, or 9
+                {t('phoneStart')}
               </Text>
             )}
 
@@ -652,7 +631,7 @@ export default function SignupScreen({ navigation }) {
               </View>
               <TextInput
                 style={styles.input}
-                placeholder="Password"
+                placeholder={t('passwordPlaceholder')}
                 placeholderTextColor="#9ca3af"
                 value={password}
                 onChangeText={setPassword}
@@ -680,8 +659,8 @@ export default function SignupScreen({ navigation }) {
                   color: password.length < 6 ? '#ef4444' :
                     (!/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) ? '#f59e0b' : '#22c55e',
                 }]}>
-                  {password.length < 6 ? 'Too short' :
-                    (!/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) ? 'Add letter + number' : 'Strong ✓'}
+                  {password.length < 6 ? t('tooShort') :
+                    (!/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) ? t('addLetterNumber') : t('strong')}
                 </Text>
               </View>
             )}
@@ -693,7 +672,7 @@ export default function SignupScreen({ navigation }) {
               </View>
               <TextInput
                 style={styles.input}
-                placeholder="Confirm Password"
+                placeholder={t('confirmPassword')}
                 placeholderTextColor="#9ca3af"
                 value={confirmPassword}
                 onChangeText={setConfirmPassword}
@@ -718,7 +697,7 @@ export default function SignupScreen({ navigation }) {
                   fontSize: 11, marginLeft: 4,
                   color: password === confirmPassword ? '#4CAF50' : '#F44336',
                 }}>
-                  {password === confirmPassword ? 'Passwords match' : 'Passwords do not match'}
+                  {password === confirmPassword ? t('passwordsMatch') : t('passwordsNotMatch')}
                 </Text>
               </View>
             )}
@@ -741,16 +720,16 @@ export default function SignupScreen({ navigation }) {
                 <ActivityIndicator size="small" color="#fff" />
               ) : null}
               <Text style={styles.loginButtonText}>
-                {loading ? '  CREATING...' : 'SIGN UP'}
+                {loading ? `  ${t('creatingBtn')}` : t('signUpBtn')}
               </Text>
             </LinearGradient>
           </TouchableOpacity>
 
           {/* Login Link */}
           <View style={styles.signupSection}>
-            <Text style={styles.signupText}>Already have an account? </Text>
+            <Text style={styles.signupText}>{t('alreadyAccount')} </Text>
             <TouchableOpacity onPress={() => navigation.navigate('Login')}>
-              <Text style={styles.signupLink}>Log In</Text>
+              <Text style={styles.signupLink}>{t('login')}</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -769,7 +748,7 @@ export default function SignupScreen({ navigation }) {
           onPress={() => setShowRoleModal(false)}
         >
           <View style={styles.modalContent} onStartShouldSetResponder={() => true}>
-            <Text style={styles.modalTitle}>Select Your Role</Text>
+            <Text style={styles.modalTitle}>{t('selectYourRole')}</Text>
             {ROLES.map((r) => (
               <TouchableOpacity
                 key={r.key}
@@ -814,7 +793,7 @@ export default function SignupScreen({ navigation }) {
           onPress={() => setShowPhotoOptions(false)}
         >
           <View style={styles.photoOptionsContent} onStartShouldSetResponder={() => true}>
-            <Text style={styles.modalTitle}>Choose Photo Source</Text>
+            <Text style={styles.modalTitle}>{t('choosePhotoSource')}</Text>
 
             <TouchableOpacity
               style={styles.photoOptionBtn}
@@ -825,8 +804,8 @@ export default function SignupScreen({ navigation }) {
                 <Ionicons name="camera-outline" size={28} color="#2196F3" />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.photoOptionLabel}>Take Photo</Text>
-                <Text style={styles.photoOptionDesc}>Use camera to take a new photo</Text>
+                <Text style={styles.photoOptionLabel}>{t('takePhoto')}</Text>
+                <Text style={styles.photoOptionDesc}>{t('useCamera')}</Text>
               </View>
               <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
             </TouchableOpacity>
@@ -840,8 +819,8 @@ export default function SignupScreen({ navigation }) {
                 <Ionicons name="images-outline" size={28} color="#9C27B0" />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.photoOptionLabel}>Choose from Gallery</Text>
-                <Text style={styles.photoOptionDesc}>Select from your photo library</Text>
+                <Text style={styles.photoOptionLabel}>{t('chooseFromGallery')}</Text>
+                <Text style={styles.photoOptionDesc}>{t('selectFromLibrary')}</Text>
               </View>
               <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
             </TouchableOpacity>
@@ -850,7 +829,7 @@ export default function SignupScreen({ navigation }) {
               style={styles.photoCancelBtn}
               onPress={() => setShowPhotoOptions(false)}
             >
-              <Text style={styles.photoCancelText}>Cancel</Text>
+              <Text style={styles.photoCancelText}>{t('cancel')}</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
@@ -864,7 +843,6 @@ const styles = StyleSheet.create({
   keyboardView: { flex: 1 },
   scrollContent: { flexGrow: 1, paddingBottom: 40 },
 
-  // Decorative shapes
   topDecoration: { position: 'absolute', top: 0, left: 0, right: 0, height: 200, overflow: 'hidden', zIndex: 1 },
   shapeBack: {
     position: 'absolute', width: width * 0.85, height: 180, top: -80, left: width * 0.25,
@@ -878,22 +856,18 @@ const styles = StyleSheet.create({
   },
   shapeGradient: { flex: 1, borderRadius: 24 },
 
-  // Logo
   logoSection: { alignItems: 'center', marginTop: 140, marginBottom: 5 },
   logoRow: { flexDirection: 'row', alignItems: 'center' },
   logoText: { fontSize: 44, fontWeight: '300', color: '#8CD6F7', letterSpacing: 2 },
   logoText2: { fontSize: 44, fontWeight: '700', color: '#004e68', letterSpacing: 2 },
 
-  // Welcome
   welcomeSection: { alignItems: 'center', marginTop: 15, marginBottom: 25 },
   welcomeTitle: { fontSize: 22, fontWeight: 'bold', color: '#1e293b' },
   welcomeSubtitle: { fontSize: 14, color: '#6b7280', marginTop: 6 },
 
-  // Form
   formSection: { paddingHorizontal: 36 },
   sectionLabel: { fontSize: 13, fontWeight: '600', color: '#1e293b', marginBottom: 8 },
 
-  // Role selector
   roleSelector: {
     flexDirection: 'row', alignItems: 'center', backgroundColor: '#f4f4f5',
     borderRadius: 12, padding: 14, marginBottom: 18, borderWidth: 2, borderColor: '#e5e7eb',
@@ -905,7 +879,6 @@ const styles = StyleSheet.create({
   roleSelectorLabel: { fontSize: 16, fontWeight: '700', color: '#1e293b' },
   roleSelectorDesc: { fontSize: 12, color: '#6b7280', marginTop: 2 },
 
-  // Photo section
   photoSection: { marginBottom: 18 },
   photoHeader: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
@@ -947,7 +920,6 @@ const styles = StyleSheet.create({
   input: { flex: 1, fontSize: 14, color: '#1e293b', paddingVertical: 0, marginLeft: 8 },
   eyeButton: { padding: 8 },
 
-  // Verification button
   verifyButton: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     backgroundColor: '#2196F3', borderRadius: 8, paddingVertical: 12,
@@ -957,7 +929,6 @@ const styles = StyleSheet.create({
   verifyButtonDisabled: { backgroundColor: '#90CAF9', shadowOpacity: 0 },
   verifyButtonText: { color: '#fff', fontSize: 14, fontWeight: '600' },
 
-  // Verification box
   verificationBox: {
     backgroundColor: '#E3F2FD', borderRadius: 12, padding: 16, marginBottom: 14,
     borderWidth: 2, borderColor: '#2196F3',
@@ -973,20 +944,16 @@ const styles = StyleSheet.create({
   verifyCodeButtonDisabled: { backgroundColor: '#A5D6A7', shadowOpacity: 0 },
   verifyCodeButtonText: { color: '#fff', fontSize: 14, fontWeight: '600' },
 
-  // Phone hints
   phoneHint: { fontSize: 11, color: '#FF9800', marginTop: -10, marginBottom: 10, marginLeft: 4 },
   phoneError: { fontSize: 11, color: '#F44336', marginTop: -10, marginBottom: 10, marginLeft: 4 },
 
-  // Password strength
   strengthRow: { flexDirection: 'row', alignItems: 'center', marginTop: -8, marginBottom: 10, paddingHorizontal: 4 },
   strengthBar: { width: 80, height: 4, backgroundColor: '#e5e7eb', borderRadius: 2, marginRight: 8, overflow: 'hidden' },
   strengthFill: { height: '100%', borderRadius: 2 },
   strengthText: { fontSize: 11, fontWeight: '500' },
 
-  // Match indicator
   matchRow: { flexDirection: 'row', alignItems: 'center', marginTop: -8, marginBottom: 10, paddingHorizontal: 4 },
 
-  // Button
   loginButtonContainer: {
     paddingHorizontal: 80, marginTop: 12,
     shadowColor: '#000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.19, shadowRadius: 7, elevation: 5,
@@ -995,12 +962,10 @@ const styles = StyleSheet.create({
   loginButton: { height: 50, borderRadius: 8, flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
   loginButtonText: { color: '#ffffff', fontSize: 16, fontWeight: 'bold', letterSpacing: 1.5 },
 
-  // Sign up link
   signupSection: { flexDirection: 'row', justifyContent: 'center', marginTop: 25, marginBottom: 20 },
   signupText: { fontSize: 15, color: '#6b7280' },
   signupLink: { fontSize: 15, fontWeight: 'bold', color: '#1e293b' },
 
-  // Role modal
   modalOverlay: {
     flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center',
     alignItems: 'center', padding: 20,
@@ -1021,7 +986,6 @@ const styles = StyleSheet.create({
   roleOptionLabel: { fontSize: 16, fontWeight: '700', color: '#1e293b' },
   roleOptionDesc: { fontSize: 12, color: '#6b7280', marginTop: 2 },
 
-  // Photo options modal
   photoOptionsContent: {
     width: '100%', maxWidth: 360, backgroundColor: '#fff',
     borderRadius: 20, padding: 20, elevation: 10,

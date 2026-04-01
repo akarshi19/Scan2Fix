@@ -30,10 +30,10 @@ export default function AppNavigator() {
     );
   }
 
-  // Show language selection on first launch
-  // if (isFirstLaunch) {
-  //   return <LanguageSelectScreen />;
-  // }
+  //Show language selection on first launch
+  if (isFirstLaunch) {
+    return <LanguageSelectScreen />;
+  }
 
   if (authLoading) {
     return (

@@ -48,17 +48,17 @@ export default function LodgeComplaint({ route, navigation }) {
 
   const getAssetTypeName = (type) => {
     switch (type) {
-      case 'AC': return 'Air Conditioner';
-      case 'WATER_COOLER': return 'Water Cooler';
-      case 'DESERT_COOLER': return 'Desert Cooler';
-      default: return 'Equipment';
+      case 'AC': return t('airConditioners');
+      case 'WATER_COOLER': return t('waterCoolers');
+      case 'DESERT_COOLER': return t('desertCoolers');
+      default: return t('equipment');
     }
   };
 
   const takePhoto = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permission Needed', 'Camera access is required.');
+      Alert.alert(t('permissionNeeded'), t('cameraPermission'));
       return;
     }
     const result = await ImagePicker.launchCameraAsync({
@@ -70,7 +70,7 @@ export default function LodgeComplaint({ route, navigation }) {
   const pickFromGallery = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permission Needed', 'Gallery access is required.');
+      Alert.alert(t('permissionNeeded'), t('galleryPermission'));
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -91,7 +91,7 @@ export default function LodgeComplaint({ route, navigation }) {
 
   const handleSubmit = async () => {
     if (!description.trim()) {
-      Alert.alert('Error', 'Please describe the issue');
+      Alert.alert(t('error'), t('describeIssueError'));
       return;
     }
     setLoading(true);
@@ -104,16 +104,20 @@ export default function LodgeComplaint({ route, navigation }) {
         photo_url: photoUrl,
       });
       if (response.data.success) {
-        Alert.alert('Success', 'Complaint submitted successfully',
-          [{ text: 'OK', onPress: () => navigation.navigate('UserHome') }]
+        Alert.alert(
+          t('success'), 
+          t('complaintSubmitted'),
+          [{ text: t('ok'), onPress: () => navigation.navigate('UserHome') }]
         );
       }
-    } catch (error) { Alert.alert('Error', error.message); }
+    } catch (error) { 
+      Alert.alert(t('error'), error.message); 
+    }
     finally { setLoading(false); }
   };
 
   return (
-    <ScreenLayout title="Lodge Complaint" showDecor showBack padBottom={100}>
+    <ScreenLayout title={t('lodgeComplaint')} showDecor showBack padBottom={100}>
       <View style={s.mainCard}>
 
         {/* ════════════════════════════════════════ */}
@@ -130,17 +134,30 @@ export default function LodgeComplaint({ route, navigation }) {
         {/* Full Asset Details                       */}
         {/* ════════════════════════════════════════ */}
         <View style={s.detailsGrid}>
-          <DetailRow icon="location-outline" label="Location:" value={assetLocation} iconColor={TEXT_MUT} />
+          <DetailRow 
+            icon="location-outline" 
+            label={t('location')} 
+            value={assetLocation} 
+            iconColor={TEXT_MUT} 
+          />
           {assetBrand ? (
-            <DetailRow icon="pricetag-outline" label="Brand:" value={assetBrand} />
+            <DetailRow 
+              icon="pricetag-outline" 
+              label={t('brand')} 
+              value={assetBrand} 
+            />
           ) : null}
           {assetModel ? (
-            <DetailRow icon="hardware-chip-outline" label="Model:" value={assetModel} />
+            <DetailRow 
+              icon="hardware-chip-outline" 
+              label={t('model')} 
+              value={assetModel} 
+            />
           ) : null}
           {assetInstallDate ? (
             <DetailRow
               icon="construct-outline"
-              label="Installed On:"
+              label={t('installedOn')}
               value={new Date(assetInstallDate).toLocaleDateString('en-GB', {
                 day: 'numeric', month: 'short', year: 'numeric',
               })}
@@ -154,11 +171,11 @@ export default function LodgeComplaint({ route, navigation }) {
         {/* ════════════════════════════════════════ */}
         {/* Description                              */}
         {/* ════════════════════════════════════════ */}
-        <Text style={s.sectionLabel}>Describe the Issue</Text>
+        <Text style={s.sectionLabel}>{t('describeIssueLabel')}</Text>
         <View style={[s.inputWrap, descFocused && s.inputWrapFocused]}>
           <TextInput
             style={s.input}
-            placeholder="What's the problem? Be as detailed as possible..."
+            placeholder={t('issuePlaceholder')}
             placeholderTextColor={TEXT_MUT}
             multiline
             value={description}
@@ -168,7 +185,7 @@ export default function LodgeComplaint({ route, navigation }) {
           />
           <View style={s.charCount}>
             <Text style={[s.charCountText, description.length > 0 && { color: ACTIVE }]}>
-              {description.length} characters
+              {description.length} {t('characters')}
             </Text>
           </View>
         </View>
@@ -176,22 +193,22 @@ export default function LodgeComplaint({ route, navigation }) {
         {/* ════════════════════════════════════════ */}
         {/* Photo Section                            */}
         {/* ════════════════════════════════════════ */}
-        <Text style={s.sectionLabel}>Attach Photo (Optional)</Text>
+        <Text style={s.sectionLabel}>{t('attachPhoto')}</Text>
         {!photo ? (
           <View style={s.photoPickerRow}>
             <TouchableOpacity style={s.photoOption} onPress={takePhoto} activeOpacity={0.8}>
               <View style={s.photoOptionIcon}>
                 <Ionicons name="camera-outline" size={24} color={ACTIVE} />
               </View>
-              <Text style={s.photoOptionLabel}>Camera</Text>
-              <Text style={s.photoOptionHint}>Take a photo</Text>
+              <Text style={s.photoOptionLabel}>{t('camera')}</Text>
+              <Text style={s.photoOptionHint}>{t('takePhotoLabel')}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={s.photoOption} onPress={pickFromGallery} activeOpacity={0.8}>
               <View style={s.photoOptionIcon}>
                 <Ionicons name="images-outline" size={24} color={ACTIVE} />
               </View>
-              <Text style={s.photoOptionLabel}>Gallery</Text>
-              <Text style={s.photoOptionHint}>Choose existing</Text>
+              <Text style={s.photoOptionLabel}>{t('gallery')}</Text>
+              <Text style={s.photoOptionHint}>{t('chooseExisting')}</Text>
             </TouchableOpacity>
           </View>
         ) : (
@@ -202,7 +219,7 @@ export default function LodgeComplaint({ route, navigation }) {
             </TouchableOpacity>
             <View style={s.previewOverlay}>
               <Ionicons name="checkmark-circle" size={16} color="#4CAF50" />
-              <Text style={s.previewText}> Photo attached</Text>
+              <Text style={s.previewText}> {t('photoAttached')}</Text>
             </View>
           </View>
         )}
@@ -222,20 +239,20 @@ export default function LodgeComplaint({ route, navigation }) {
             <View style={s.loadingRow}>
               <ActivityIndicator color="#fff" size="small" />
               <Text style={s.submitText}>
-                {uploadingPhoto ? '  Uploading photo...' : '  Submitting...'}
+                {uploadingPhoto ? `  ${t('uploadingPhoto')}` : `  ${t('submitting')}`}
               </Text>
             </View>
           ) : (
             <View style={s.loadingRow}>
               <Ionicons name="send-outline" size={18} color="#FFF" />
-              <Text style={s.submitText}>  Submit Complaint</Text>
+              <Text style={s.submitText}>  {t('submitComplaint')}</Text>
             </View>
           )}
         </TouchableOpacity>
 
         {/* Cancel */}
         <TouchableOpacity style={s.cancelBtn} onPress={() => navigation.goBack()} activeOpacity={0.8}>
-          <Text style={s.cancelText}>Cancel</Text>
+          <Text style={s.cancelText}>{t('cancel')}</Text>
         </TouchableOpacity>
       </View>
     </ScreenLayout>

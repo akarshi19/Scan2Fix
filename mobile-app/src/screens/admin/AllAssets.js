@@ -6,6 +6,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { assetsAPI } from '../../services/api';
+import { useLanguage } from '../../context/LanguageContext';
 import ScreenLayout from '../../components/ScreenLayout';
 
 const ACTIVE = '#5BA8D4';
@@ -15,40 +16,39 @@ const TEXT_PRI = '#1A1A2E';
 const TEXT_SEC = '#5A7A8A';
 const TEXT_MUT = '#9DB5C0';
 
-const TYPE_CONFIG = {
-  AC: { icon: 'snow-outline', color: '#2196F3', label: 'Air Conditioner' },
-  WATER_COOLER: { icon: 'water-outline', color: '#00BCD4', label: 'Water Cooler' },
-  DESERT_COOLER: { icon: 'leaf-outline', color: '#FF9800', label: 'Desert Cooler' },
-};
-
-const FILTER_OPTIONS = [
-  { key: 'ALL', label: 'All Equipment', icon: 'cube-outline', color: ACTIVE },
-  { key: 'AC', label: 'Air Conditioners', icon: 'snow-outline', color: '#2196F3' },
-  { key: 'WATER_COOLER', label: 'Water Coolers', icon: 'water-outline', color: '#00BCD4' },
-  { key: 'DESERT_COOLER', label: 'Desert Coolers', icon: 'leaf-outline', color: '#FF9800' },
-  { key: 'INACTIVE', label: 'Inactive', icon: 'close-circle-outline', color: '#F44336' },
-];
-
 export default function AllAssets({ route }) {
   const navigation = useNavigation();
+  const { t } = useLanguage();
   const [assets, setAssets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState('ALL');
   const [showFilterModal, setShowFilterModal] = useState(false);
 
+  // Dynamic configuration using translations
+  const TYPE_CONFIG = {
+    AC: { icon: 'snow-outline', color: '#2196F3', label: t('airConditioners') },
+    WATER_COOLER: { icon: 'water-outline', color: '#00BCD4', label: t('waterCoolers') },
+    DESERT_COOLER: { icon: 'leaf-outline', color: '#FF9800', label: t('desertCoolers') },
+  };
+
+  const FILTER_OPTIONS = [
+    { key: 'ALL', label: t('allEquipment'), icon: 'cube-outline', color: ACTIVE },
+    { key: 'AC', label: t('airConditioners'), icon: 'snow-outline', color: '#2196F3' },
+    { key: 'WATER_COOLER', label: t('waterCoolers'), icon: 'water-outline', color: '#00BCD4' },
+    { key: 'DESERT_COOLER', label: t('desertCoolers'), icon: 'leaf-outline', color: '#FF9800' },
+    { key: 'INACTIVE', label: t('inactive'), icon: 'close-circle-outline', color: '#F44336' },
+  ];
+
   useFocusEffect(useCallback(() => { fetchAssets(); }, []));
 
-  // Handle initialFilter from dashboard navigation
   useEffect(() => {
     if (route?.params?.initialFilter) {
       setFilterType(route.params.initialFilter);
-      // Clear the param so it doesn't persist on tab switches
       navigation.setParams({ initialFilter: undefined });
     }
   }, [route?.params?.initialFilter]);
 
-  // Reset filter when tab is pressed (not from dashboard)
   useEffect(() => {
     const unsubscribe = navigation.getParent()?.addListener('tabPress', (e) => {
       if (!route?.params?.initialFilter) {
@@ -58,6 +58,7 @@ export default function AllAssets({ route }) {
     });
     return unsubscribe;
   }, [navigation, route?.params?.initialFilter]);
+
   const fetchAssets = async () => {
     setLoading(true);
     try {
@@ -95,7 +96,7 @@ export default function AllAssets({ route }) {
   };
 
   const getActiveFilterLabel = () => {
-    return FILTER_OPTIONS.find(o => o.key === filterType)?.label || 'All';
+    return FILTER_OPTIONS.find(o => o.key === filterType)?.label || t('all');
   };
 
   const getActiveFilterColor = () => {
@@ -115,7 +116,7 @@ export default function AllAssets({ route }) {
         <Ionicons name="search-outline" size={18} color={TEXT_MUT} style={{ marginRight: 8 }} />
         <TextInput
           style={s.searchInput}
-          placeholder="Search by ID, location or brand..."
+          placeholder={t('searchPlaceholder')}
           placeholderTextColor={TEXT_MUT}
           value={searchQuery}
           onChangeText={setSearchQuery}
@@ -142,7 +143,12 @@ export default function AllAssets({ route }) {
   );
 
   const renderAsset = ({ item }) => {
-    const tc = TYPE_CONFIG[item.type] || { icon: 'cube-outline', color: '#666', label: item.type };
+    const tc = TYPE_CONFIG[item.type] || { 
+      icon: 'cube-outline', 
+      color: '#666', 
+      label: item.type 
+    };
+    
     return (
       <TouchableOpacity
         style={s.card}
@@ -178,7 +184,7 @@ export default function AllAssets({ route }) {
                 fontWeight: '600',
                 color: item.is_active !== false ? '#2E7D32' : '#C62828',
               }}>
-                {item.is_active !== false ? 'Active' : 'Inactive'}
+                {item.is_active !== false ? t('active') : t('inactiveStatus')}
               </Text>
             </View>
           </View>
@@ -189,7 +195,7 @@ export default function AllAssets({ route }) {
 
   return (
     <ScreenLayout
-      title="Equipments"
+      title={t('equipments')}
       scroll={false}
       fixedHeader={fixedHeaderContent}
       showDecor
@@ -220,13 +226,13 @@ export default function AllAssets({ route }) {
               <Ionicons name="close-circle" size={16} color={getActiveFilterColor()} />
             </TouchableOpacity>
           </View>
-          <Text style={s.countText}>{filtered.length} results</Text>
+          <Text style={s.countText}>{filtered.length} {t('results')}</Text>
         </View>
       )}
 
       {filterType === 'ALL' && (
         <View style={s.statsBar}>
-          <Text style={s.countTextAll}>{filtered.length} equipment</Text>
+          <Text style={s.countTextAll}>{filtered.length} {t('equipmentCount')}</Text>
           <View style={{ flexDirection: 'row', gap: 8 }}>
             <View style={[s.statPill, { backgroundColor: '#E8F5E9' }]}>
               <Ionicons name="checkmark-circle-outline" size={12} color="#4CAF50" />
@@ -255,17 +261,17 @@ export default function AllAssets({ route }) {
             <Ionicons name="cube-outline" size={50} color={TEXT_MUT} />
             <Text style={s.emptyTitle}>
               {filterType === 'ALL'
-                ? 'No Equipment Found'
+                ? t('noEquipmentFound')
                 : filterType === 'INACTIVE'
-                  ? 'No Inactive Equipment'
-                  : `No ${getActiveFilterLabel()}`}
+                  ? t('noInactiveEquipment')
+                  : t('noEquipmentType')}
             </Text>
             <Text style={s.emptyText}>
               {filterType === 'ALL'
-                ? 'Equipment will appear here'
+                ? t('equipmentWillAppear')
                 : filterType === 'INACTIVE'
-                  ? 'All equipment is currently active'
-                  : `No equipment of this type found`}
+                  ? t('allActiveMessage')
+                  : t('noEquipmentTypeFound')}
             </Text>
           </View>
         }
@@ -287,7 +293,7 @@ export default function AllAssets({ route }) {
         >
           <View style={s.modalContent}>
             <View style={s.modalHandle} />
-            <Text style={s.modalTitle}>Filter by Type</Text>
+            <Text style={s.modalTitle}>{t('filterByType')}</Text>
 
             {FILTER_OPTIONS.map(option => (
               <TouchableOpacity
@@ -343,7 +349,7 @@ export default function AllAssets({ route }) {
               style={s.modalCloseBtn}
               onPress={() => setShowFilterModal(false)}
             >
-              <Text style={s.modalCloseBtnText}>Close</Text>
+              <Text style={s.modalCloseBtnText}>{t('close')}</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
@@ -352,10 +358,8 @@ export default function AllAssets({ route }) {
   );
 }
 
+// Styles remain exactly the same
 const s = StyleSheet.create({
-  // ════════════════════════════════════════
-  // Header — Search + Filter
-  // ════════════════════════════════════════
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -391,10 +395,6 @@ const s = StyleSheet.create({
     backgroundColor: ACTIVE,
     borderColor: ACTIVE,
   },
-
-  // ════════════════════════════════════════
-  // Active filter indicator
-  // ════════════════════════════════════════
   activeFilterRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -423,10 +423,6 @@ const s = StyleSheet.create({
     fontSize: 12,
     color: TEXT_MUT,
   },
-
-  // ════════════════════════════════════════
-  // Stats Bar (shown for ALL filter)
-  // ════════════════════════════════════════
   statsBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -450,10 +446,6 @@ const s = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
   },
-
-  // ════════════════════════════════════════
-  // Filter Modal
-  // ════════════════════════════════════════
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.4)',
@@ -528,10 +520,6 @@ const s = StyleSheet.create({
     fontWeight: '600',
     color: TEXT_SEC,
   },
-
-  // ════════════════════════════════════════
-  // Asset Cards
-  // ════════════════════════════════════════
   card: {
     backgroundColor: CARD_BG,
     borderRadius: 14,
@@ -592,10 +580,6 @@ const s = StyleSheet.create({
     height: 6,
     borderRadius: 3,
   },
-
-  // ════════════════════════════════════════
-  // Empty State
-  // ════════════════════════════════════════
   empty: {
     flex: 1,
     justifyContent: 'center',

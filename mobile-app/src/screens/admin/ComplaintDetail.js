@@ -8,6 +8,7 @@ import { Picker } from '@react-native-picker/picker';
 import { complaintsAPI, usersAPI, getFileUrl } from '../../services/api';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
+import { useLanguage } from '../../context/LanguageContext';
 import ScreenLayout from '../../components/ScreenLayout';
 
 const STATUS_COLORS = {
@@ -21,6 +22,7 @@ export default function ComplaintDetail({ route, navigation }) {
   const { complaint } = route.params;
   const { colors } = useTheme();
   const { user } = useAuth();
+  const { t } = useLanguage();
   const [staffList, setStaffList] = useState([]);
   const [selectedStaff, setSelectedStaff] = useState(complaint.assigned_staff_id?.toString() || '');
   const [loading, setLoading] = useState(false);
@@ -36,15 +38,6 @@ export default function ComplaintDetail({ route, navigation }) {
     if (isAdmin) fetchStaffMembers();
   }, [isAdmin]);
 
-  useEffect(() => {
-    console.log('=== COMPLAINT DETAIL DEBUG ===');
-    console.log('Full user object:', JSON.stringify(user, null, 2));
-    console.log('user.role:', user?.role);
-    console.log('Is admin?:', user?.role === 'ADMIN');
-    console.log('Complaint:', JSON.stringify(complaint, null, 2));
-  }, [user, complaint]);
-
-
   const fetchStaffMembers = async () => {
     try {
       const r = await usersAPI.getStaff();
@@ -53,28 +46,44 @@ export default function ComplaintDetail({ route, navigation }) {
   };
 
   const handleAssign = async () => {
-    if (!selectedStaff) { Alert.alert('Error', 'Please select a staff member'); return; }
+    if (!selectedStaff) { 
+      Alert.alert(t('error'), t('selectStaffError')); 
+      return; 
+    }
     const staffMember = staffList.find(s => s.id === selectedStaff);
     if (staffMember?.is_on_leave) {
-      Alert.alert('Cannot Assign', `${staffMember.full_name || staffMember.email} is on leave.`);
+      Alert.alert(
+        t('cannotAssign'), 
+        `${staffMember.full_name || staffMember.email} ${t('staffOnLeaveMsg')}`
+      );
       return;
     }
     setLoading(true);
     try {
       const id = complaint.id || complaint._id;
       const r = await complaintsAPI.assignStaff(id, selectedStaff);
-      if (r.data.success) Alert.alert('Staff Assigned!', r.data.message, [{ text: 'OK', onPress: () => navigation.goBack() }]);
-    } catch (e) { Alert.alert('Error', e.message); }
-    finally { setLoading(false); }
+      if (r.data.success) {
+        Alert.alert(
+          t('success'), 
+          r.data.message, 
+          [{ text: t('ok'), onPress: () => navigation.goBack() }]
+        );
+      }
+    } catch (e) { 
+      Alert.alert(t('error'), e.message); 
+    }
+    finally { 
+      setLoading(false); 
+    }
   };
 
   const handleSaveDescription = async () => {
     if (!descText.trim()) {
-      Alert.alert('Error', 'Description cannot be empty');
+      Alert.alert(t('error'), t('descriptionEmpty'));
       return;
     }
     if (descText.trim().length < 10) {
-      Alert.alert('Error', 'Description must be at least 10 characters');
+      Alert.alert(t('error'), t('descriptionMin'));
       return;
     }
     setSavingDesc(true);
@@ -84,10 +93,10 @@ export default function ComplaintDetail({ route, navigation }) {
       if (r.data.success) {
         complaint.description = descText.trim();
         setEditingDesc(false);
-        Alert.alert('Success ✅', 'Description updated');
+        Alert.alert(t('success'), t('descUpdated'));
       }
     } catch (e) {
-      Alert.alert('Error', e.message || 'Failed to update description');
+      Alert.alert(t('error'), e.message || t('descUpdateFailed'));
     } finally {
       setSavingDesc(false);
     }
@@ -99,12 +108,22 @@ export default function ComplaintDetail({ route, navigation }) {
   };
 
   const getAssetTypeName = (type) => {
-    switch (type) {
-      case 'AC': return 'Air Conditioner';
-      case 'WATER_COOLER': return 'Water Cooler';
-      case 'DESERT_COOLER': return 'Desert Cooler';
-      default: return 'Equipment';
-    }
+    const typeMap = {
+      'AC': t('airConditioners'),
+      'WATER_COOLER': t('waterCoolers'),
+      'DESERT_COOLER': t('desertCoolers'),
+    };
+    return typeMap[type] || t('equipment');
+  };
+
+  const getStatusLabel = (status) => {
+    const statusMap = {
+      'OPEN': t('open'),
+      'ASSIGNED': t('assigned'),
+      'IN_PROGRESS': t('inProgress'),
+      'CLOSED': t('closed'),
+    };
+    return statusMap[status] || status.replace('_', ' ');
   };
 
   const statusInfo = STATUS_COLORS[complaint.status] ?? { bg: '#F5F5F5', text: '#666', dot: '#999' };
@@ -113,35 +132,36 @@ export default function ComplaintDetail({ route, navigation }) {
   const staffOnLeave = complaint.profiles?.is_on_leave && !isClosed;
   const selectedLeave = selectedStaff && staffList.find(s => s.id === selectedStaff)?.is_on_leave;
 
-  // Fix reporter — fallback to current user for "my complaints"
   const reporterName = complaint.reporter?.full_name
     || complaint.reporter?.email
     || user?.full_name
     || user?.email
-    || 'Unknown';
+    || t('unknown');
 
-  const resolverName = complaint.profiles?.full_name || complaint.profiles?.email || 'Unknown';
+  const resolverName = complaint.profiles?.full_name 
+    || complaint.profiles?.email 
+    || t('unknown');
 
   return (
-    <ScreenLayout title="Complaint Details" showBack showDecor padBottom={100}>
+    <ScreenLayout title={t('complaintDetails')} showBack showDecor padBottom={100}>
 
       {/* ════════════════════════════════════════ */}
       {/* Complaint Info Card                      */}
       {/* ════════════════════════════════════════ */}
       <View style={[s.card, { backgroundColor: colors.cardBg }]}>
 
-        {/* Title row — "Complaint Details" + Status badge in same line */}
+        {/* Title row */}
         <View style={s.cardTitleRow}>
-          <Text style={[s.cardTitle, { color: colors.textPri }]}>Complaint Details</Text>
+          <Text style={[s.cardTitle, { color: colors.textPri }]}>{t('complaintDetails')}</Text>
           <View style={[s.statusBadge, { backgroundColor: statusInfo.bg }]}>
             <View style={[s.statusDot, { backgroundColor: statusInfo.dot }]} />
             <Text style={[s.statusBadgeText, { color: statusInfo.text }]}>
-              {complaint.status.replace('_', ' ')}
+              {getStatusLabel(complaint.status)}
             </Text>
           </View>
         </View>
 
-        {/* Asset Header — icon + ID + type */}
+        {/* Asset Header */}
         <View style={s.assetHeader}>
           <View style={s.assetHeaderInfo}>
             <Text style={[s.assetIdText, { color: colors.textPri }]}>{complaint.asset_id}</Text>
@@ -151,50 +171,110 @@ export default function ComplaintDetail({ route, navigation }) {
           </View>
         </View>
 
-        {/* All Asset Details */}
-        <InfoRow icon="location-outline" label="Location:" value={complaint.assets?.location} colors={colors} iconColor={colors.active} />
-        <InfoRow icon="pricetag-outline" label="Brand:" value={complaint.assets?.brand} colors={colors} />
-        <InfoRow icon="hardware-chip-outline" label="Model:" value={complaint.assets?.model} colors={colors} />
+        {/* Asset Details */}
+        <InfoRow 
+          icon="location-outline" 
+          label={t('location')} 
+          value={complaint.assets?.location} 
+          colors={colors} 
+          iconColor={colors.active}
+          t={t}
+        />
+        <InfoRow 
+          icon="pricetag-outline" 
+          label={t('brand')} 
+          value={complaint.assets?.brand} 
+          colors={colors}
+          t={t}
+        />
+        <InfoRow 
+          icon="hardware-chip-outline" 
+          label={t('model')} 
+          value={complaint.assets?.model} 
+          colors={colors}
+          t={t}
+        />
         {complaint.assets?.install_date && (
-          <InfoRow icon="construct-outline" label="Installed On:" value={
-            new Date(complaint.assets.install_date).toLocaleDateString('en-GB', {
+          <InfoRow 
+            icon="construct-outline" 
+            label={t('installedOn')} 
+            value={new Date(complaint.assets.install_date).toLocaleDateString('en-GB', {
               day: 'numeric', month: 'short', year: 'numeric'
-            })
-          } colors={colors} />
+            })} 
+            colors={colors}
+            t={t}
+          />
         )}
+
         {/* Complaint Meta */}
-        <InfoRow icon="calendar-outline" label="Reported On:" value={
-          new Date(complaint.created_at).toLocaleDateString('en-US', {
+        <InfoRow 
+          icon="calendar-outline" 
+          label={t('reportedOn')} 
+          value={new Date(complaint.created_at).toLocaleDateString('en-US', {
             day: 'numeric', month: 'short', year: 'numeric',
             hour: '2-digit', minute: '2-digit'
-          })
-        } colors={colors} />
+          })} 
+          colors={colors}
+          t={t}
+        />
 
-        <InfoRow icon="person-outline" label="Reported By:" value={reporterName} colors={colors} />
+        <InfoRow 
+          icon="person-outline" 
+          label={t('reportedBy')} 
+          value={reporterName} 
+          colors={colors}
+          t={t}
+        />
 
         {complaint.complaint_number && (
-          <InfoRow icon="document-text-outline" label="Complaint No:" value={complaint.complaint_number} colors={colors} />
+          <InfoRow 
+            icon="document-text-outline" 
+            label={t('complaintNo')} 
+            value={complaint.complaint_number} 
+            colors={colors}
+            t={t}
+          />
         )}
+
         {isClosed && (
           <>
-            <InfoRow icon="checkmark-done-outline" label="Resolved By:" value={resolverName} colors={colors} valueColor="#000" />
-            <InfoRow icon="calendar-outline" label="Resolved On:" value={
-              new Date(complaint.closed_at).toLocaleDateString('en-GB', {
+            <InfoRow 
+              icon="checkmark-done-outline" 
+              label={t('resolvedBy')} 
+              value={resolverName} 
+              colors={colors} 
+              valueColor="#000"
+              t={t}
+            />
+            <InfoRow 
+              icon="calendar-outline" 
+              label={t('resolvedOn')} 
+              value={new Date(complaint.closed_at).toLocaleDateString('en-GB', {
                 day: 'numeric', month: 'short', year: 'numeric'
-              })
-            } colors={colors} valueColor="#000" />
+              })} 
+              colors={colors} 
+              valueColor="#000"
+              t={t}
+            />
             {complaint.verified_at && (
-              <InfoRow icon="shield-checkmark-outline" label="Verified On:" value={
-                new Date(complaint.verified_at).toLocaleDateString('en-GB', {
+              <InfoRow 
+                icon="shield-checkmark-outline" 
+                label={t('verifiedOn')} 
+                value={new Date(complaint.verified_at).toLocaleDateString('en-GB', {
                   day: 'numeric', month: 'short', year: 'numeric'
-                })
-              } colors={colors} valueColor="#000" last />
+                })} 
+                colors={colors} 
+                valueColor="#000" 
+                last
+                t={t}
+              />
             )}
           </>
         )}
+
         {/* Issue Description */}
         <View style={s.descTitleRow}>
-          <Text style={[s.sectionLabel, { color: colors.textPri }]}>Issue Description</Text>
+          <Text style={[s.sectionLabel, { color: colors.textPri }]}>{t('issueDescription')}</Text>
           {canEditDesc && !isClosed && !editingDesc && (
             <TouchableOpacity
               style={s.descEditBtn}
@@ -219,18 +299,18 @@ export default function ComplaintDetail({ route, navigation }) {
               value={descText}
               onChangeText={setDescText}
               multiline
-              placeholder="Describe the issue..."
+              placeholder={t('describeIssue')}
               placeholderTextColor="#9DB5C0"
               autoFocus
             />
             <View style={s.descCharRow}>
               <Text style={[s.descCharCount, descText.trim().length < 10 && { color: '#E53935' }]}>
-                {descText.trim().length} characters {descText.trim().length < 10 ? '(min 10)' : '✓'}
+                {descText.trim().length} {t('characters')} {descText.trim().length < 10 ? t('minChars') : '✓'}
               </Text>
             </View>
             <View style={s.descEditActions}>
               <TouchableOpacity style={s.descCancelBtn} onPress={handleCancelDescEdit}>
-                <Text style={s.descCancelText}>Cancel</Text>
+                <Text style={s.descCancelText}>{t('cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[s.descSaveBtn, (savingDesc || descText.trim().length < 10) && s.descSaveBtnDisabled]}
@@ -243,7 +323,7 @@ export default function ComplaintDetail({ route, navigation }) {
                 ) : (
                   <>
                     <Ionicons name="checkmark-outline" size={16} color="#FFF" />
-                    <Text style={s.descSaveText}> Save</Text>
+                    <Text style={s.descSaveText}> {t('save')}</Text>
                   </>
                 )}
               </TouchableOpacity>
@@ -257,35 +337,36 @@ export default function ComplaintDetail({ route, navigation }) {
       {/* ════════════════════════════════════════ */}
       {photoUrl && (
         <View style={[s.card, { backgroundColor: colors.cardBg }]}>
-          <Text style={[s.cardTitleSimple, { color: colors.textPri }]}>Attached Photo</Text>
+          <Text style={[s.cardTitleSimple, { color: colors.textPri }]}>{t('attachedPhoto')}</Text>
           <TouchableOpacity onPress={() => setShowFullImage(true)} activeOpacity={0.9}>
             <View style={s.photoWrap}>
               <Image source={{ uri: photoUrl }} style={s.photo} />
               <View style={s.enlargeOverlay}>
                 <Ionicons name="expand-outline" size={13} color={colors.active} />
-                <Text style={{ fontSize: 12, color: colors.active, fontWeight: '500' }}> Tap to enlarge</Text>
+                <Text style={{ fontSize: 12, color: colors.active, fontWeight: '500' }}> {t('tapToEnlarge')}</Text>
               </View>
             </View>
           </TouchableOpacity>
         </View>
       )}
+
       {/* ════════════════════════════════════════ */}
       {/* Assign Staff — ADMIN ONLY                */}
       {/* ════════════════════════════════════════ */}
       {!isClosed && isAdmin && (
         <View style={[s.card, { backgroundColor: colors.cardBg }]}>
-          <Text style={[s.cardTitleSimple, { color: colors.textPri }]}>Assign Staff</Text>
+          <Text style={[s.cardTitleSimple, { color: colors.textPri }]}>{t('assignStaff')}</Text>
 
           {staffOnLeave && (
             <View style={s.leaveWarning}>
               <Ionicons name="warning" size={16} color="#F44336" />
               <Text style={s.leaveWarningText}>
-                Assigned staff ({complaint.profiles?.full_name}) is currently on leave. Consider reassigning.
+                {t('staffOnLeaveWarning')}
               </Text>
             </View>
           )}
 
-          <Text style={[s.pickerLabel, { color: colors.textSec }]}>Select Staff Member</Text>
+          <Text style={[s.pickerLabel, { color: colors.textSec }]}>{t('selectStaff')}</Text>
           <View style={[s.pickerWrap, { borderColor: colors.inputBorder }]}>
             <Picker
               selectedValue={selectedStaff}
@@ -293,11 +374,11 @@ export default function ComplaintDetail({ route, navigation }) {
               style={{ height: 52, color: colors.textPri }}
               dropdownIconColor={colors.active}
             >
-              <Picker.Item label="-- Select Staff --" value="" />
+              <Picker.Item label={t('selectStaffPlaceholder')} value="" />
               {staffList.map(staff => (
                 <Picker.Item
                   key={staff.id}
-                  label={`${staff.full_name || staff.email}${staff.is_on_leave ? '  (On Leave)' : '  ✓'}`}
+                  label={`${staff.full_name || staff.email}${staff.is_on_leave ? `  (${t('onLeave')})` : `  ${t('available')}`}`}
                   value={staff.id}
                   color={staff.is_on_leave ? '#AAA' : colors.textPri}
                   enabled={!staff.is_on_leave}
@@ -309,7 +390,7 @@ export default function ComplaintDetail({ route, navigation }) {
           {selectedLeave && (
             <View style={s.warnBox}>
               <Ionicons name="warning-outline" size={16} color="#E65100" />
-              <Text style={s.warnText}> This staff member is on leave</Text>
+              <Text style={s.warnText}> {t('selectedStaffOnLeave')}</Text>
             </View>
           )}
 
@@ -321,13 +402,13 @@ export default function ComplaintDetail({ route, navigation }) {
           >
             <Ionicons name="person-add-outline" size={18} color="#fff" />
             <Text style={s.assignBtnText}>
-              {loading ? 'Assigning…' : complaint.assigned_staff_id ? 'Reassign Staff' : 'Assign Staff'}
+              {loading ? t('assigning') : complaint.assigned_staff_id ? t('reassign') : t('assign')}
             </Text>
           </TouchableOpacity>
 
           {complaint.assigned_staff_id && (
             <Text style={[s.currentAssign, { color: colors.textMut }]}>
-              Currently: {staffList.find(s => s.id === complaint.assigned_staff_id?.toString())?.full_name || complaint.profiles?.full_name || 'Unknown'}
+              {t('current')} {staffList.find(s => s.id === complaint.assigned_staff_id?.toString())?.full_name || complaint.profiles?.full_name || t('unknown')}
             </Text>
           )}
         </View>
@@ -338,7 +419,7 @@ export default function ComplaintDetail({ route, navigation }) {
       {/* ════════════════════════════════════════ */}
       {!isClosed && !isAdmin && complaint.profiles && (
         <View style={[s.card, { backgroundColor: colors.cardBg }]}>
-          <Text style={[s.cardTitleSimple, { color: colors.textPri }]}>Assigned Staff</Text>
+          <Text style={[s.cardTitleSimple, { color: colors.textPri }]}>{t('assignedStaff')}</Text>
           <View style={s.staffInfoBar}>
             {complaint.profiles.photo_url ? (
               <Image source={{ uri: getFileUrl(complaint.profiles.photo_url) }} style={s.staffAvatar} />
@@ -353,7 +434,7 @@ export default function ComplaintDetail({ route, navigation }) {
               <Text style={[s.staffName, { color: colors.textPri }]}>
                 {complaint.profiles.full_name || complaint.profiles.email}
               </Text>
-              <Text style={[s.staffRole, { color: colors.textMut }]}>Maintenance Staff</Text>
+              <Text style={[s.staffRole, { color: colors.textMut }]}>{t('maintenanceStaff')}</Text>
             </View>
             <Ionicons name="checkmark-circle" size={22} color="#4CAF50" />
           </View>
@@ -361,7 +442,7 @@ export default function ComplaintDetail({ route, navigation }) {
           {staffOnLeave && (
             <View style={s.leaveWarning}>
               <Ionicons name="warning" size={16} color="#F44336" />
-              <Text style={s.leaveWarningText}>This staff member is currently on leave</Text>
+              <Text style={s.leaveWarningText}>{t('staffCurrentlyOnLeave')}</Text>
             </View>
           )}
         </View>
@@ -372,8 +453,8 @@ export default function ComplaintDetail({ route, navigation }) {
         <View style={[s.card, { backgroundColor: colors.cardBg }]}>
           <View style={s.notAssignedBox}>
             <Ionicons name="time-outline" size={32} color="#FF9800" />
-            <Text style={s.notAssignedTitle}>Pending Assignment</Text>
-            <Text style={s.notAssignedText}>A staff member will be assigned shortly</Text>
+            <Text style={s.notAssignedTitle}>{t('pendingAssignment')}</Text>
+            <Text style={s.notAssignedText}>{t('staffWillAssign')}</Text>
           </View>
         </View>
       )}
@@ -384,7 +465,7 @@ export default function ComplaintDetail({ route, navigation }) {
           <Image source={{ uri: photoUrl }} style={s.fullImage} resizeMode="contain" />
           <View style={s.closeHintRow}>
             <Ionicons name="close-circle-outline" size={16} color="rgba(255,255,255,0.6)" />
-            <Text style={s.closeHint}> Tap anywhere to close</Text>
+            <Text style={s.closeHint}> {t('tapToClose')}</Text>
           </View>
         </TouchableOpacity>
       </Modal>
@@ -392,26 +473,24 @@ export default function ComplaintDetail({ route, navigation }) {
   );
 }
 
-function InfoRow({ icon, label, value, colors, iconColor, valueColor, last }) {
-  if (!value && value !== 0) return null; // Don't render if no value
+function InfoRow({ icon, label, value, colors, iconColor, valueColor, last, t }) {
+  if (!value && value !== 0) return null;
   return (
     <View style={[s.infoRow, !last && { borderBottomWidth: 1, borderBottomColor: colors.divider }]}>
       <Ionicons name={icon} size={16} color={iconColor || colors.textMut} style={{ marginRight: 8, width: 24, textAlign: 'center' }} />
       <Text style={[s.infoLabel, { color: colors.textMut }]}>{label}</Text>
-      <Text style={[s.infoValue, { color: valueColor || colors.textPri }]}>{value || 'N/A'}</Text>
+      <Text style={[s.infoValue, { color: valueColor || colors.textPri }]}>{value || t('na')}</Text>
     </View>
   );
 }
 
+// Styles remain exactly the same
 const s = StyleSheet.create({
-  // Card
   card: {
     borderRadius: 16, padding: 18, marginBottom: 14,
     shadowColor: '#A0BDD0', shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.12, shadowRadius: 8, elevation: 3,
   },
-
-  // Title row — title + status in same line
   cardTitleRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -427,8 +506,6 @@ const s = StyleSheet.create({
     marginBottom: 16, paddingBottom: 10,
     borderBottomWidth: 1, borderBottomColor: '#EEF4F8',
   },
-
-  // Status badge
   statusBadge: {
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: 10, paddingVertical: 5,
@@ -436,40 +513,22 @@ const s = StyleSheet.create({
   },
   statusDot: { width: 7, height: 7, borderRadius: 4 },
   statusBadgeText: { fontSize: 11, fontWeight: '700' },
-
-  // Asset header
   assetHeader: {
     flexDirection: 'row', alignItems: 'center',
     marginBottom: 14,
   },
-  assetIconWrap: {
-    width: 44, height: 44, borderRadius: 12,
-    alignItems: 'center', justifyContent: 'center',
-    marginRight: 12,
-  },
   assetHeaderInfo: { flex: 1 },
   assetIdText: { fontSize: 17, fontWeight: '800' },
   assetTypeText: { fontSize: 12, marginTop: 2 },
-
-  // Info rows
   infoRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 11 },
   infoLabel: { width: 90, fontSize: 12, fontWeight: '600' },
   infoValue: { flex: 1, fontSize: 14, fontWeight: '500' },
-
-  // Section label
   sectionLabel: { fontSize: 13, fontWeight: '600', marginBottom: 6, marginTop: 10 },
-
-  // Description box
   descriptionBox: {
     backgroundColor: '#F8FAFB', borderRadius: 10,
     padding: 12, borderWidth: 1, borderColor: '#EEF4F8',
   },
   description: { fontSize: 14, lineHeight: 22 },
-
-  // Divider
-  divider: { height: 1, marginVertical: 12 },
-
-  // Photo
   photoWrap: { borderRadius: 12, overflow: 'hidden' },
   photo: { width: '100%', height: 200, borderRadius: 12 },
   enlargeOverlay: {
@@ -478,22 +537,16 @@ const s = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     paddingVertical: 8,
   },
-
-  // Leave warning
   leaveWarning: {
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: '#FFEBEE', borderRadius: 10,
     padding: 12, marginBottom: 14, gap: 8,
   },
   leaveWarningText: { flex: 1, color: '#C62828', fontSize: 12, fontWeight: '500', lineHeight: 18 },
-
-  // Picker
   pickerLabel: { fontSize: 13, fontWeight: '600', marginBottom: 8 },
   pickerWrap: { backgroundColor: '#EEF6FB', borderRadius: 10, marginBottom: 14, borderWidth: 1, overflow: 'hidden' },
   warnBox: { backgroundColor: '#FFF3E0', borderRadius: 8, padding: 12, marginBottom: 14, flexDirection: 'row', alignItems: 'center' },
   warnText: { color: '#E65100', fontSize: 13 },
-
-  // Assign button
   assignBtn: {
     backgroundColor: '#004e68', borderRadius: 10, paddingVertical: 14,
     alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8,
@@ -503,13 +556,6 @@ const s = StyleSheet.create({
   assignBtnDisabled: { backgroundColor: '#004e684b', shadowOpacity: 0, elevation: 0 },
   assignBtnText: { color: '#FFF', fontWeight: '700', fontSize: 15 },
   currentAssign: { textAlign: 'center', marginTop: 12, fontSize: 12 },
-
-  // Closed
-  closedBox: { backgroundColor: '#E8F5E9', borderRadius: 10, padding: 24, alignItems: 'center', gap: 6 },
-  closedTitle: { fontSize: 16, fontWeight: '700', color: '#2E7D32' },
-  closedDate: { fontSize: 12, color: '#666' },
-
-  // Staff info
   staffInfoBar: {
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: '#EEF6FB', borderRadius: 10,
@@ -524,22 +570,16 @@ const s = StyleSheet.create({
   staffAvatarInitial: { color: '#FFF', fontWeight: '700', fontSize: 16 },
   staffName: { fontSize: 15, fontWeight: '700' },
   staffRole: { fontSize: 12, marginTop: 2 },
-
-  // Not assigned
   notAssignedBox: {
     backgroundColor: '#FFF8E1', borderRadius: 10,
     padding: 24, alignItems: 'center', gap: 6,
   },
   notAssignedTitle: { fontSize: 16, fontWeight: '700', color: '#E65100' },
   notAssignedText: { fontSize: 13, color: '#666', textAlign: 'center' },
-
-  // Modal
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.92)', justifyContent: 'center', alignItems: 'center' },
   fullImage: { width: '95%', height: '70%' },
   closeHintRow: { flexDirection: 'row', alignItems: 'center', marginTop: 16 },
   closeHint: { color: 'rgba(255,255,255,0.6)', fontSize: 13 },
-
-    // Description editable
   descTitleRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',

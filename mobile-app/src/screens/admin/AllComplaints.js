@@ -23,15 +23,6 @@ const STATUS_COLORS = {
   CLOSED: '#4CAF50',
 };
 
-const SORT_OPTIONS = [
-  { key: 'ALL', label: 'All Complaints', icon: 'list-outline' },
-  { key: 'OPEN', label: 'Open', icon: 'alert-circle-outline' },
-  { key: 'ASSIGNED', label: 'Assigned', icon: 'person-outline' },
-  { key: 'IN_PROGRESS', label: 'In Progress', icon: 'time-outline' },
-  { key: 'STAFF_ON_LEAVE', label: 'Staff On Leave', icon: 'airplane-outline' },
-  { key: 'CLOSED', label: 'Closed', icon: 'checkmark-circle-outline' },
-];
-
 export default function AllComplaints({ navigation, route }) {
   const [complaints, setComplaints] = useState([]);
   const [filtered, setFiltered] = useState([]);
@@ -41,6 +32,16 @@ export default function AllComplaints({ navigation, route }) {
   const [showSortModal, setShowSortModal] = useState(false);
   const { colors } = useTheme();
   const { t } = useLanguage();
+
+  // Dynamic sort options using translations
+  const SORT_OPTIONS = [
+    { key: 'ALL', label: t('allComplaints'), icon: 'list-outline' },
+    { key: 'OPEN', label: t('open'), icon: 'alert-circle-outline' },
+    { key: 'ASSIGNED', label: t('assigned'), icon: 'person-outline' },
+    { key: 'IN_PROGRESS', label: t('inProgress'), icon: 'time-outline' },
+    { key: 'STAFF_ON_LEAVE', label: t('staffOnLeave'), icon: 'airplane-outline' },
+    { key: 'CLOSED', label: t('closed'), icon: 'checkmark-circle-outline' },
+  ];
 
   // Fetch on mount + focus
   useEffect(() => {
@@ -58,20 +59,16 @@ export default function AllComplaints({ navigation, route }) {
   useEffect(() => {
     if (route?.params?.initialFilter) {
       setActiveFilter(route.params.initialFilter);
-      // Clear the param immediately so it doesn't persist
       navigation.setParams({ initialFilter: undefined });
     }
   }, [route?.params?.initialFilter]);
 
   // Reset filter when Complaints tab is pressed directly
-  // AllComplaints is NESTED inside ComplaintsStack,
-  // so we need to listen on the PARENT (tab navigator)
   useEffect(() => {
     const parent = navigation.getParent();
     if (!parent) return;
 
     const unsubscribe = parent.addListener('tabPress', () => {
-      // Only reset if no incoming initialFilter
       if (!route?.params?.initialFilter) {
         setActiveFilter('ALL');
         setSearchQuery('');
@@ -109,7 +106,7 @@ export default function AllComplaints({ navigation, route }) {
   };
 
   const getActiveFilterLabel = () => {
-    return SORT_OPTIONS.find(o => o.key === activeFilter)?.label || 'All';
+    return SORT_OPTIONS.find(o => o.key === activeFilter)?.label || t('all');
   };
 
   const getFilterCount = (key) => {
@@ -118,13 +115,24 @@ export default function AllComplaints({ navigation, route }) {
     return complaints.filter(c => c.status === key).length;
   };
 
+  // Get translated status label
+  const getStatusLabel = (status) => {
+    const statusMap = {
+      'OPEN': t('open'),
+      'ASSIGNED': t('assigned'),
+      'IN_PROGRESS': t('inProgress'),
+      'CLOSED': t('closed'),
+    };
+    return statusMap[status] || status.replace('_', ' ');
+  };
+
   const fixedHeaderContent = (
     <View style={s.headerRow}>
       <View style={s.searchWrap}>
         <Ionicons name="search-outline" size={18} color={TEXT_MUT} style={{ marginRight: 8 }} />
         <TextInput
           style={s.searchInput}
-          placeholder="Search by Asset ID or description"
+          placeholder={t('searchComplaints')}
           placeholderTextColor={TEXT_MUT}
           value={searchQuery}
           onChangeText={setSearchQuery}
@@ -159,7 +167,7 @@ export default function AllComplaints({ navigation, route }) {
       {item.profiles?.is_on_leave && item.status !== 'CLOSED' && (
         <View style={s.leaveTag}>
           <Ionicons name="warning" size={10} color="#FFF" />
-          <Text style={s.leaveTagText}> Staff on Leave</Text>
+          <Text style={s.leaveTagText}> {t('staffOnLeaveTag')}</Text>
         </View>
       )}
 
@@ -168,7 +176,7 @@ export default function AllComplaints({ navigation, route }) {
         <View style={[s.statusPill, { backgroundColor: `${STATUS_COLORS[item.status]}20` }]}>
           <View style={[s.statusDot, { backgroundColor: STATUS_COLORS[item.status] }]} />
           <Text style={[s.statusText, { color: STATUS_COLORS[item.status] }]}>
-            {item.status.replace('_', ' ')}
+            {getStatusLabel(item.status)}
           </Text>
         </View>
       </View>
@@ -185,9 +193,9 @@ export default function AllComplaints({ navigation, route }) {
       {item.reporter && (
         <View style={s.reporterRow}>
           <Ionicons name="person-outline" size={13} color={TEXT_MUT} />
-          <Text style={s.reporterLabel}>  Reported by: </Text>
+          <Text style={s.reporterLabel}>  {t('reportedBy')} </Text>
           <Text style={s.reporterName}>
-            {item.reporter.full_name || item.reporter.email || 'Unknown'}
+            {item.reporter.full_name || item.reporter.email || t('unknown')}
           </Text>
         </View>
       )}
@@ -196,7 +204,7 @@ export default function AllComplaints({ navigation, route }) {
         item.profiles && (
           <View style={s.closedStaffRow}>
             <Ionicons name="person-outline" size={13} color={TEXT_MUT} />
-            <Text style={s.closedStaffLabel}>  Handled by: </Text>
+            <Text style={s.closedStaffLabel}>  {t('handledBy')} </Text>
             <Text style={s.closedStaffName}>
               {item.profiles.full_name || item.profiles.email}
             </Text>
@@ -214,7 +222,7 @@ export default function AllComplaints({ navigation, route }) {
             </View>
           )}
           <View style={{ flex: 1 }}>
-            <Text style={s.assignedLabel}>Assigned To:</Text>
+            <Text style={s.assignedLabel}>{t('assignedTo')}</Text>
             <Text style={s.assignedName}>
               {item.profiles.full_name || item.profiles.email}
             </Text>
@@ -224,7 +232,7 @@ export default function AllComplaints({ navigation, route }) {
       ) : (
         <View style={s.unassignedBar}>
           <Ionicons name="warning-outline" size={14} color="#E65100" />
-          <Text style={s.unassignedText}>  Not assigned yet</Text>
+          <Text style={s.unassignedText}>  {t('notAssigned')}</Text>
         </View>
       )}
 
@@ -232,7 +240,7 @@ export default function AllComplaints({ navigation, route }) {
         <View style={s.closedRow}>
           <Ionicons name="checkmark-done-circle" size={14} color={TEXT_MUT} />
           <Text style={s.closedDate}>
-            {' '}Resolved on: {new Date(item.closed_at).toLocaleDateString('en-GB', {
+            {' '}{t('resolvedOn')} {new Date(item.closed_at).toLocaleDateString('en-GB', {
               day: 'numeric', month: 'short', year: 'numeric',
             })}
           </Text>
@@ -249,7 +257,7 @@ export default function AllComplaints({ navigation, route }) {
           </Text>
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <Text style={s.tapHint}>Tap to view  </Text>
+          <Text style={s.tapHint}>{t('tapToView')}  </Text>
           <Ionicons name="chevron-forward" size={13} color={TEXT_MUT} />
         </View>
       </View>
@@ -258,7 +266,7 @@ export default function AllComplaints({ navigation, route }) {
 
   return (
     <ScreenLayout
-      title="Complaints"
+      title={t('complaints')}
       scroll={false}
       fixedHeader={fixedHeaderContent}
       showDecor
@@ -292,12 +300,12 @@ export default function AllComplaints({ navigation, route }) {
               />
             </TouchableOpacity>
           </View>
-          <Text style={s.countText}>{filtered.length} results</Text>
+          <Text style={s.countText}>{filtered.length} {t('results')}</Text>
         </View>
       )}
 
       {activeFilter === 'ALL' && (
-        <Text style={s.countTextAll}>Total complaints — {filtered.length}</Text>
+        <Text style={s.countTextAll}>{t('totalComplaintsCount')} {filtered.length}</Text>
       )}
 
       <FlatList
@@ -315,17 +323,17 @@ export default function AllComplaints({ navigation, route }) {
             <Ionicons name="mail-open-outline" size={50} color={TEXT_MUT} />
             <Text style={s.emptyTitle}>
               {activeFilter === 'ALL'
-                ? 'No Complaints Yet'
+                ? t('noComplaintsYet')
                 : activeFilter === 'STAFF_ON_LEAVE'
-                ? 'No Staff On Leave'
-                : `No ${activeFilter.replace('_', ' ')} Complaints`}
+                ? t('noStaffOnLeave')
+                : t('noComplaintsType')}
             </Text>
             <Text style={s.emptyText}>
               {activeFilter === 'ALL'
-                ? 'Complaints will appear here'
+                ? t('complaintsWillAppear')
                 : activeFilter === 'STAFF_ON_LEAVE'
-                ? 'No complaints have staff on leave'
-                : `Complaints with "${activeFilter.replace('_', ' ')}" status will appear here`}
+                ? t('noStaffLeaveComplaints')
+                : t('complaintsStatusAppear')}
             </Text>
           </View>
         }
@@ -344,7 +352,7 @@ export default function AllComplaints({ navigation, route }) {
         >
           <View style={s.sortModalContent}>
             <View style={s.sortModalHandle} />
-            <Text style={s.sortModalTitle}>Filter by Status</Text>
+            <Text style={s.sortModalTitle}>{t('filterByStatus')}</Text>
 
             {SORT_OPTIONS.map(option => (
               <TouchableOpacity
@@ -419,7 +427,7 @@ export default function AllComplaints({ navigation, route }) {
               style={s.sortCloseBtn}
               onPress={() => setShowSortModal(false)}
             >
-              <Text style={s.sortCloseBtnText}>Close</Text>
+              <Text style={s.sortCloseBtnText}>{t('close')}</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
@@ -428,6 +436,7 @@ export default function AllComplaints({ navigation, route }) {
   );
 }
 
+// Styles remain exactly the same
 const s = StyleSheet.create({
   headerRow: {
     flexDirection: 'row',

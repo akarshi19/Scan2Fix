@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { usersAPI, uploadAPI, authAPI } from '../../services/api';
 import { useTheme } from '../../context/ThemeContext';
+import { useLanguage } from '../../context/LanguageContext';
 import ScreenLayout from '../../components/ScreenLayout';
 
 const ACTIVE = '#5BA8D4';
@@ -14,14 +15,15 @@ const TEXT_PRI = '#1A1A2E';
 const TEXT_SEC = '#5A7A8A';
 const TEXT_MUT = '#9DB5C0';
 
-const ROLES = [
-  { key: 'USER', label: 'User', icon: 'person-outline', color: '#2196F3' },
-  { key: 'STAFF', label: 'Staff', icon: 'build-outline', color: '#5BA8D4' },
-  { key: 'ADMIN', label: 'Admin', icon: 'star-outline', color: '#9C27B0' },
-];
-
-function RoleDropdown({ selected, onSelect, colors }) {
+function RoleDropdown({ selected, onSelect, colors, t }) {
   const [visible, setVisible] = useState(false);
+  
+  const ROLES = [
+    { key: 'USER', label: t('user'), icon: 'person-outline', color: '#2196F3' },
+    { key: 'STAFF', label: t('staff'), icon: 'build-outline', color: '#5BA8D4' },
+    { key: 'ADMIN', label: t('admin'), icon: 'star-outline', color: '#9C27B0' },
+  ];
+  
   const selectedOption = ROLES.find(o => o.key === selected);
 
   return (
@@ -37,7 +39,7 @@ function RoleDropdown({ selected, onSelect, colors }) {
           </View>
         )}
         <Text style={[s.dropdownText, { color: colors.textPri }]}>
-          {selectedOption?.label || 'Select...'}
+          {selectedOption?.label || t('select')}
         </Text>
         <Ionicons name="chevron-down" size={18} color={colors.textMut} />
       </TouchableOpacity>
@@ -45,7 +47,7 @@ function RoleDropdown({ selected, onSelect, colors }) {
       <Modal visible={visible} transparent animationType="fade" onRequestClose={() => setVisible(false)}>
         <TouchableOpacity style={s.roleModalOverlay} activeOpacity={1} onPress={() => setVisible(false)}>
           <View style={[s.roleModalContent, { backgroundColor: colors.cardBg }]}>
-            <Text style={[s.roleModalTitle, { color: colors.textPri }]}>Select Role</Text>
+            <Text style={[s.roleModalTitle, { color: colors.textPri }]}>{t('selectRole')}</Text>
             {ROLES.map(option => (
               <TouchableOpacity
                 key={option.key}
@@ -81,6 +83,7 @@ function RoleDropdown({ selected, onSelect, colors }) {
 
 export default function AddUser({ navigation }) {
   const { colors } = useTheme();
+  const { t } = useLanguage();
   const [loading, setLoading] = useState(false);
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
@@ -95,7 +98,7 @@ export default function AddUser({ navigation }) {
   const [photoUri, setPhotoUri] = useState(null);
   const [uploadedPhotoUrl, setUploadedPhotoUrl] = useState('');
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
-  const [showPhotoOptions, setShowPhotoOptions] = useState(false); // ← Add this
+  const [showPhotoOptions, setShowPhotoOptions] = useState(false);
 
   // Email verification states
   const [showVerification, setShowVerification] = useState(false);
@@ -117,14 +120,13 @@ export default function AddUser({ navigation }) {
   }, []);
 
   const requestPermissions = async () => {
-    // Request both camera and library permissions
     const cameraPermission = await ImagePicker.requestCameraPermissionsAsync();
     const mediaPermission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     
     if (cameraPermission.status !== 'granted' || mediaPermission.status !== 'granted') {
       Alert.alert(
-        'Permissions Required',
-        'Camera and photo library access is needed to upload profile pictures.',
+        t('permissionsRequired'),
+        t('cameraPermissionMsg'),
       );
     }
   };
@@ -143,8 +145,14 @@ export default function AddUser({ navigation }) {
 
   const handleAddCustomDesignation = () => {
     const trimmed = customDesignation.trim().toUpperCase();
-    if (!trimmed) { Alert.alert('Error', 'Please enter a designation'); return; }
-    if (trimmed.length < 2) { Alert.alert('Error', 'Designation must be at least 2 characters'); return; }
+    if (!trimmed) { 
+      Alert.alert(t('error'), t('enterDesignation')); 
+      return; 
+    }
+    if (trimmed.length < 2) { 
+      Alert.alert(t('error'), t('designationMin')); 
+      return; 
+    }
     if (existingDesignations.includes(trimmed)) {
       setDesignation(trimmed);
       setCustomDesignation('');
@@ -159,7 +167,6 @@ export default function AddUser({ navigation }) {
     setShowDesignationModal(false);
   };
 
-  // Photo option selection handler
   const handlePhotoOptionPress = (option) => {
     setShowPhotoOptions(false);
     if (option === 'camera') {
@@ -169,7 +176,6 @@ export default function AddUser({ navigation }) {
     }
   };
 
-  // Take photo with camera
   const handleTakePhoto = async () => {
     try {
       const result = await ImagePicker.launchCameraAsync({
@@ -184,11 +190,10 @@ export default function AddUser({ navigation }) {
       }
     } catch (error) {
       console.error('Camera error:', error);
-      Alert.alert('Error', 'Failed to take photo');
+      Alert.alert(t('error'), t('photoUploadFailed'));
     }
   };
 
-  // Pick photo from gallery
   const handlePickPhoto = async () => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -204,7 +209,7 @@ export default function AddUser({ navigation }) {
       }
     } catch (error) {
       console.error('Photo picker error:', error);
-      Alert.alert('Error', 'Failed to pick photo');
+      Alert.alert(t('error'), t('photoUploadFailed'));
     }
   };
 
@@ -221,18 +226,17 @@ export default function AddUser({ navigation }) {
       const response = await uploadAPI.uploadPhoto(formData);
       if (response.data.success) {
         setUploadedPhotoUrl(response.data.data.url);
-        Alert.alert('Success', 'Photo uploaded successfully!');
+        Alert.alert(t('success'), t('photoUploaded'));
       }
     } catch (error) {
       console.error('Photo upload error:', error);
-      Alert.alert('Error', 'Failed to upload photo. Please try again.');
+      Alert.alert(t('error'), t('photoUploadFailed'));
       setPhotoUri(null);
     } finally {
       setUploadingPhoto(false);
     }
   };
 
-  // Auto-verify email
   const autoVerifyEmail = async (emailToVerify) => {
     try {
       const testPayload = {
@@ -254,11 +258,11 @@ export default function AddUser({ navigation }) {
         setNeedsManualVerification(true);
         setIsEmailVerified(false);
         Alert.alert(
-          'Email Verification Required',
-          'We could not verify this email domain automatically. Please verify the email by sending a verification code.',
+          t('emailVerificationRequired'),
+          t('cameraPermissionMsg'),
         );
       } else if (error.response?.data?.message?.includes('already registered')) {
-        Alert.alert('Email Already Exists', 'This email is already registered in the system.');
+        Alert.alert(t('error'), t('emailAlreadyExists'));
         setIsEmailVerified(false);
       } else {
         setIsEmailVerified(true);
@@ -276,7 +280,7 @@ export default function AddUser({ navigation }) {
 
   const handleSendVerificationCode = async () => {
     if (!fullName.trim()) {
-      Alert.alert('Error', 'Please enter the user\'s full name first');
+      Alert.alert(t('error'), t('enterFullName'));
       return;
     }
 
@@ -286,12 +290,12 @@ export default function AddUser({ navigation }) {
       if (response.data.success) {
         setShowVerification(true);
         Alert.alert(
-          'Code Sent! 📧',
-          'A 6-digit verification code has been sent to this email address.',
+          t('codeSent'),
+          t('codeSentMsg'),
         );
       }
     } catch (error) {
-      Alert.alert('Error', error.message || 'Failed to send verification code');
+      Alert.alert(t('error'), error.message || t('failedToSendCode'));
     } finally {
       setSendingCode(false);
     }
@@ -299,7 +303,7 @@ export default function AddUser({ navigation }) {
 
   const handleVerifyCode = async () => {
     if (!verificationCode || verificationCode.length !== 6) {
-      Alert.alert('Error', 'Please enter the 6-digit verification code');
+      Alert.alert(t('error'), t('enterVerificationCode'));
       return;
     }
 
@@ -310,60 +314,69 @@ export default function AddUser({ navigation }) {
         setIsEmailVerified(true);
         setNeedsManualVerification(false);
         setShowVerification(false);
-        Alert.alert('Success! ✅', 'Email verified successfully');
+        Alert.alert(t('success'), t('emailVerified'));
       }
     } catch (error) {
-      Alert.alert('Error', error.message || 'Failed to verify code');
+      Alert.alert(t('error'), error.message || t('verificationFailed'));
     } finally {
       setVerifyingCode(false);
     }
   };
 
   const validateForm = () => {
-    if (!fullName.trim()) { Alert.alert('Error', 'Please enter full name'); return false; }
+    if (!fullName.trim()) { 
+      Alert.alert(t('error'), t('enterFullName')); 
+      return false; 
+    }
     
-    if (!email.trim()) { Alert.alert('Error', 'Please enter email'); return false; }
+    if (!email.trim()) { 
+      Alert.alert(t('error'), t('enterEmail')); 
+      return false; 
+    }
     
     const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
     if (!emailRegex.test(email.trim())) { 
-      Alert.alert('Invalid Email', 'Please enter a valid email'); 
+      Alert.alert(t('invalidEmail'), t('enterValidEmail')); 
       return false; 
     }
 
     if (!isEmailVerified) {
       Alert.alert(
-        'Email Not Verified',
+        t('emailNotVerified'),
         needsManualVerification 
-          ? 'Please verify the email by sending and entering the verification code.'
-          : 'Please wait while we verify the email domain.',
+          ? t('cameraPermissionMsg')
+          : t('verifyEmailFirst'),
       );
       return false;
     }
 
     if (!password || password.length < 6) { 
-      Alert.alert('Error', 'Password must be at least 6 characters'); 
+      Alert.alert(t('error'), t('passwordMin')); 
       return false; 
     }
 
-    if (!phone.trim()) { Alert.alert('Error', 'Please enter phone number'); return false; }
+    if (!phone.trim()) { 
+      Alert.alert(t('error'), t('enterPhone')); 
+      return false; 
+    }
     
     const phoneDigits = phone.replace(/\D/g, '');
     if (phoneDigits.length !== 10) {
-      Alert.alert('Error', 'Phone number must be exactly 10 digits');
+      Alert.alert(t('error'), t('phoneMustBe10'));
       return false;
     }
     if (!/^[6-9]/.test(phoneDigits)) {
-      Alert.alert('Error', 'Indian phone numbers must start with 6, 7, 8, or 9');
+      Alert.alert(t('error'), t('invalidPhoneStart'));
       return false;
     }
 
     if (role === 'STAFF') {
       if (!employeeId.trim()) { 
-        Alert.alert('Error', 'Employee ID is required for staff'); 
+        Alert.alert(t('error'), t('employeeIdRequired')); 
         return false; 
       }
       if (!uploadedPhotoUrl) {
-        Alert.alert('Photo Required', 'Please upload a photo for the staff member');
+        Alert.alert(t('photoRequiredTitle'), t('photoRequired'));
         return false;
       }
     }
@@ -388,33 +401,33 @@ export default function AddUser({ navigation }) {
       });
 
       if (response.data.success) {
-        Alert.alert('User Created!', response.data.message, [
-          { text: 'OK', onPress: () => navigation.goBack() },
+        Alert.alert(t('userCreated'), response.data.message, [
+          { text: t('ok'), onPress: () => navigation.goBack() },
         ]);
       }
     } catch (error) {
-      Alert.alert('Error', error.message || 'Failed to create user');
+      Alert.alert(t('error'), error.message || t('failedToCreateUser'));
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <ScreenLayout title="Add User" showBack>
+    <ScreenLayout title={t('addUser')} showBack>
       {/* Role */}
       <View style={[s.card, { backgroundColor: colors.cardBg }]}>
-        <Text style={[s.cardTitle, { color: colors.textPri }]}>Select Role</Text>
-        <RoleDropdown selected={role} onSelect={setRole} colors={colors} />
+        <Text style={[s.cardTitle, { color: colors.textPri }]}>{t('selectRole')}</Text>
+        <RoleDropdown selected={role} onSelect={setRole} colors={colors} t={t} />
       </View>
 
       {/* Photo Upload */}
       <View style={[s.card, { backgroundColor: colors.cardBg }]}>
         <View style={s.photoHeader}>
           <Text style={[s.cardTitle, { color: colors.textPri }]}>
-            Photo {role === 'STAFF' && <Text style={{ color: '#F44336' }}>*</Text>}
+            {t('photo')} {role === 'STAFF' && <Text style={{ color: '#F44336' }}>*</Text>}
           </Text>
           {role === 'STAFF' && (
-            <Text style={s.requiredBadge}>Required for Staff</Text>
+            <Text style={s.requiredBadge}>{t('requiredForStaff')}</Text>
           )}
         </View>
 
@@ -425,7 +438,7 @@ export default function AddUser({ navigation }) {
               {uploadingPhoto && (
                 <View style={s.uploadingOverlay}>
                   <ActivityIndicator size="large" color="#fff" />
-                  <Text style={s.uploadingText}>Uploading...</Text>
+                  <Text style={s.uploadingText}>{t('uploading')}</Text>
                 </View>
               )}
               <TouchableOpacity
@@ -441,15 +454,15 @@ export default function AddUser({ navigation }) {
           ) : (
             <TouchableOpacity
               style={[s.photoPlaceholder, { borderColor: colors.inputBorder }]}
-              onPress={() => setShowPhotoOptions(true)} // ← Changed to show options modal
+              onPress={() => setShowPhotoOptions(true)}
               activeOpacity={0.7}
             >
               <Ionicons name="camera-outline" size={40} color={colors.textMut} />
               <Text style={[s.photoPlaceholderText, { color: colors.textMut }]}>
-                Tap to add photo
+                {t('tapToAddPhoto')}
               </Text>
               <Text style={[s.photoPlaceholderSubtext, { color: colors.textMut }]}>
-                Camera or Gallery
+                {t('cameraOrGallery')}
               </Text>
             </TouchableOpacity>
           )}
@@ -458,13 +471,13 @@ export default function AddUser({ navigation }) {
 
       {/* Basic Info */}
       <View style={[s.card, { backgroundColor: colors.cardBg }]}>
-        <Text style={[s.cardTitle, { color: colors.textPri }]}>Basic Information</Text>
+        <Text style={[s.cardTitle, { color: colors.textPri }]}>{t('basicInformation')}</Text>
 
         <View style={[s.inputWrap, { backgroundColor: colors.inputBg, borderColor: colors.inputBorder }]}>
           <Ionicons name="person-outline" size={18} color={colors.textMut} style={{ marginRight: 10 }} />
           <TextInput 
             style={[s.input, { color: colors.textPri }]} 
-            placeholder="Full Name *" 
+            placeholder={t('fullNameLabel')} 
             placeholderTextColor={colors.textMut} 
             value={fullName} 
             onChangeText={setFullName} 
@@ -475,7 +488,7 @@ export default function AddUser({ navigation }) {
           <Ionicons name="mail-outline" size={18} color={colors.textMut} style={{ marginRight: 10 }} />
           <TextInput 
             style={[s.input, { color: colors.textPri }]} 
-            placeholder="Email *" 
+            placeholder={t('emailLabel')} 
             placeholderTextColor={colors.textMut} 
             value={email} 
             onChangeText={setEmail} 
@@ -491,7 +504,7 @@ export default function AddUser({ navigation }) {
         {/* Manual verification if needed */}
         {needsManualVerification && !isEmailVerified && (
           <View style={s.verificationBox}>
-            <Text style={s.verificationTitle}>Email Verification Required</Text>
+            <Text style={s.verificationTitle}>{t('emailVerificationRequired')}</Text>
             {!showVerification ? (
               <TouchableOpacity
                 style={[s.verifyButton, sendingCode && s.verifyButtonDisabled]}
@@ -501,12 +514,12 @@ export default function AddUser({ navigation }) {
                 {sendingCode ? (
                   <>
                     <ActivityIndicator size="small" color="#fff" />
-                    <Text style={s.verifyButtonText}>  Sending...</Text>
+                    <Text style={s.verifyButtonText}>  {t('sending')}</Text>
                   </>
                 ) : (
                   <>
                     <Ionicons name="mail-outline" size={16} color="#fff" />
-                    <Text style={s.verifyButtonText}>  Send Verification Code</Text>
+                    <Text style={s.verifyButtonText}>  {t('sendVerificationCode')}</Text>
                   </>
                 )}
               </TouchableOpacity>
@@ -516,7 +529,7 @@ export default function AddUser({ navigation }) {
                   <Ionicons name="key-outline" size={18} color="#2196F3" style={{ marginRight: 10 }} />
                   <TextInput
                     style={[s.input, { color: colors.textPri }]}
-                    placeholder="6-digit code"
+                    placeholder={t('enterCode')}
                     placeholderTextColor={colors.textMut}
                     value={verificationCode}
                     onChangeText={(text) => {
@@ -535,12 +548,12 @@ export default function AddUser({ navigation }) {
                   {verifyingCode ? (
                     <>
                       <ActivityIndicator size="small" color="#fff" />
-                      <Text style={s.verifyCodeButtonText}>  Verifying...</Text>
+                      <Text style={s.verifyCodeButtonText}>  {t('verifying')}</Text>
                     </>
                   ) : (
                     <>
                       <Ionicons name="shield-checkmark-outline" size={16} color="#fff" />
-                      <Text style={s.verifyCodeButtonText}>  Verify Code</Text>
+                      <Text style={s.verifyCodeButtonText}>  {t('verifyCode')}</Text>
                     </>
                   )}
                 </TouchableOpacity>
@@ -553,7 +566,7 @@ export default function AddUser({ navigation }) {
           <Ionicons name="lock-closed-outline" size={18} color={colors.textMut} style={{ marginRight: 10 }} />
           <TextInput 
             style={[s.input, { color: colors.textPri }]} 
-            placeholder="Password * (min 6 chars)" 
+            placeholder={t('password')} 
             placeholderTextColor={colors.textMut} 
             value={password} 
             onChangeText={setPassword} 
@@ -576,7 +589,7 @@ export default function AddUser({ navigation }) {
               fontSize: 11, fontWeight: '500',
               color: password.length < 6 ? '#ef4444' : (!/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) ? '#f59e0b' : '#22c55e',
             }}>
-              {password.length < 6 ? 'Too short' : (!/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) ? 'Add letter + number' : 'Strong ✓'}
+              {password.length < 6 ? t('tooShort') : (!/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) ? t('addLetterNumber') : t('strong')}
             </Text>
           </View>
         )}
@@ -585,7 +598,7 @@ export default function AddUser({ navigation }) {
           <Ionicons name="call-outline" size={18} color={colors.textMut} style={{ marginRight: 10 }} />
           <TextInput 
             style={[s.input, { color: colors.textPri }]} 
-            placeholder="Phone Number * (10 digits)" 
+            placeholder={t('phoneNumber')} 
             placeholderTextColor={colors.textMut} 
             value={phone} 
             onChangeText={(text) => {
@@ -606,31 +619,30 @@ export default function AddUser({ navigation }) {
         </View>
 
         {phone.length > 0 && phone.length < 10 && (
-          <Text style={s.phoneHint}>{phone.length}/10 digits</Text>
+          <Text style={s.phoneHint}>{phone.length}/10 {t('digitsCount')}</Text>
         )}
         {phone.length === 10 && !/^[6-9]/.test(phone) && (
-          <Text style={s.phoneError}>Must start with 6, 7, 8, or 9</Text>
+          <Text style={s.phoneError}>{t('invalidPhoneStart')}</Text>
         )}
       </View>
 
       {/* Staff Details */}
       {role === 'STAFF' && (
         <View style={[s.card, { backgroundColor: colors.cardBg }]}>
-          <Text style={[s.cardTitle, { color: colors.textPri }]}>Staff Details</Text>
+          <Text style={[s.cardTitle, { color: colors.textPri }]}>{t('staffDetails')}</Text>
 
           <View style={[s.inputWrap, { backgroundColor: colors.inputBg, borderColor: colors.inputBorder }]}>
             <Ionicons name="card-outline" size={18} color={colors.textMut} style={{ marginRight: 10 }} />
             <TextInput 
               style={[s.input, { color: colors.textPri }]} 
-              placeholder="Employee ID * (e.g., EMP001)" 
+              placeholder={t('employeeIdInput')} 
               placeholderTextColor={colors.textMut} 
               value={employeeId} 
               onChangeText={setEmployeeId} 
             />
           </View>
 
-          {/* Designation Picker */}
-          <Text style={[s.fieldLabel, { color: colors.textSec }]}>Designation</Text>
+          <Text style={[s.fieldLabel, { color: colors.textSec }]}>{t('designationLabel')}</Text>
           <TouchableOpacity
             style={[s.desigSelector, { backgroundColor: colors.inputBg, borderColor: colors.inputBorder }]}
             onPress={() => setShowDesignationModal(true)}
@@ -638,7 +650,7 @@ export default function AddUser({ navigation }) {
           >
             <Ionicons name="briefcase-outline" size={18} color={designation ? ACTIVE : colors.textMut} />
             <Text style={[s.desigSelectorText, { color: designation ? colors.textPri : colors.textMut }]}>
-              {designation || 'Select designation...'}
+              {designation || t('selectDesignation')}
             </Text>
             <Ionicons name="chevron-down" size={16} color={colors.textMut} />
           </TouchableOpacity>
@@ -655,13 +667,13 @@ export default function AddUser({ navigation }) {
         {loading ? (
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             <ActivityIndicator size="small" color="#fff" />
-            <Text style={s.submitBtnText}>  Creating...</Text>
+            <Text style={s.submitBtnText}>  {t('creating')}</Text>
           </View>
         ) : (
           <>
             <Ionicons name="person-add-outline" size={20} color="#fff" />
             <Text style={s.submitBtnText}>
-              Create {role === 'STAFF' ? 'Staff Member' : role === 'ADMIN' ? 'Admin' : 'User'}
+              {role === 'STAFF' ? t('createStaff') : role === 'ADMIN' ? t('createAdmin') : t('createUser')}
             </Text>
           </>
         )}
@@ -689,7 +701,7 @@ export default function AddUser({ navigation }) {
         >
           <View style={s.desigModalContent} onStartShouldSetResponder={() => true}>
             <View style={s.desigModalHandle} />
-            <Text style={s.desigModalTitle}>Select Designation</Text>
+            <Text style={s.desigModalTitle}>{t('selectDesignationTitle')}</Text>
 
             <TouchableOpacity
               style={[s.desigOption, !designation && s.desigOptionActive]}
@@ -699,7 +711,7 @@ export default function AddUser({ navigation }) {
                 <Ionicons name="remove-circle-outline" size={18} color={TEXT_MUT} />
               </View>
               <Text style={[s.desigOptionLabel, !designation && { fontWeight: '700', color: ACTIVE }]}>
-                No Designation
+                {t('noDesignation')}
               </Text>
               {!designation && <Ionicons name="checkmark-circle" size={20} color={ACTIVE} />}
             </TouchableOpacity>
@@ -738,23 +750,23 @@ export default function AddUser({ navigation }) {
                 <View style={[s.addDesigIcon, { backgroundColor: '#E8F5E9' }]}>
                   <Ionicons name="add" size={20} color="#4CAF50" />
                 </View>
-                <Text style={s.addDesigText}>Add New Designation</Text>
+                <Text style={s.addDesigText}>{t('addNewDesignation')}</Text>
               </TouchableOpacity>
             ) : (
               <View style={s.customDesigWrap}>
-                <Text style={s.customDesigLabel}>New Designation</Text>
+                <Text style={s.customDesigLabel}>{t('newDesignation')}</Text>
                 <TextInput
                   style={s.customDesigInput}
                   value={customDesignation}
                   onChangeText={setCustomDesignation}
-                  placeholder="e.g., TECHNICIAN, SUPERVISOR..."
+                  placeholder={t('designationPlaceholder')}
                   placeholderTextColor={TEXT_MUT}
                   autoCapitalize="characters"
                   autoFocus
                 />
                 {customDesignation.trim() && (
                   <Text style={s.customDesigPreview}>
-                    Will be saved as: {customDesignation.trim().toUpperCase()}
+                    {t('willBeSavedAs')} {customDesignation.trim().toUpperCase()}
                   </Text>
                 )}
                 <View style={s.customDesigActions}>
@@ -762,7 +774,7 @@ export default function AddUser({ navigation }) {
                     style={s.customDesigCancelBtn}
                     onPress={() => { setIsAddingCustomDesignation(false); setCustomDesignation(''); }}
                   >
-                    <Text style={s.customDesigCancelText}>Cancel</Text>
+                    <Text style={s.customDesigCancelText}>{t('cancel')}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[s.customDesigAddBtn, !customDesignation.trim() && s.customDesigAddBtnDisabled]}
@@ -770,7 +782,7 @@ export default function AddUser({ navigation }) {
                     disabled={!customDesignation.trim()}
                   >
                     <Ionicons name="checkmark" size={16} color="#FFF" />
-                    <Text style={s.customDesigAddText}> Add & Select</Text>
+                    <Text style={s.customDesigAddText}> {t('addAndSelect')}</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -780,15 +792,13 @@ export default function AddUser({ navigation }) {
               style={s.desigCloseBtn}
               onPress={() => { setShowDesignationModal(false); setIsAddingCustomDesignation(false); setCustomDesignation(''); }}
             >
-              <Text style={s.desigCloseBtnText}>Close</Text>
+              <Text style={s.desigCloseBtnText}>{t('close')}</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
       </Modal>
 
-      {/* ═══════════════════════════════════════════ */}
-      {/* Photo Options Modal (Camera or Gallery)      */}
-      {/* ═══════════════════════════════════════════ */}
+      {/* Photo Options Modal */}
       <Modal
         visible={showPhotoOptions}
         transparent
@@ -801,7 +811,7 @@ export default function AddUser({ navigation }) {
           onPress={() => setShowPhotoOptions(false)}
         >
           <View style={s.photoOptionsContent} onStartShouldSetResponder={() => true}>
-            <Text style={s.photoModalTitle}>Choose Photo Source</Text>
+            <Text style={s.photoModalTitle}>{t('choosePhotoSource')}</Text>
             
             <TouchableOpacity
               style={s.photoOptionBtn}
@@ -812,8 +822,8 @@ export default function AddUser({ navigation }) {
                 <Ionicons name="camera-outline" size={28} color="#2196F3" />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={s.photoOptionLabel}>Take Photo</Text>
-                <Text style={s.photoOptionDesc}>Use camera to take a new photo</Text>
+                <Text style={s.photoOptionLabel}>{t('takePhoto')}</Text>
+                <Text style={s.photoOptionDesc}>{t('useCamera')}</Text>
               </View>
               <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
             </TouchableOpacity>
@@ -827,8 +837,8 @@ export default function AddUser({ navigation }) {
                 <Ionicons name="images-outline" size={28} color="#9C27B0" />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={s.photoOptionLabel}>Choose from Gallery</Text>
-                <Text style={s.photoOptionDesc}>Select from your photo library</Text>
+                <Text style={s.photoOptionLabel}>{t('chooseFromGallery')}</Text>
+                <Text style={s.photoOptionDesc}>{t('selectFromLibrary')}</Text>
               </View>
               <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
             </TouchableOpacity>
@@ -837,7 +847,7 @@ export default function AddUser({ navigation }) {
               style={s.photoCancelBtn}
               onPress={() => setShowPhotoOptions(false)}
             >
-              <Text style={s.photoCancelText}>Cancel</Text>
+              <Text style={s.photoCancelText}>{t('cancel')}</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
@@ -846,7 +856,9 @@ export default function AddUser({ navigation }) {
   );
 }
 
+// Styles remain exactly the same as before
 const s = StyleSheet.create({
+  // ... (keep all your existing styles unchanged)
   card: { 
     borderRadius: 16, padding: 18, marginBottom: 14, 
     shadowColor: '#A0BDD0', shadowOffset: { width: 0, height: 3 }, 
@@ -859,8 +871,6 @@ const s = StyleSheet.create({
     paddingHorizontal: 14, marginBottom: 12, borderWidth: 1 
   },
   input: { flex: 1, fontSize: 14, paddingVertical: 12 },
-
-  // Photo section
   photoHeader: { 
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', 
     marginBottom: 12 
@@ -890,8 +900,6 @@ const s = StyleSheet.create({
     backgroundColor: '#fff', borderRadius: 16, shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4, elevation: 5,
   },
-
-  // Photo Options Modal
   photoModalOverlay: {
     flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center',
     alignItems: 'center', padding: 20,
@@ -920,8 +928,6 @@ const s = StyleSheet.create({
     backgroundColor: '#f4f4f5', alignItems: 'center',
   },
   photoCancelText: { fontSize: 15, fontWeight: '600', color: '#6b7280' },
-
-  // Email verification
   verificationBox: {
     backgroundColor: '#E3F2FD', borderRadius: 10, padding: 12,
     marginBottom: 12, borderWidth: 1, borderColor: '#2196F3',
@@ -941,16 +947,12 @@ const s = StyleSheet.create({
   },
   verifyCodeButtonDisabled: { backgroundColor: '#A5D6A7' },
   verifyCodeButtonText: { color: '#fff', fontSize: 13, fontWeight: '600' },
-
-  // Phone hints
   phoneHint: { 
     fontSize: 11, color: '#FF9800', marginTop: -8, marginBottom: 10, marginLeft: 4 
   },
   phoneError: { 
     fontSize: 11, color: '#F44336', marginTop: -8, marginBottom: 10, marginLeft: 4 
   },
-
-  // Password strength
   strengthRow: { 
     flexDirection: 'row', alignItems: 'center', marginTop: -6, marginBottom: 12, 
     paddingHorizontal: 4 
@@ -960,8 +962,6 @@ const s = StyleSheet.create({
     marginRight: 8, overflow: 'hidden' 
   },
   strengthFill: { height: '100%', borderRadius: 2 },
-
-  // Role dropdown
   dropdown: { 
     flexDirection: 'row', alignItems: 'center', borderRadius: 10, 
     paddingHorizontal: 14, paddingVertical: 6, borderWidth: 1, marginBottom: 12 
@@ -990,15 +990,11 @@ const s = StyleSheet.create({
     justifyContent: 'center', marginRight: 12 
   },
   roleOptionText: { flex: 1, fontSize: 15 },
-
-  // Designation selector
   desigSelector: { 
     flexDirection: 'row', alignItems: 'center', borderRadius: 10, 
     paddingHorizontal: 14, paddingVertical: 13, borderWidth: 1, marginBottom: 12, gap: 10 
   },
   desigSelectorText: { flex: 1, fontSize: 14 },
-
-  // Designation modal
   desigModalOverlay: { 
     flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' 
   },
@@ -1022,7 +1018,6 @@ const s = StyleSheet.create({
     justifyContent: 'center' 
   },
   desigOptionLabel: { flex: 1, fontSize: 15, fontWeight: '500', color: TEXT_PRI },
-
   addDesigBtn: { 
     flexDirection: 'row', alignItems: 'center', paddingVertical: 14, 
     paddingHorizontal: 12, borderRadius: 12, gap: 12 
@@ -1032,7 +1027,6 @@ const s = StyleSheet.create({
     justifyContent: 'center' 
   },
   addDesigText: { fontSize: 15, fontWeight: '600', color: '#4CAF50' },
-
   customDesigWrap: { marginBottom: 8 },
   customDesigLabel: { fontSize: 12, fontWeight: '600', color: TEXT_SEC, marginBottom: 8 },
   customDesigInput: { 
@@ -1052,13 +1046,11 @@ const s = StyleSheet.create({
   },
   customDesigAddBtnDisabled: { backgroundColor: '#A5D6A7' },
   customDesigAddText: { color: '#FFF', fontWeight: '700', fontSize: 13 },
-
   desigCloseBtn: { 
     marginTop: 12, paddingVertical: 14, borderRadius: 12, 
     backgroundColor: '#F2F6F8', alignItems: 'center' 
   },
   desigCloseBtnText: { fontSize: 15, fontWeight: '600', color: TEXT_SEC },
-
   submitBtn: { 
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, 
     backgroundColor: '#5BA8D4', borderRadius: 12, paddingVertical: 16, marginTop: 10, 

@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { Ionicons, FontAwesome, AntDesign } from '@expo/vector-icons';
 import { usersAPI, getFileUrl } from '../../services/api';
+import { useLanguage } from '../../context/LanguageContext';
 import ScreenLayout from '../../components/ScreenLayout';
 import ConfirmDialog from '../../components/ConfirmDialog';
 
@@ -51,6 +52,7 @@ function Field({ label, value, onChangeText, placeholder, keyboardType, editable
 
 export default function UserDetail({ route, navigation }) {
   const { user: userParam } = route.params;
+  const { t } = useLanguage();
   const [user, setUser] = useState(userParam);
   const [loading, setLoading] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -97,11 +99,11 @@ export default function UserDetail({ route, navigation }) {
   const handleAddCustomDesignation = () => {
     const trimmed = customDesignation.trim().toUpperCase();
     if (!trimmed) {
-      Alert.alert('Error', 'Please enter a designation');
+      Alert.alert(t('error'), t('enterDesignation'));
       return;
     }
     if (trimmed.length < 2) {
-      Alert.alert('Error', 'Designation must be at least 2 characters');
+      Alert.alert(t('error'), t('designationMin'));
       return;
     }
     if (existingDesignations.includes(trimmed)) {
@@ -126,10 +128,10 @@ export default function UserDetail({ route, navigation }) {
         const updatedUser = { ...user, is_on_leave: !user.is_on_leave };
         setUser(updatedUser);
         navigation.setParams({ user: updatedUser });
-        Alert.alert('Success', r.data.message);
+        Alert.alert(t('success'), r.data.message);
       }
     } catch (e) {
-      Alert.alert('Error', e.message);
+      Alert.alert(t('error'), e.message);
     } finally {
       setLoading(false);
     }
@@ -137,7 +139,7 @@ export default function UserDetail({ route, navigation }) {
 
   const handleSave = async () => {
     if (!fullName.trim()) {
-      Alert.alert('Error', 'Full name is required');
+      Alert.alert(t('error'), t('fullNameRequired'));
       return;
     }
     setLoading(true);
@@ -159,10 +161,10 @@ export default function UserDetail({ route, navigation }) {
         setUser(updatedUser);
         navigation.setParams({ user: updatedUser });
         setEditing(false);
-        Alert.alert('Success', 'User details updated');
+        Alert.alert(t('success'), t('userUpdated'));
       }
     } catch (e) {
-      Alert.alert('Error', e.message);
+      Alert.alert(t('error'), e.message || t('userUpdateFailed'));
     } finally {
       setLoading(false);
     }
@@ -182,18 +184,18 @@ export default function UserDetail({ route, navigation }) {
       const response = await usersAPI.deleteUser(user.id);
       if (response.data.success) {
         Alert.alert(
-          'User Deleted',
+          t('success'),
           response.data.message,
           [
             {
-              text: 'OK',
+              text: t('ok'),
               onPress: () => navigation.goBack()
             }
           ]
         );
       }
     } catch (error) {
-      Alert.alert('Error', error.message || 'Failed to delete user');
+      Alert.alert(t('error'), error.message || t('deleteFailed'));
     } finally {
       setDeleting(false);
       setShowDeleteDialog(false);
@@ -205,7 +207,7 @@ export default function UserDetail({ route, navigation }) {
   const canDeleteUser = !isMasterAdmin;
 
   return (
-    <ScreenLayout title="User Details" showBack showDecor padBottom={0}>
+    <ScreenLayout title={t('userDetails')} showBack showDecor padBottom={0}>
       <ScrollView
         style={s.scroll}
         contentContainerStyle={s.scrollContent}
@@ -220,7 +222,7 @@ export default function UserDetail({ route, navigation }) {
               <Text style={s.avatarInitial}>{user.full_name?.charAt(0) ?? '?'}</Text>
             </View>
           )}
-          <Text style={s.heroName}>{user.full_name || 'No Name'}</Text>
+          <Text style={s.heroName}>{user.full_name || t('noName')}</Text>
           <Text style={s.heroEmail}>{user.email}</Text>
           <View style={[s.rolePill, { backgroundColor: roleStyle.bg }]}>
             <Ionicons
@@ -233,7 +235,7 @@ export default function UserDetail({ route, navigation }) {
           {user.is_on_leave && (
             <View style={s.leaveBadge}>
               <Ionicons name="home-outline" size={13} color="#FFF" />
-              <Text style={s.leaveBadgeText}>  Currently On Leave</Text>
+              <Text style={s.leaveBadgeText}>  {t('currentlyOnLeave')}</Text>
             </View>
           )}
         </View>
@@ -241,7 +243,7 @@ export default function UserDetail({ route, navigation }) {
         {/* Details card */}
         <View style={s.card}>
           <View style={s.cardTitleRow}>
-            <Text style={s.cardTitle}>User Details</Text>
+            <Text style={s.cardTitle}>{t('userDetails')}</Text>
             <TouchableOpacity
               style={[s.editIconBtn, editing && s.editIconBtnActive]}
               onPress={() => editing ? handleCancelEdit() : setEditing(true)}
@@ -255,17 +257,17 @@ export default function UserDetail({ route, navigation }) {
 
           {!editing ? (
             <>
-              <DetailRow iconName="mail-outline" label="Email:" value={user.email} />
-              <DetailRow iconName="call-outline" label="Phone:" value={user.phone || 'Not provided'} />
+              <DetailRow iconName="mail-outline" label={t('email')} value={user.email} />
+              <DetailRow iconName="call-outline" label={t('phone')} value={user.phone || t('notProvided')} />
               {user.role === 'STAFF' && (
                 <>
-                  <DetailRow iconName="card-outline" label="Employee ID:" value={user.employee_id || 'Not provided'} />
-                  <DetailRow iconName="briefcase-outline" label="Designation:" value={user.designation || 'Not set'} />
+                  <DetailRow iconName="card-outline" label={t('employeeId')} value={user.employee_id || t('notProvided')} />
+                  <DetailRow iconName="briefcase-outline" label={t('designation')} value={user.designation || t('notSet')} />
                 </>
               )}
               <DetailRow
                 iconName="calendar-outline"
-                label="Joined On:"
+                label={t('joinedOn')}
                 value={new Date(user.created_at).toLocaleDateString('en-GB', {
                   day: 'numeric', month: 'short', year: 'numeric',
                 })}
@@ -274,15 +276,31 @@ export default function UserDetail({ route, navigation }) {
             </>
           ) : (
             <>
-              <Field label="Full Name" value={fullName} onChangeText={setFullName} placeholder="Enter full name" />
-              <Field label="Phone" value={phone} onChangeText={setPhone} placeholder="Enter phone" keyboardType="phone-pad" />
+              <Field 
+                label={t('fullName')} 
+                value={fullName} 
+                onChangeText={setFullName} 
+                placeholder={t('enterFullName')} 
+              />
+              <Field 
+                label={t('phone')} 
+                value={phone} 
+                onChangeText={setPhone} 
+                placeholder={t('enterPhone')} 
+                keyboardType="phone-pad" 
+              />
               {user.role === 'STAFF' && (
                 <>
-                  <Field label="Employee ID" value={employeeId} onChangeText={setEmployeeId} placeholder="e.g. EMP-001" />
+                  <Field 
+                    label={t('employeeId')} 
+                    value={employeeId} 
+                    onChangeText={setEmployeeId} 
+                    placeholder="e.g. EMP-001" 
+                  />
 
                   {/* Designation Picker */}
                   <View style={s.fieldWrap}>
-                    <Text style={s.fieldLabel}>Designation</Text>
+                    <Text style={s.fieldLabel}>{t('designation')}</Text>
                     <TouchableOpacity
                       style={s.designationSelector}
                       onPress={() => setShowDesignationModal(true)}
@@ -297,7 +315,7 @@ export default function UserDetail({ route, navigation }) {
                         s.designationSelectorText,
                         { color: designation ? TEXT_PRI : TEXT_MUT },
                       ]}>
-                        {designation || 'Select designation...'}
+                        {designation || t('selectDesignation')}
                       </Text>
                       <Ionicons name="chevron-down" size={16} color={TEXT_MUT} />
                     </TouchableOpacity>
@@ -307,7 +325,7 @@ export default function UserDetail({ route, navigation }) {
 
               <View style={s.editActions}>
                 <TouchableOpacity style={s.cancelBtn} onPress={handleCancelEdit}>
-                  <Text style={s.cancelBtnText}>Cancel</Text>
+                  <Text style={s.cancelBtnText}>{t('cancel')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[s.saveBtn, loading && s.saveBtnDisabled]}
@@ -316,7 +334,9 @@ export default function UserDetail({ route, navigation }) {
                   activeOpacity={0.85}
                 >
                   <Ionicons name="checkmark-outline" size={17} color="#FFF" />
-                  <Text style={s.saveBtnText}>{loading ? 'Saving…' : 'Save Changes'}</Text>
+                  <Text style={s.saveBtnText}>
+                    {loading ? t('saving') : t('saveChanges')}
+                  </Text>
                 </TouchableOpacity>
               </View>
             </>
@@ -326,7 +346,7 @@ export default function UserDetail({ route, navigation }) {
         {/* Staff actions */}
         {user.role === 'STAFF' && (
           <View style={s.card}>
-            <Text style={s.cardTitle}>Staff Actions</Text>
+            <Text style={s.cardTitle}>{t('staffActions')}</Text>
             <TouchableOpacity
               style={[s.leaveBtn, user.is_on_leave ? s.leaveBtnAvail : s.leaveBtnLeave]}
               onPress={toggleLeaveStatus}
@@ -342,26 +362,31 @@ export default function UserDetail({ route, navigation }) {
                 s.leaveBtnText,
                 user.is_on_leave ? s.leaveBtnTextAvail : s.leaveBtnTextLeave,
               ]}>
-                {loading ? 'Updating…' : user.is_on_leave ? '  Mark as Available' : '  Mark as On Leave'}
+                {loading 
+                  ? t('updating') 
+                  : user.is_on_leave 
+                    ? `  ${t('markAsAvailable')}` 
+                    : `  ${t('markAsOnLeave')}`
+                }
               </Text>
             </TouchableOpacity>
           </View>
         )}
 
-        {/* Delete User Section - Only show if user can be deleted */}
+        {/* Delete User Section */}
         {canDeleteUser && (
           <View style={s.card}>
-            <Text style={s.cardTitle}>Danger Zone</Text>
+            <Text style={s.cardTitle}>{t('dangerZone')}</Text>
             <TouchableOpacity
               style={s.deleteUserBtn}
               onPress={() => setShowDeleteDialog(true)}
               activeOpacity={0.85}
             >
               <Ionicons name="trash-outline" size={18} color="#E53935" />
-              <Text style={s.deleteUserBtnText}>Delete User Account</Text>
+              <Text style={s.deleteUserBtnText}>{t('deleteUser')}</Text>
             </TouchableOpacity>
             <Text style={s.deleteWarning}>
-              This will permanently delete this user and all associated data
+              {t('deleteWarning')}
             </Text>
           </View>
         )}
@@ -371,18 +396,17 @@ export default function UserDetail({ route, navigation }) {
           <View style={s.masterAdminNotice}>
             <Ionicons name="shield-checkmark" size={20} color="#4CAF50" />
             <Text style={s.masterAdminText}>
-              Master Admin account is protected and cannot be deleted
+              {t('masterAdminProtected')}
             </Text>
           </View>
         )}
 
-        {/* Add at the end, before </ScreenLayout> */}
         <ConfirmDialog
           visible={showDeleteDialog}
-          title="Delete User?"
-          message={`Are you sure you want to delete ${user.full_name || user.email}?\n\nThis action cannot be undone.`}
-          confirmText={deleting ? 'Deleting...' : 'Delete Forever'}
-          cancelText="Cancel"
+          title={t('deleteUserTitle')}
+          message={`${t('deleteUserConfirm')}\n\n${user.full_name || user.email}`}
+          confirmText={deleting ? t('deleting') : t('deleteForever')}
+          cancelText={t('cancel')}
           type="danger"
           onConfirm={handleDeleteUser}
           onCancel={() => setShowDeleteDialog(false)}
@@ -390,6 +414,7 @@ export default function UserDetail({ route, navigation }) {
 
         <View style={{ height: 120 }} />
       </ScrollView>
+
       {/* Designation Selection Modal */}
       <Modal
         visible={showDesignationModal}
@@ -415,7 +440,7 @@ export default function UserDetail({ route, navigation }) {
             onStartShouldSetResponder={() => true}
           >
             <View style={s.modalHandle} />
-            <Text style={s.modalTitle}>Select Designation</Text>
+            <Text style={s.modalTitle}>{t('selectDesignationTitle')}</Text>
 
             {/* None option */}
             <TouchableOpacity
@@ -430,7 +455,7 @@ export default function UserDetail({ route, navigation }) {
                 <Ionicons name="remove-circle-outline" size={18} color={TEXT_MUT} />
               </View>
               <Text style={[s.desigOptionLabel, !designation && { fontWeight: '700', color: ACTIVE }]}>
-                No Designation
+                {t('noDesignation')}
               </Text>
               {!designation && (
                 <Ionicons name="checkmark-circle" size={20} color={ACTIVE} />
@@ -490,23 +515,23 @@ export default function UserDetail({ route, navigation }) {
                 <View style={[s.addDesigIcon, { backgroundColor: '#E8F5E9' }]}>
                   <Ionicons name="add" size={20} color="#4CAF50" />
                 </View>
-                <Text style={s.addDesigText}>Add New Designation</Text>
+                <Text style={s.addDesigText}>{t('addNewDesignation')}</Text>
               </TouchableOpacity>
             ) : (
               <View style={s.customDesigWrap}>
-                <Text style={s.customDesigLabel}>New Designation</Text>
+                <Text style={s.customDesigLabel}>{t('newDesignation')}</Text>
                 <TextInput
                   style={s.customDesigInput}
                   value={customDesignation}
                   onChangeText={setCustomDesignation}
-                  placeholder="e.g., TECHNICIAN, SUPERVISOR..."
+                  placeholder={t('designationPlaceholder')}
                   placeholderTextColor={TEXT_MUT}
                   autoCapitalize="characters"
                   autoFocus
                 />
                 {customDesignation.trim() && (
                   <Text style={s.customDesigPreview}>
-                    Will be saved as: {customDesignation.trim().toUpperCase()}
+                    {t('willBeSavedAs')} {customDesignation.trim().toUpperCase()}
                   </Text>
                 )}
                 <View style={s.customDesigActions}>
@@ -517,7 +542,7 @@ export default function UserDetail({ route, navigation }) {
                       setCustomDesignation('');
                     }}
                   >
-                    <Text style={s.customDesigCancelText}>Cancel</Text>
+                    <Text style={s.customDesigCancelText}>{t('cancel')}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[
@@ -529,7 +554,7 @@ export default function UserDetail({ route, navigation }) {
                     activeOpacity={0.85}
                   >
                     <Ionicons name="checkmark" size={16} color="#FFF" />
-                    <Text style={s.customDesigAddText}> Add & Select</Text>
+                    <Text style={s.customDesigAddText}> {t('addAndSelect')}</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -544,7 +569,7 @@ export default function UserDetail({ route, navigation }) {
                 setCustomDesignation('');
               }}
             >
-              <Text style={s.modalCloseBtnText}>Close</Text>
+              <Text style={s.modalCloseBtnText}>{t('close')}</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
@@ -553,11 +578,11 @@ export default function UserDetail({ route, navigation }) {
   );
 }
 
+// Styles remain exactly the same
 const s = StyleSheet.create({
+  // ... (all your existing styles remain unchanged)
   scroll: { flex: 1 },
   scrollContent: { paddingBottom: 20 },
-
-  // Hero
   hero: { alignItems: 'center', paddingVertical: 24, marginBottom: 16 },
   avatar: {
     width: AVATAR_SIZE, height: AVATAR_SIZE, borderRadius: AVATAR_SIZE / 2,
@@ -578,8 +603,6 @@ const s = StyleSheet.create({
     paddingVertical: 6, marginTop: 10, flexDirection: 'row', alignItems: 'center',
   },
   leaveBadgeText: { color: '#FFF', fontWeight: '700', fontSize: 12 },
-
-  // Card
   card: {
     backgroundColor: CARD_BG, borderRadius: 16, padding: 18, marginBottom: 14,
     shadowColor: '#A0BDD0', shadowOffset: { width: 0, height: 3 },
@@ -595,15 +618,11 @@ const s = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   editIconBtnActive: { backgroundColor: '#FDECEA' },
-
-  // Detail rows
   detailRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12 },
   detailRowBorder: { borderBottomWidth: 1, borderBottomColor: '#EEF4F8' },
   detailIcon: { marginRight: 12 },
   detailLabel: { width: 100, fontSize: 13, color: TEXT_MUT, fontWeight: '500' },
   detailValue: { flex: 1, fontSize: 14, color: TEXT_PRI, fontWeight: '600' },
-
-  // Fields
   fieldWrap: { marginBottom: 12 },
   fieldLabel: { fontSize: 12, fontWeight: '600', color: TEXT_SEC, marginBottom: 5 },
   fieldInput: {
@@ -612,16 +631,12 @@ const s = StyleSheet.create({
     borderWidth: 1, borderColor: `${SKY}60`,
   },
   fieldInputDisabled: { backgroundColor: '#F5F8FA', color: TEXT_MUT, borderColor: '#E0EBF0' },
-
-  // Designation selector
   designationSelector: {
     flexDirection: 'row', alignItems: 'center', backgroundColor: '#EEF6FB',
     borderRadius: 10, paddingHorizontal: 14, paddingVertical: 13,
     borderWidth: 1, borderColor: `${SKY}60`, gap: 10,
   },
   designationSelectorText: { flex: 1, fontSize: 14 },
-
-  // Edit actions
   editActions: { flexDirection: 'row', gap: 10, marginTop: 6 },
   saveBtn: {
     flex: 2, backgroundColor: ACTIVE, borderRadius: 10, paddingVertical: 13,
@@ -631,16 +646,12 @@ const s = StyleSheet.create({
   saveBtnText: { color: '#FFF', fontWeight: '700', fontSize: 14 },
   cancelBtn: { flex: 1, backgroundColor: '#EEF4F8', borderRadius: 10, paddingVertical: 13, alignItems: 'center' },
   cancelBtnText: { color: TEXT_SEC, fontWeight: '600', fontSize: 14 },
-
-  // Leave button
   leaveBtn: { borderRadius: 10, paddingVertical: 14, alignItems: 'center', marginTop: 8, flexDirection: 'row', justifyContent: 'center' },
   leaveBtnLeave: { backgroundColor: '#FFF3E0' },
   leaveBtnAvail: { backgroundColor: '#E8F5E9' },
   leaveBtnText: { fontSize: 14, fontWeight: '700' },
   leaveBtnTextLeave: { color: '#E65100' },
   leaveBtnTextAvail: { color: '#2E7D32' },
-
-  // Designation Modal
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
   modalContent: {
     backgroundColor: '#FFF', borderTopLeftRadius: 24, borderTopRightRadius: 24,
@@ -649,7 +660,6 @@ const s = StyleSheet.create({
   modalHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: '#DDD', alignSelf: 'center', marginBottom: 16 },
   modalTitle: { fontSize: 18, fontWeight: '800', color: TEXT_PRI, marginBottom: 16 },
   modalDivider: { height: 1, backgroundColor: '#EEF4F8', marginVertical: 12 },
-
   desigList: { maxHeight: 220 },
   desigOption: {
     flexDirection: 'row', alignItems: 'center', paddingVertical: 14,
@@ -658,12 +668,9 @@ const s = StyleSheet.create({
   desigOptionActive: { backgroundColor: '#F0F8FF' },
   desigOptionIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   desigOptionLabel: { flex: 1, fontSize: 15, fontWeight: '500', color: TEXT_PRI },
-
-  // Add custom designation
   addDesigBtn: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 12, borderRadius: 12, gap: 12 },
   addDesigIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   addDesigText: { fontSize: 15, fontWeight: '600', color: '#4CAF50' },
-
   customDesigWrap: { marginBottom: 8 },
   customDesigLabel: { fontSize: 12, fontWeight: '600', color: TEXT_SEC, marginBottom: 8 },
   customDesigInput: {
@@ -680,10 +687,8 @@ const s = StyleSheet.create({
   },
   customDesigAddBtnDisabled: { backgroundColor: '#A5D6A7' },
   customDesigAddText: { color: '#FFF', fontWeight: '700', fontSize: 13 },
-
   modalCloseBtn: { marginTop: 12, paddingVertical: 14, borderRadius: 12, backgroundColor: '#F2F6F8', alignItems: 'center' },
   modalCloseBtnText: { fontSize: 15, fontWeight: '600', color: TEXT_SEC },
-
   deleteUserBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     backgroundColor: '#FFEBEE', borderRadius: 10, paddingVertical: 14,

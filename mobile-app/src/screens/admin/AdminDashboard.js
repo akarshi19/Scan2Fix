@@ -200,7 +200,7 @@ export default function AdminDashboard({ navigation }) {
 
   return (
     <ScreenLayout
-      title={`${t('welcome')}, ${user?.full_name || 'Admin'}!`}
+      title={`${t('welcome')}, ${user?.full_name || t('admin')}!`}
       refreshing={loading}
       onRefresh={fetchData}
       showDecor
@@ -261,7 +261,9 @@ export default function AdminDashboard({ navigation }) {
           activeOpacity={0.85}
         >
           <Ionicons name="notifications-outline" size={22} color="#fff" />
-          <Text style={s.actionBtnText}>{stats.open} {t('needAssignment')}</Text>
+          <Text style={s.actionBtnText}>
+            {stats.open} {t('needAssignment')}
+          </Text>
         </TouchableOpacity>
       </View>
 
@@ -276,7 +278,9 @@ export default function AdminDashboard({ navigation }) {
         {recentComplaints.length === 0 ? (
           <View style={{ alignItems: 'center', padding: 30 }}>
             <Ionicons name="document-text-outline" size={40} color={TEXT_MUT} />
-            <Text style={{ color: TEXT_MUT, marginTop: 10 }}>{t('noComplaints')}</Text>
+            <Text style={{ color: TEXT_MUT, marginTop: 10 }}>
+              {t('noComplaints')}
+            </Text>
           </View>
         ) : (
           recentComplaints.map((item, idx) => (

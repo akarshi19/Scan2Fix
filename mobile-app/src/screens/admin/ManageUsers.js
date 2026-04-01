@@ -6,6 +6,7 @@ import {
 import { Ionicons, FontAwesome } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { usersAPI, getFileUrl } from '../../services/api';
+import { useLanguage } from '../../context/LanguageContext';
 import ScreenLayout from '../../components/ScreenLayout';
 
 const ACTIVE = '#5BA8D4';
@@ -24,6 +25,7 @@ const ROLE_ICONS = {
 
 export default function ManageUsers({ route }) {
   const navigation = useNavigation();
+  const { t } = useLanguage();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -66,11 +68,11 @@ export default function ManageUsers({ route }) {
   // ════════════════════════════════════════
   const buildFilterOptions = () => {
     const baseOptions = [
-      { key: 'ALL', label: 'All Users', icon: 'people-outline', color: ACTIVE },
-      { key: 'ADMIN', label: 'Admins', icon: 'star-outline', color: '#FF9800' },
-      { key: 'STAFF', label: 'All Staff', icon: 'build-outline', color: '#2196F3' },
-      { key: 'STAFF_ON_DUTY', label: 'Staff On Duty', icon: 'checkmark-circle-outline', color: '#4CAF50' },
-      { key: 'ON_LEAVE', label: 'On Leave', icon: 'airplane-outline', color: '#F44336' },
+      { key: 'ALL', label: t('allUsers'), icon: 'people-outline', color: ACTIVE },
+      { key: 'ADMIN', label: t('admins'), icon: 'star-outline', color: '#FF9800' },
+      { key: 'STAFF', label: t('allStaff'), icon: 'build-outline', color: '#2196F3' },
+      { key: 'STAFF_ON_DUTY', label: t('staffOnDuty'), icon: 'checkmark-circle-outline', color: '#4CAF50' },
+      { key: 'ON_LEAVE', label: t('onLeaveStatus'), icon: 'airplane-outline', color: '#F44336' },
     ];
 
     // Get unique designations from staff users
@@ -89,7 +91,7 @@ export default function ManageUsers({ route }) {
       isDesignation: true,
     }));
 
-    const userOption = { key: 'USER', label: 'Users', icon: 'person-outline', color: '#9C27B0' };
+    const userOption = { key: 'USER', label: t('users'), icon: 'person-outline', color: '#9C27B0' };
 
     return [...baseOptions, ...designationOptions, userOption];
   };
@@ -131,7 +133,7 @@ export default function ManageUsers({ route }) {
   };
 
   const getActiveFilterLabel = () => {
-    return filterOptions.find(o => o.key === filterRole)?.label || 'All';
+    return filterOptions.find(o => o.key === filterRole)?.label || t('all');
   };
 
   const getActiveFilterColor = () => {
@@ -141,12 +143,12 @@ export default function ManageUsers({ route }) {
   const toggleAvailability = async (userId, currentStatus, userName) => {
     const newStatus = !currentStatus;
     Alert.alert(
-      newStatus ? '🏖️ Mark On Leave' : '✅ Mark Available',
-      `Mark ${userName} as ${newStatus ? 'On Leave' : 'Available'}?`,
+      newStatus ? t('markOnLeaveTitle') : t('markAvailableTitle'),
+      t('markStatusMessage').replace('user', userName).replace('status', newStatus ? t('onLeaveStatus') : t('available')),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('cancel'), style: 'cancel' },
         {
-          text: 'Confirm',
+          text: t('confirm'),
           onPress: async () => {
             try {
               const r = await usersAPI.toggleLeave(userId);
@@ -154,10 +156,13 @@ export default function ManageUsers({ route }) {
                 setUsers(prev => prev.map(u =>
                   u.id === userId ? { ...u, is_on_leave: newStatus } : u
                 ));
-                Alert.alert('Success', `${userName} is now ${newStatus ? 'On Leave' : 'Available'}`);
+                Alert.alert(
+                  t('success'), 
+                  `${userName} ${t('userNowStatus')} ${newStatus ? t('onLeaveStatus') : t('available')}`
+                );
               }
             } catch (e) {
-              Alert.alert('Error', e.message);
+              Alert.alert(t('error'), e.message);
             }
           },
         },
@@ -175,7 +180,7 @@ export default function ManageUsers({ route }) {
         <Ionicons name="search-outline" size={18} color={TEXT_MUT} style={{ marginRight: 8 }} />
         <TextInput
           style={s.searchInput}
-          placeholder="Search by name, email or ID..."
+          placeholder={t('searchUsers')}
           placeholderTextColor={TEXT_MUT}
           value={searchQuery}
           onChangeText={setSearchQuery}
@@ -218,17 +223,17 @@ export default function ManageUsers({ route }) {
           )}
           <View style={{ flex: 1 }}>
             <View style={s.nameRow}>
-              <Text style={s.userName}>{item.full_name || 'No Name'}</Text>
+              <Text style={s.userName}>{item.full_name || t('noName')}</Text>
               {item.is_on_leave && (
                 <View style={s.leavePill}>
                   <Ionicons name="home-outline" size={10} color="#FFF" />
-                  <Text style={s.leavePillText}> On Leave</Text>
+                  <Text style={s.leavePillText}> {t('onLeave')}</Text>
                 </View>
               )}
               {item.role === 'STAFF' && !item.is_on_leave && (
                 <View style={s.onDutyPill}>
                   <Ionicons name="checkmark-circle" size={10} color="#FFF" />
-                  <Text style={s.onDutyPillText}> On Duty</Text>
+                  <Text style={s.onDutyPillText}> {t('onDuty')}</Text>
                 </View>
               )}
             </View>
@@ -256,7 +261,7 @@ export default function ManageUsers({ route }) {
               s.actionBtnText,
               item.is_on_leave ? s.actionBtnTextAvail : s.actionBtnTextLeave,
             ]}>
-              {item.is_on_leave ? '  Mark Available' : '  Mark On Leave'}
+              {item.is_on_leave ? `  ${t('markAvailable')}` : `  ${t('markOnLeave')}`}
             </Text>
           </TouchableOpacity>
         )}
@@ -274,7 +279,7 @@ export default function ManageUsers({ route }) {
 
   return (
     <ScreenLayout
-      title="Manage Users"
+      title={t('manageUsers')}
       scroll={false}
       fixedHeader={fixedHeaderContent}
       showDecor
@@ -295,13 +300,13 @@ export default function ManageUsers({ route }) {
               <Ionicons name="close-circle" size={16} color={getActiveFilterColor()} />
             </TouchableOpacity>
           </View>
-          <Text style={s.countText}>{filtered.length} results</Text>
+          <Text style={s.countText}>{filtered.length} {t('results')}</Text>
         </View>
       )}
 
       {filterRole === 'ALL' && (
         <View style={s.statsBar}>
-          <Text style={s.countTextAll}>{filtered.length} users</Text>
+          <Text style={s.countTextAll}>{filtered.length} {t('usersCount')}</Text>
           <View style={{ flexDirection: 'row', gap: 8 }}>
             <View style={[s.statPill, { backgroundColor: '#E8F5E9' }]}>
               <Ionicons name="checkmark-circle-outline" size={12} color="#4CAF50" />
@@ -326,13 +331,13 @@ export default function ManageUsers({ route }) {
           <View style={s.empty}>
             <Ionicons name="people-outline" size={50} color={TEXT_MUT} />
             <Text style={s.emptyTitle}>
-              {filterRole === 'ALL' ? 'No Users Found'
-                : filterRole === 'ON_LEAVE' ? 'No Staff On Leave'
-                : filterRole === 'STAFF_ON_DUTY' ? 'No Staff On Duty'
-                : filterRole.startsWith('DESIG_') ? `No ${filterRole.replace('DESIG_', '')} Staff`
-                : `No ${filterRole} Users`}
+              {filterRole === 'ALL' ? t('noUsersFound')
+                : filterRole === 'ON_LEAVE' ? t('noStaffOnDuty')
+                : filterRole === 'STAFF_ON_DUTY' ? t('noStaffOnDuty')
+                : filterRole.startsWith('DESIG_') ? `${t('noUsersRole')} ${filterRole.replace('DESIG_', '')}`
+                : `${t('noUsersRole')} ${filterRole}`}
             </Text>
-            <Text style={s.emptyText}>Try a different filter</Text>
+            <Text style={s.emptyText}>{t('tryDifferentFilter')}</Text>
           </View>
         }
       />
@@ -353,7 +358,7 @@ export default function ManageUsers({ route }) {
         >
           <View style={s.modalContent} onStartShouldSetResponder={() => true}>
             <View style={s.modalHandle} />
-            <Text style={s.modalTitle}>Filter Users</Text>
+            <Text style={s.modalTitle}>{t('filterUsers')}</Text>
 
             <FlatList
               data={filterOptions}
@@ -365,7 +370,7 @@ export default function ManageUsers({ route }) {
                   {isFirstDesignation(index) && (
                     <View style={s.sectionHeader}>
                       <View style={s.sectionDivider} />
-                      <Text style={s.sectionHeaderText}>By Designation</Text>
+                      <Text style={s.sectionHeaderText}>{t('byDesignation')}</Text>
                     </View>
                   )}
                   <TouchableOpacity
@@ -417,7 +422,7 @@ export default function ManageUsers({ route }) {
               style={s.modalCloseBtn}
               onPress={() => setShowFilterModal(false)}
             >
-              <Text style={s.modalCloseBtnText}>Close</Text>
+              <Text style={s.modalCloseBtnText}>{t('close')}</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
@@ -426,6 +431,7 @@ export default function ManageUsers({ route }) {
   );
 }
 
+// Styles remain exactly the same
 const s = StyleSheet.create({
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   searchWrap: {
@@ -440,7 +446,6 @@ const s = StyleSheet.create({
     justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)',
   },
   filterButtonActive: { backgroundColor: ACTIVE, borderColor: ACTIVE },
-
   activeFilterRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     marginBottom: 10, marginTop: 4,
@@ -452,7 +457,6 @@ const s = StyleSheet.create({
   activeFilterDot: { width: 7, height: 7, borderRadius: 4 },
   activeFilterText: { fontSize: 12, fontWeight: '700' },
   countText: { fontSize: 12, color: TEXT_MUT },
-
   statsBar: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     marginBottom: 10, marginTop: 4,
@@ -463,8 +467,6 @@ const s = StyleSheet.create({
     paddingVertical: 4, borderRadius: 12,
   },
   statPillText: { fontSize: 11, fontWeight: '600' },
-
-  // Modal
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
   modalContent: {
     backgroundColor: '#FFF', borderTopLeftRadius: 24, borderTopRightRadius: 24,
@@ -472,15 +474,12 @@ const s = StyleSheet.create({
   },
   modalHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: '#DDD', alignSelf: 'center', marginBottom: 16 },
   modalTitle: { fontSize: 18, fontWeight: '800', color: TEXT_PRI, marginBottom: 16 },
-
-  // Section header for designations
   sectionHeader: { paddingHorizontal: 4, paddingTop: 8, paddingBottom: 6 },
   sectionDivider: { height: 1, backgroundColor: '#EEF4F8', marginBottom: 10 },
   sectionHeaderText: {
     fontSize: 11, fontWeight: '700', color: TEXT_MUT,
     textTransform: 'uppercase', letterSpacing: 1,
   },
-
   filterOption: {
     flexDirection: 'row', alignItems: 'center', paddingVertical: 14,
     paddingHorizontal: 12, borderRadius: 12, marginBottom: 4, gap: 12,
@@ -492,8 +491,6 @@ const s = StyleSheet.create({
   filterOptionCountText: { fontSize: 12, fontWeight: '700' },
   modalCloseBtn: { marginTop: 12, paddingVertical: 14, borderRadius: 12, backgroundColor: '#F2F6F8', alignItems: 'center' },
   modalCloseBtnText: { fontSize: 15, fontWeight: '600', color: TEXT_SEC },
-
-  // Cards
   card: {
     backgroundColor: CARD_BG, borderRadius: 14, marginBottom: 12, overflow: 'hidden',
     shadowColor: '#A0BDD0', shadowOffset: { width: 0, height: 3 },
@@ -532,7 +529,6 @@ const s = StyleSheet.create({
   actionBtnText: { fontSize: 13, fontWeight: '600' },
   actionBtnTextLeave: { color: '#E65100' },
   actionBtnTextAvail: { color: '#2E7D32' },
-
   empty: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40, gap: 12 },
   emptyTitle: { fontSize: 16, fontWeight: '700', color: TEXT_SEC },
   emptyText: { color: TEXT_MUT, fontSize: 13, textAlign: 'center' },

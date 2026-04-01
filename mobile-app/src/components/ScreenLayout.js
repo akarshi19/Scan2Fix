@@ -66,7 +66,7 @@ export default function ScreenLayout({
         ]}>
           {showBack && (
             <BackButton
-              color={showDecor ? '#000' : colors.textPri}
+              color={showDecor ? '#000' : colors.navBg}
               style={s.backBtn}
             />
           )}
