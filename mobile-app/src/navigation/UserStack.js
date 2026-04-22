@@ -8,7 +8,6 @@ import UserDashboard from '../screens/user/UserDashboard';
 import ScanQR from '../screens/user/ScanQR';
 import LodgeComplaint from '../screens/user/LodgeComplaint';
 import MyComplaints from '../screens/user/MyComplaints';
-import VerifyOTPScreen from '../screens/user/VerifyOTPScreen';
 import ProfileScreen from '../screens/shared/ProfileScreen';
 import ComplaintDetail from '../screens/admin/ComplaintDetail';
 
@@ -29,7 +28,22 @@ function HomeStack() {
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="UserHome" component={UserDashboard} />
       <Stack.Screen name="ScanQR" component={ScanQR} />
-      <Stack.Screen name="LodgeComplaint" component={LodgeComplaint} />
+      <Stack.Screen 
+        name="LodgeComplaint" 
+        component={LodgeComplaint}
+        options={{
+          // Allow deep link parameter to pass through
+          deepLink: true,
+        }}
+      />
+      <Stack.Screen 
+        name="complaint" 
+        component={LodgeComplaint}
+        options={{
+          // This handles deep links like scan2fix://complaint/ASSET-ID
+          deepLink: true,
+        }}
+      />
       <Stack.Screen name="ProfileScreen" component={ProfileScreen} />
     </Stack.Navigator>
   );

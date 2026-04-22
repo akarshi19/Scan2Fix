@@ -12,6 +12,7 @@ const rateLimit = require('express-rate-limit');
 const path = require('path');
 const connectDB = require('./config/db');
 
+
 // Load environment variables
 dotenv.config();
 
@@ -25,8 +26,23 @@ const app = express();
 // MIDDLEWARE
 // ============================================
 
-// Security headers
-app.use(helmet());
+// Disable HTTPS enforcement for local development
+app.use((req, res, next) => {
+  // Remove all HTTPS-forcing headers
+  res.removeHeader('Strict-Transport-Security');
+  res.removeHeader('Content-Security-Policy');
+  // Allow HTTP requests
+  res.setHeader('Content-Security-Policy-Report-Only', "upgrade-insecure-requests 'none'");
+  next();
+});
+
+// Security headers - DISABLE for local HTTP development
+app.use(helmet({
+  hsts: false,
+  frameguard: false,
+  contentSecurityPolicy: false,
+  referrerPolicy: false,
+}));
 
 // CORS — allow mobile app and web admin to connect
 app.use(cors({
@@ -65,6 +81,9 @@ if (process.env.NODE_ENV === 'development') {
   app.use(morgan('dev'));
 }
 
+// Serve public files (web form, etc.)
+app.use('/public', express.static(path.join(__dirname, 'public')));
+
 // Serve uploaded files as static
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
@@ -85,9 +104,6 @@ app.use('/api/auth', authLimiter, require('./routes/authRoutes'));
 // Social auth routes
 app.use('/api/auth', authLimiter, require('./routes/socialAuthRoutes'));
 
-// Asset routes
-app.use('/api/assets', require('./routes/assetRoutes'));
-
 // Complaint routes
 app.use('/api/complaints', require('./routes/complaintRoutes'));
 
@@ -97,11 +113,26 @@ app.use('/api/users', require('./routes/userRoutes'));
 // Report routes
 app.use('/api/reports', require('./routes/reportRoutes'));
 
-// Upload routes 
+// Upload routes
 app.use('/api/upload', require('./routes/uploadRoutes'));
 
 // OAuth callback (for Google/Microsoft redirect)
 app.use('/auth', require('./routes/oauthCallbackRoutes'));
+
+// ============================================
+// WEB FORM ROUTES
+// ============================================
+
+// Serve complaint form
+// Access via: /complaint?assetId=ASSET-ID or /complaint?qrId=ASSET-ID
+app.get('/complaint', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'complaint-form.html'));
+});
+
+// Alternative route for web app scanning
+app.get('/scan2fix/complaint/:assetId', (req, res) => {
+  res.redirect(`/complaint?assetId=${req.params.assetId}`);
+});
 
 // ============================================
 // ERROR HANDLING

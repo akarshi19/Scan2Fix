@@ -162,7 +162,8 @@ export const authAPI = {
 // ════════════════════════════════════════
 
 export const complaintsAPI = {
-  // Create complaint (LodgeComplaint.js)
+  // Create complaint from app (LodgeComplaint.js)
+  // data: { station, area, location, asset_type, description, photo_url, contact_name, contact_phone }
   create: (data) =>
     api.post('/complaints', data),
 
@@ -201,37 +202,12 @@ export const complaintsAPI = {
   //update
   updateDescription: (complaintId, description) =>
     api.put(`/complaints/${complaintId}/description`, { description }),
+
+  // Close with written acknowledgement photo (no-email complaints)
+  closeWithAck: (complaintId, ackPhotoUrl) =>
+    api.post(`/complaints/${complaintId}/close-with-ack`, { ack_photo_url: ackPhotoUrl }),
 };
 
-// ════════════════════════════════════════
-// ASSETS API
-// ════════════════════════════════════════
-
-export const assetsAPI = {
-  // QR lookup (ScanQR.js)
-  getByQR: (assetId) =>
-    api.get(`/assets/qr/${assetId}`),
-
-  // Get all assets — admin
-  getAll: (params) =>
-    api.get('/assets', { params }),
-
-    // Get asset types — admin
-  getTypes: () =>
-    api.get('/assets/types'),
-
-  // Create asset — admin
-  create: (data) =>
-    api.post('/assets', data),
-
-  // Update asset — admin
-  update: (id, data) =>
-    api.put(`/assets/${id}`, data),
-
-    // Toggle active/inactive — admin
-  toggleActive: (id) =>
-    api.put(`/assets/${id}/toggle-active`),
-};
 
 // USERS API
 export const usersAPI = {
@@ -321,19 +297,13 @@ export const uploadAPI = {
 };
 
 // REPORTS API
-// New server-side reports (admin only)
 export const reportsAPI = {
-  overview: () =>
-    api.get('/reports/overview'),
-
-  monthly: (year) =>
-    api.get('/reports/monthly', { params: { year } }),
-
-  yearly: () =>
-    api.get('/reports/yearly'),
-
-  staff: () =>
-    api.get('/reports/staff'),
+  overview: ()      => api.get('/reports/overview'),
+  weekly:   ()      => api.get('/reports/weekly'),
+  monthly:  (year)  => api.get('/reports/monthly', { params: { year } }),
+  yearly:   ()      => api.get('/reports/yearly'),
+  staff:    ()      => api.get('/reports/staff'),
+  staffMe:  ()      => api.get('/reports/staff/me'),
 };
 
 // ════════════════════════════════════════
@@ -347,15 +317,16 @@ export const reportsAPI = {
 //   photo_url is a relative path like: /uploads/complaints/abc.jpg
 //   We need to prepend the server base URL
 // ════════════════════════════════════════
+// Server root URL (without /api suffix)
+export const SERVER_URL = API_URL.replace('/api', '');
+
 export const getFileUrl = (relativePath) => {
   if (!relativePath) return null;
 
   // If it's already a full URL, return as-is
   if (relativePath.startsWith('http')) return relativePath;
 
-  // Remove /api from the base URL to get server root
-  const serverRoot = API_URL.replace('/api', '');
-  return `${serverRoot}${relativePath}`;
+  return `${SERVER_URL}${relativePath}`;
 };
 
 // Export the axios instance as default

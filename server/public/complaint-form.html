@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Report an Issue | Scan2Fix</title>
+  <link rel="stylesheet" href="/public/complaint-form.css" />
+  <style>
+    .field-hint { font-size: 12px; color: #888; margin-top: 7px; margin-bottom: 12px; }
+    .char-count { font-size: 12px; color: #888; margin-top: 7px; margin-bottom: 12px; }
+    .char-ok { color: #22543d; }
+
+    /* Station pre-fill badge */
+    .station-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.35);
+      color: #fff; border-radius: 6px; padding: 6px 12px;
+      font-weight: 600; font-size: 13px; margin-top: 10px;
+    }
+
+    /* Select styling */
+    select {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 14px;
+      font-family: inherit;
+      background: #fff;
+      color: #333;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23888' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+      cursor: pointer;
+      transition: border-color 0.3s, box-shadow 0.3s;
+    }
+    select:focus {
+      outline: none;
+      border-color: #7dd3fc;
+      box-shadow: 0 0 0 3px rgba(125,211,252,0.1);
+    }
+
+    /* Photo upload */
+    .photo-upload-area {
+      border: 2px dashed #c8dde8; border-radius: 10px; padding: 20px;
+      text-align: center; cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      background: #f9fafb; margin-bottom: 6px;
+    }
+    .photo-upload-area:hover { border-color: #004e68; background: #f0f8ff; }
+    .photo-upload-area.has-photo { border-style: solid; border-color: #004e68; padding: 10px; }
+    .photo-upload-icon { font-size: 28px; margin-bottom: 6px; }
+    .photo-upload-label { font-size: 13px; color: #555; }
+    .photo-upload-sub { font-size: 11px; color: #999; margin-top: 3px; }
+    .photo-preview { width: 100%; max-height: 200px; object-fit: cover; border-radius: 8px; display: block; }
+    .photo-remove-btn {
+      display: inline-flex; align-items: center; gap: 4px;
+      margin-top: 8px; font-size: 12px; color: #c53030;
+      background: none; border: none; cursor: pointer; padding: 0;
+    }
+    .uploading-badge { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: #004e68; margin-top: 6px; }
+    .upload-spinner {
+      width: 14px; height: 14px;
+      border: 2px solid #cce5f0; border-top-color: #004e68;
+      border-radius: 50%; animation: spin 0.7s linear infinite; display: inline-block;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #photo-input { display: none; }
+    .optional-tag { font-size: 11px; color: #999; font-weight: 400; margin-left: 5px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🔧 Scan2Fix</h1>
+      <p>Maintenance Issue Report</p>
+      <div id="station-header" style="display:none; margin-top:10px;">
+        <div class="station-badge">📍 <span id="station-header-text"></span></div>
+      </div>
+    </div>
+
+    <div class="content">
+
+      <form id="complaint-form" novalidate>
+        <div class="info-box">
+          <strong>How it works</strong>
+          Fill in your details and describe the issue. A maintenance staff member will be assigned and you'll be contacted once the work is done.
+        </div>
+
+        <!-- ── Your Information ── -->
+        <div class="form-section">
+          <h2>Your Information</h2>
+          <div class="form-group">
+            <label for="name">Full Name <span class="required">*</span></label>
+            <input type="text" id="name" placeholder="Enter your full name" autocomplete="name" />
+          </div>
+          <div class="form-group">
+            <label for="phone">Contact Number <span class="required">*</span></label>
+            <input type="tel" id="phone" placeholder="10-digit mobile number" maxlength="10" inputmode="numeric" />
+          </div>
+          <div class="form-group">
+            <label for="email">Email Address <span class="optional-tag">(optional)</span></label>
+            <input type="email" id="email" placeholder="you@gmail.com" autocomplete="email" inputmode="email" />
+            <p class="field-hint">If provided, an OTP will be sent here when the work is completed. Without email, the staff will obtain a written acknowledgement.</p>
+          </div>
+        </div>
+
+        <!-- ── Issue Location ── -->
+        <div class="form-section">
+          <h2>Issue Location</h2>
+          <div class="form-group">
+            <label for="station">Station / Site <span class="required">*</span></label>
+            <input type="text" id="station" placeholder="e.g. Central Depot, Gate 3, Block A" autocomplete="off" />
+          </div>
+          <div class="form-group">
+            <label for="area">Area <span class="required">*</span></label>
+            <input type="text" id="area" placeholder="e.g. Main Building, Workshop, Canteen" autocomplete="off" />
+          </div>
+          <div class="form-group">
+            <label for="reported-location">Exact Location <span class="required">*</span></label>
+            <input type="text" id="reported-location" placeholder="e.g. 2nd Floor, Room 201, Near Lift" />
+          </div>
+        </div>
+
+        <!-- ── Asset & Defect ── -->
+        <div class="form-section">
+          <h2>Asset &amp; Defect</h2>
+          <div class="form-group">
+            <label for="asset-type">Type of Asset <span class="required">*</span></label>
+            <select id="asset-type">
+              <option value="">— Select asset type —</option>
+              <option value="Window AC">Window AC</option>
+              <option value="Split AC">Split AC</option>
+              <option value="Tower AC">Tower AC</option>
+              <option value="AC Plant">AC Plant</option>
+              <option value="Water Cooler">Water Cooler</option>
+              <option value="Desert Cooler">Desert Cooler</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="description">Details of Defect <span class="required">*</span></label>
+            <textarea id="description" rows="5"
+              placeholder="Describe the issue in detail (minimum 10 characters)…"></textarea>
+            <p class="char-count" id="char-count">0 characters — minimum 10 required</p>
+          </div>
+
+          <div class="form-group">
+            <label>
+              Photo of the Issue
+              <span class="optional-tag">(optional)</span>
+            </label>
+            <input type="file" id="photo-input" accept="image/*" capture="environment" />
+            <div class="photo-upload-area" id="photo-upload-area" onclick="document.getElementById('photo-input').click()">
+              <div id="photo-placeholder">
+                <div class="photo-upload-icon">📷</div>
+                <div class="photo-upload-label">Tap to take or choose a photo</div>
+                <div class="photo-upload-sub">JPG, PNG up to 5 MB</div>
+              </div>
+              <img id="photo-preview" class="photo-preview" style="display:none" alt="Preview" />
+            </div>
+            <div id="photo-status" style="text-align:center"></div>
+          </div>
+        </div>
+
+        <div id="form-alert" class="alert" style="display:none"></div>
+
+        <div class="button-group">
+          <button type="submit" class="btn-submit" id="submit-btn">Submit Complaint</button>
+        </div>
+      </form>
+
+      <div id="success-state" style="display:none" class="success-message">
+        <h2>✅ Complaint Submitted!</h2>
+        <p>Thank you for reporting this issue. A maintenance staff member will be assigned shortly.</p>
+        <div class="complaint-reference" id="complaint-ref"></div>
+        <p id="success-otp-msg" style="display:none">You will receive an OTP at your email when the work is completed — show it to the staff member to close the complaint.</p>
+        <p id="success-ack-msg" style="display:none">The staff member will obtain a written acknowledgement from you when the work is completed.</p>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    // ── Pre-fill station from URL param (?station=Central Depot) ──
+    var params       = new URLSearchParams(window.location.search);
+    var stationParam = (params.get('station') || '').trim();
+
+    // Pre-fill station text input and show header badge if param provided
+    if (stationParam) {
+      document.getElementById('station').value = stationParam;
+      document.getElementById('station-header-text').textContent = stationParam;
+      document.getElementById('station-header').style.display = 'block';
+    }
+
+    var uploadedPhotoUrl = null;
+    var isUploading = false;
+
+    function showEl(id, displayType) {
+      document.getElementById(id).style.display = displayType || 'block';
+    }
+    function hideEl(id) {
+      document.getElementById(id).style.display = 'none';
+    }
+
+    // ── Photo handling ──
+    document.getElementById('photo-input').addEventListener('change', function () {
+      var file = this.files[0];
+      if (!file) return;
+      if (file.size > 5 * 1024 * 1024) {
+        setPhotoStatus('<span style="color:#c53030">File too large — max 5 MB</span>');
+        this.value = '';
+        return;
+      }
+      var reader = new FileReader();
+      reader.onload = function (e) {
+        var preview = document.getElementById('photo-preview');
+        preview.src = e.target.result;
+        showEl('photo-preview', 'block');
+        hideEl('photo-placeholder');
+        document.getElementById('photo-upload-area').classList.add('has-photo');
+      };
+      reader.readAsDataURL(file);
+      uploadPhoto(file);
+    });
+
+    function uploadPhoto(file) {
+      isUploading = true;
+      uploadedPhotoUrl = null;
+      setPhotoStatus('<span class="uploading-badge"><span class="upload-spinner"></span> Uploading photo…</span>');
+      var formData = new FormData();
+      formData.append('photo', file);
+      fetch('/api/upload/photo', { method: 'POST', body: formData })
+        .then(function (res) { return res.json(); })
+        .then(function (json) {
+          isUploading = false;
+          if (json.success && json.data) {
+            uploadedPhotoUrl = json.data.url;
+            setPhotoStatus('<span style="color:#22543d;font-size:12px">✓ Photo uploaded</span> <button type="button" class="photo-remove-btn" onclick="removePhoto()">✕ Remove</button>');
+          } else {
+            uploadedPhotoUrl = null;
+            setPhotoStatus('<span style="color:#c53030;font-size:12px">Upload failed — complaint will be submitted without photo</span> <button type="button" class="photo-remove-btn" onclick="removePhoto()">Remove</button>');
+          }
+        })
+        .catch(function () {
+          isUploading = false;
+          uploadedPhotoUrl = null;
+          setPhotoStatus('<span style="color:#c53030;font-size:12px">Upload failed — complaint will be submitted without photo</span> <button type="button" class="photo-remove-btn" onclick="removePhoto()">Remove</button>');
+        });
+    }
+
+    function removePhoto() {
+      uploadedPhotoUrl = null;
+      isUploading = false;
+      document.getElementById('photo-input').value = '';
+      document.getElementById('photo-preview').src = '';
+      hideEl('photo-preview');
+      showEl('photo-placeholder', 'block');
+      document.getElementById('photo-upload-area').classList.remove('has-photo');
+      setPhotoStatus('');
+    }
+
+    function setPhotoStatus(html) {
+      document.getElementById('photo-status').innerHTML = html;
+    }
+
+    // ── Character count ──
+    document.getElementById('description').addEventListener('input', function () {
+      var len = this.value.length;
+      var el = document.getElementById('char-count');
+      if (len >= 10) {
+        el.textContent = len + ' characters ✓';
+        el.className = 'char-count char-ok';
+      } else {
+        el.textContent = len + ' characters — minimum 10 required';
+        el.className = 'char-count';
+      }
+    });
+
+    // ── Phone: digits only ──
+    document.getElementById('phone').addEventListener('input', function () {
+      this.value = this.value.replace(/\D/g, '').slice(0, 10);
+    });
+
+    // ── Form submit ──
+    document.getElementById('complaint-form').addEventListener('submit', function (e) {
+      e.preventDefault();
+      hideEl('form-alert');
+
+      if (isUploading) { showAlert('Please wait — photo is still uploading.'); return; }
+
+      var name             = document.getElementById('name').value.trim();
+      var phone            = document.getElementById('phone').value.replace(/\D/g, '');
+      var email            = document.getElementById('email').value.trim();
+      var station          = document.getElementById('station').value.trim();
+      var area             = document.getElementById('area').value.trim();
+      var reportedLocation = document.getElementById('reported-location').value.trim();
+      var assetType        = document.getElementById('asset-type').value;
+      var desc             = document.getElementById('description').value.trim();
+
+      if (!name)                        { showAlert('Please enter your full name.'); return; }
+      if (phone.length !== 10)          { showAlert('Please enter a 10-digit contact number.'); return; }
+      if (email && !isValidEmail(email)) { showAlert('Please enter a valid email address or leave the field empty.'); return; }
+      if (!station)                     { showAlert('Please enter the station / site.'); return; }
+      if (!area)                        { showAlert('Please enter the area.'); return; }
+      if (!reportedLocation)            { showAlert('Please enter the exact location.'); return; }
+      if (!assetType)                   { showAlert('Please select the type of asset.'); return; }
+      if (desc.length < 10)             { showAlert('Description must be at least 10 characters.'); return; }
+
+      var btn = document.getElementById('submit-btn');
+      btn.disabled = true;
+      btn.textContent = '⏳ Submitting…';
+
+      var hasRealEmail = email && isValidEmail(email);
+      var submitEmail  = hasRealEmail ? email : 'noreply@noreply.scan2fix';
+
+      fetch('/api/complaints/qr-scan/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          description: desc,
+          source: 'WEB',
+          contact_name: name,
+          contact_email: submitEmail,
+          contact_phone: phone,
+          station: station,
+          area: area,
+          location: reportedLocation,
+          asset_type: assetType,
+          photo_url: uploadedPhotoUrl || null,
+        })
+      })
+      .then(function (res) { return res.json(); })
+      .then(function (json) {
+        if (json.success) {
+          hideEl('complaint-form');
+          var d = json.data || {};
+          var refHtml =
+            '<strong>Complaint #:</strong> ' + (d.complaint_number || 'N/A') + '<br>' +
+            '<strong>Station:</strong> ' + station + '<br>' +
+            '<strong>Area:</strong> ' + area + '<br>' +
+            '<strong>Location:</strong> ' + reportedLocation + '<br>' +
+            '<strong>Asset Type:</strong> ' + assetType;
+          if (hasRealEmail) refHtml += '<br><strong>Email:</strong> ' + email;
+          document.getElementById('complaint-ref').innerHTML = refHtml;
+          if (hasRealEmail) {
+            showEl('success-otp-msg', 'block');
+          } else {
+            showEl('success-ack-msg', 'block');
+          }
+          showEl('success-state', 'block');
+        } else {
+          showAlert(json.message || 'Failed to submit. Please try again.');
+          btn.disabled = false;
+          btn.textContent = 'Submit Complaint';
+        }
+      })
+      .catch(function () {
+        showAlert('Network error. Please check your connection and try again.');
+        btn.disabled = false;
+        btn.textContent = 'Submit Complaint';
+      });
+    });
+
+    function isValidEmail(e) {
+      return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
+    }
+
+    function showAlert(msg) {
+      var el = document.getElementById('form-alert');
+      el.className = 'alert alert-error';
+      el.innerHTML = '<strong>❌ Error</strong> — ' + msg;
+      showEl('form-alert', 'block');
+      el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  </script>
+</body>
+</html>

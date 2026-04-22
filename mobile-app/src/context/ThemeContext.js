@@ -27,7 +27,11 @@ export const THEMES = {
     staffUnavailable: '#F44336',
     totalAssets: '#607D8B',
     closed: '#4CAF50',
-    black: '#000'
+    black: '#000',
+    white: '#fff',
+    button:'#004e68',
+    admin: '#a11846',
+    shadowColor: '#A0BDD0',
   },
   dark: {
     name: 'dark',
@@ -52,6 +56,11 @@ export const THEMES = {
     staffUnavailable: '#ed6b62',
     totalAssets: '#999da0',
     closed: '#82e385',
+    white: '#fff',
+    black: '#000',
+    button:'#004e68',
+    admin: '#a11846',
+    shadowColor: '#A0BDD0',
   },
 };
 

@@ -10,7 +10,7 @@
 //   5. Returns JWT token
 // ============================================
 
-const User = require('../models/User');
+const User = require('../models/User_v2');
 const generateToken = require('../utils/generateToken');
 const https = require('https');
 

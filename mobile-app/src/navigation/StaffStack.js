@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import StaffDashboard from '../screens/staff/StaffDashboard';
 import JobDetails from '../screens/staff/JobDetails';
 import ProfileScreen from '../screens/shared/ProfileScreen';
+import StaffReportAnalysis from '../screens/shared/StaffReportAnalysis';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -27,6 +28,7 @@ function NotStartedStack() {
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="StaffDashboard" component={StaffDashboard} initialParams={{ statusFilter: 'ASSIGNED' }} />
       <Stack.Screen name="JobDetails" component={JobDetails} />
+      <Stack.Screen name="StaffReportAnalysis" component={StaffReportAnalysis} />
       <Stack.Screen name="ProfileScreen" component={ProfileScreen} />
     </Stack.Navigator>
   );
@@ -37,7 +39,8 @@ function InProgressStack() {
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="StaffDashboardIP" component={StaffDashboard} initialParams={{ statusFilter: 'IN_PROGRESS' }} />
       <Stack.Screen name="JobDetailsIP" component={JobDetails} />
-       <Stack.Screen name="ProfileScreen" component={ProfileScreen} />
+      <Stack.Screen name="StaffReportAnalysis" component={StaffReportAnalysis} />
+      <Stack.Screen name="ProfileScreen" component={ProfileScreen} />
     </Stack.Navigator>
   );
 }
@@ -47,6 +50,7 @@ function FinishingStack() {
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="StaffDashboardF" component={StaffDashboard} initialParams={{ statusFilter: 'FINISHING' }} />
       <Stack.Screen name="JobDetailsF" component={JobDetails} />
+      <Stack.Screen name="StaffReportAnalysis" component={StaffReportAnalysis} />
       <Stack.Screen name="ProfileScreen" component={ProfileScreen} />
     </Stack.Navigator>
   );
@@ -57,6 +61,7 @@ function CompletedStack() {
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="StaffDashboardC" component={StaffDashboard} initialParams={{ statusFilter: 'CLOSED' }} />
       <Stack.Screen name="JobDetailsC" component={JobDetails} />
+      <Stack.Screen name="StaffReportAnalysis" component={StaffReportAnalysis} />
        <Stack.Screen name="ProfileScreen" component={ProfileScreen} />
     </Stack.Navigator>
   );

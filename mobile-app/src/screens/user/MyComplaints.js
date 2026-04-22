@@ -42,7 +42,7 @@ export default function MyComplaints() {
 
   // Dynamic sort options using translations
   const SORT_OPTIONS = [
-    { key: 'ALL', label: t('allComplaints'), icon: 'list-outline' },
+    { key: 'ALL', label: t('allComplaints'), icon: 'list' },
     { key: 'OPEN', label: t('open'), icon: 'alert-circle-outline' },
     { key: 'ASSIGNED', label: t('assigned'), icon: 'person-outline' },
     { key: 'IN_PROGRESS', label: t('inProgress'), icon: 'time-outline' },
@@ -80,13 +80,19 @@ export default function MyComplaints() {
       result = result.filter(c => c.status === activeFilter);
     }
     if (searchQuery) {
+      const q = searchQuery.toLowerCase();
       result = result.filter(c =>
-        c.asset_id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        c.description?.toLowerCase().includes(searchQuery.toLowerCase())
+        c.complaint_number?.toLowerCase().includes(q) ||
+        c.station?.toLowerCase().includes(q) ||
+        c.area?.toLowerCase().includes(q) ||
+        c.description?.toLowerCase().includes(q)
       );
     }
     setFiltered(result);
   };
+
+  const hasRealEmail = (complaint) =>
+    complaint.contact_email && !complaint.contact_email.includes('@noreply.scan2fix');
 
   const navigateToDetail = (complaint) => {
     navigation.navigate('ComplaintDetail', { complaint });
@@ -108,7 +114,7 @@ export default function MyComplaints() {
   const shareOTP = async () => {
     try {
       await Share.share({
-        message: `Scan2Fix ${t('completionOtp')}\n\n${t('complaintNo')} ${otpComplaint.asset_id}\n${t('enterOtp')}: ${generatedOTP}\n\n${t('validFor')}\n\n${t('otpNoteUser')}`,
+        message: `Scan2Fix ${t('completionOtp')}\n\n${t('complaintNo')} ${otpComplaint.complaint_number}\n${t('enterOtp')}: ${generatedOTP}\n\n${t('validFor')}\n\n${t('otpNoteUser')}`,
       });
     } catch (error) {
       console.error('Share error:', error);
@@ -167,6 +173,7 @@ export default function MyComplaints() {
   const renderComplaint = ({ item }) => {
     const isClosed = item.status === 'CLOSED';
     const isFinishing = item.status === 'FINISHING';
+    const locationStr = [item.station, item.area, item.location].filter(Boolean).join(' › ');
     return (
       <TouchableOpacity
         style={s.card}
@@ -174,7 +181,7 @@ export default function MyComplaints() {
         onPress={() => navigateToDetail(item)}
       >
         <View style={s.cardTopRow}>
-          <Text style={s.assetId}>{item.asset_id}</Text>
+          <Text style={s.assetId}>{item.complaint_number}</Text>
           <View style={[s.statusPill, { backgroundColor: `${STATUS_COLORS[item.status]}20` }]}>
             <View style={[s.statusDot, { backgroundColor: STATUS_COLORS[item.status] }]} />
             <Text style={[s.statusLabel, { color: STATUS_COLORS[item.status] }]}>
@@ -183,12 +190,12 @@ export default function MyComplaints() {
           </View>
         </View>
 
-        <Text style={s.assetType}>{item.assets?.type}</Text>
+        <Text style={s.assetType}>{item.asset_type}</Text>
 
         <View style={s.locationRow}>
           <Ionicons name="location-outline" size={13} color={isClosed ? TEXT_MUT : ACTIVE} />
-          <Text style={[s.location, isClosed && { color: TEXT_MUT }]}>
-            {' '}{item.assets?.location || t('unknown')}
+          <Text style={[s.location, isClosed && { color: TEXT_MUT }]} numberOfLines={1}>
+            {' '}{locationStr || t('unknown')}
           </Text>
         </View>
 
@@ -246,8 +253,8 @@ export default function MyComplaints() {
           )
         )}
 
-        {/* OTP button — only for finishing */}
-        {!isClosed && isFinishing && (
+        {/* OTP or written ack notice — only for finishing */}
+        {isFinishing && hasRealEmail(item) && (
           <TouchableOpacity
             style={s.generateOtpButton}
             onPress={() => handleGenerateOTP(item)}
@@ -262,7 +269,7 @@ export default function MyComplaints() {
           <View style={s.finishingNotice}>
             <Ionicons name="flag-outline" size={14} color="#FF9800" />
             <Text style={s.finishingNoticeText}>
-              {t('otpHelpNote')}
+              {hasRealEmail(item) ? t('otpHelpNote') : 'Staff will complete with a written acknowledgement photo.'}
             </Text>
           </View>
         )}
@@ -339,6 +346,10 @@ export default function MyComplaints() {
         contentContainerStyle={filtered.length === 0 ? { flex: 1 } : { paddingBottom: 140 }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        removeClippedSubviews
+        maxToRenderPerBatch={10}
+        initialNumToRender={10}
+        windowSize={5}
         ListEmptyComponent={
           <View style={s.empty}>
             <Ionicons name="mail-open-outline" size={50} color={TEXT_MUT} />

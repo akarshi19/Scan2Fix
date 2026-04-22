@@ -27,8 +27,11 @@ const ASSET_TYPES = {
 
 // Staff designations
 const DESIGNATIONS = {
-  JUNIOR: 'JUNIOR',
-  SENIOR: 'SENIOR',
+  SENIOR: 'Sr.Tech',
+  TECH_I: 'Tech-I',
+  TECH_II: 'Tech-II',
+  APP_TECH_III: 'App.Tech-III',
+  HELPER: 'Assist/Helper',
 };
 
 module.exports = {

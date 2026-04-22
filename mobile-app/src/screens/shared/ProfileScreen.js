@@ -18,7 +18,7 @@ const TEXT_PRI = '#1A1A2E'; const TEXT_SEC = '#5A7A8A'; const TEXT_MUT = '#9DB5C
 
 const MASTER_ADMIN_EMAIL = 'adminscan2fix@gmail.com';
 
-export default function ProfileScreen() {
+export default function ProfileScreen({ navigation }) {
   const { user, role, signOut, refreshUser } = useAuth();
   const { t } = useLanguage();
   const [fullName, setFullName] = useState('');
@@ -428,6 +428,21 @@ export default function ProfileScreen() {
           </View>
         )}
       </View>
+
+      {/* Analytics & Reports Card - For ADMIN and STAFF */}
+      {(role === 'ADMIN' || role === 'STAFF') && (
+        <View style={s.card}>
+          <TouchableOpacity
+            style={s.menuItem}
+            onPress={() => navigation?.navigate('StaffReportAnalysis')}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="analytics-outline" size={20} color="#6366F1" style={{ marginRight: 15 }} />
+            <Text style={s.menuText}>{t('reportAnalysis') || 'Report & Analysis'}</Text>
+            <Ionicons name="chevron-forward" size={18} color={TEXT_MUT} />
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Delete Account Card - Only show if not master admin */}
       {!isMasterAdmin && (

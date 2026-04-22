@@ -35,7 +35,7 @@ export default function AllComplaints({ navigation, route }) {
 
   // Dynamic sort options using translations
   const SORT_OPTIONS = [
-    { key: 'ALL', label: t('allComplaints'), icon: 'list-outline' },
+    { key: 'ALL', label: t('allComplaints'), icon: 'list' },
     { key: 'OPEN', label: t('open'), icon: 'alert-circle-outline' },
     { key: 'ASSIGNED', label: t('assigned'), icon: 'person-outline' },
     { key: 'IN_PROGRESS', label: t('inProgress'), icon: 'time-outline' },
@@ -81,9 +81,11 @@ export default function AllComplaints({ navigation, route }) {
     setLoading(true);
     try {
       const r = await complaintsAPI.getAll();
-      if (r.data.success) setComplaints(r.data.data || []);
+      if (r.data.success) {
+        setComplaints(r.data.data || []);
+      }
     } catch (e) {
-      console.error(e);
+      console.error('fetchComplaints error:', e);
     } finally {
       setLoading(false);
     }
@@ -97,11 +99,22 @@ export default function AllComplaints({ navigation, route }) {
       result = result.filter(c => c.status === activeFilter);
     }
     if (searchQuery) {
+      const q = searchQuery.toLowerCase();
       result = result.filter(c =>
-        c.asset_id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        c.description?.toLowerCase().includes(searchQuery.toLowerCase())
+        c.complaint_number?.toLowerCase().includes(q) ||
+        c.station?.toLowerCase().includes(q) ||
+        c.area?.toLowerCase().includes(q) ||
+        c.description?.toLowerCase().includes(q)
       );
     }
+    // Sort: active complaints oldest-first (FIFO queue); closed newest-closed-first
+    result.sort((a, b) => {
+      const aClosed = a.status === 'CLOSED';
+      const bClosed = b.status === 'CLOSED';
+      if (!aClosed && !bClosed) return new Date(a.created_at) - new Date(b.created_at);
+      if (aClosed && bClosed)   return new Date(b.closed_at || b.created_at) - new Date(a.closed_at || a.created_at);
+      return aClosed ? 1 : -1; // active before closed
+    });
     setFiltered(result);
   };
 
@@ -158,111 +171,110 @@ export default function AllComplaints({ navigation, route }) {
     </View>
   );
 
-  const renderComplaint = ({ item }) => (
-    <TouchableOpacity
-      style={s.card}
-      activeOpacity={0.85}
-      onPress={() => navigation.navigate('ComplaintDetail', { complaint: item })}
-    >
-      {item.profiles?.is_on_leave && item.status !== 'CLOSED' && (
-        <View style={s.leaveTag}>
-          <Ionicons name="warning" size={10} color="#FFF" />
-          <Text style={s.leaveTagText}> {t('staffOnLeaveTag')}</Text>
-        </View>
-      )}
+  const renderComplaint = ({ item }) => {
+    const reporterName = item.contact_name
+      || item.reporter?.full_name || item.reporter?.email || t('unknown');
 
-      <View style={s.cardTopRow}>
-        <Text style={s.assetId}>{item.asset_id}</Text>
-        <View style={[s.statusPill, { backgroundColor: `${STATUS_COLORS[item.status]}20` }]}>
-          <View style={[s.statusDot, { backgroundColor: STATUS_COLORS[item.status] }]} />
-          <Text style={[s.statusText, { color: STATUS_COLORS[item.status] }]}>
-            {getStatusLabel(item.status)}
+    return (
+      <TouchableOpacity
+        style={s.card}
+        activeOpacity={0.85}
+        onPress={() => navigation.navigate('ComplaintDetail', { complaint: item })}
+      >
+        {item.profiles?.is_on_leave && item.status !== 'CLOSED' && (
+          <View style={s.leaveTag}>
+            <Ionicons name="warning" size={10} color="#FFF" />
+            <Text style={s.leaveTagText}> {t('staffOnLeaveTag')}</Text>
+          </View>
+        )}
+
+        {/* Top row: complaint number + status */}
+        <View style={s.cardTopRow}>
+          <Text style={s.assetId}>{item.complaint_number || '—'}</Text>
+          <View style={[s.statusPill, { backgroundColor: `${STATUS_COLORS[item.status]}20` }]}>
+            <View style={[s.statusDot, { backgroundColor: STATUS_COLORS[item.status] }]} />
+            <Text style={[s.statusText, { color: STATUS_COLORS[item.status] }]}>
+              {getStatusLabel(item.status)}
+            </Text>
+          </View>
+        </View>
+
+        {/* Asset type */}
+        <Text style={s.assetType}>{item.asset_type}</Text>
+
+        {/* Location info */}
+        <View style={s.locationRow}>
+          <Ionicons name="location-outline" size={13} color={ACTIVE} />
+          <Text style={s.location}>
+            {' '}{[item.station, item.area, item.location].filter(Boolean).join(' › ')}
           </Text>
         </View>
-      </View>
 
-      <Text style={s.assetType}>{item.assets?.type}</Text>
+        <Text style={s.description} numberOfLines={2}>{item.description}</Text>
 
-      <View style={s.locationRow}>
-        <Ionicons name="location-outline" size={13} color={ACTIVE} />
-        <Text style={s.location}> {item.assets?.location}</Text>
-      </View>
-
-      <Text style={s.description} numberOfLines={2}>{item.description}</Text>
-
-      {item.reporter && (
+        {/* Reporter */}
         <View style={s.reporterRow}>
           <Ionicons name="person-outline" size={13} color={TEXT_MUT} />
           <Text style={s.reporterLabel}>  {t('reportedBy')} </Text>
-          <Text style={s.reporterName}>
-            {item.reporter.full_name || item.reporter.email || t('unknown')}
-          </Text>
+          <Text style={s.reporterName}>{reporterName}</Text>
         </View>
-      )}
 
-      {item.status === 'CLOSED' ? (
-        item.profiles && (
-          <View style={s.closedStaffRow}>
-            <Ionicons name="person-outline" size={13} color={TEXT_MUT} />
-            <Text style={s.closedStaffLabel}>  {t('handledBy')} </Text>
-            <Text style={s.closedStaffName}>
-              {item.profiles.full_name || item.profiles.email}
-            </Text>
-          </View>
-        )
-      ) : item.profiles ? (
-        <View style={s.assignedBar}>
-          {item.profiles.photo_url ? (
-            <Image source={{ uri: getFileUrl(item.profiles.photo_url) }} style={s.avatar} />
-          ) : (
-            <View style={s.avatarFallback}>
-              <Text style={s.avatarInitial}>
-                {item.profiles.full_name?.charAt(0) ?? 'S'}
-              </Text>
+        {/* Staff assignment */}
+        {item.status === 'CLOSED' ? (
+          item.profiles && (
+            <View style={s.closedStaffRow}>
+              <Ionicons name="person-circle-outline" size={13} color={TEXT_MUT} />
+              <Text style={s.closedStaffLabel}>  Handled by </Text>
+              <Text style={s.closedStaffName}>{item.profiles.full_name || item.profiles.email}</Text>
             </View>
-          )}
-          <View style={{ flex: 1 }}>
-            <Text style={s.assignedLabel}>{t('assignedTo')}</Text>
-            <Text style={s.assignedName}>
-              {item.profiles.full_name || item.profiles.email}
+          )
+        ) : item.profiles ? (
+          <View style={s.assignedBar}>
+            {item.profiles.photo_url ? (
+              <Image source={{ uri: getFileUrl(item.profiles.photo_url) }} style={s.avatar} />
+            ) : (
+              <View style={s.avatarFallback}>
+                <Text style={s.avatarInitial}>{item.profiles.full_name?.charAt(0) ?? 'S'}</Text>
+              </View>
+            )}
+            <View style={{ flex: 1 }}>
+              <Text style={s.assignedLabel}>{t('assignedTo')}</Text>
+              <Text style={s.assignedName}>{item.profiles.full_name || item.profiles.email}</Text>
+            </View>
+            <Ionicons name="checkmark-circle" size={18} color="#fff" />
+          </View>
+        ) : (
+          <View style={s.unassignedBar}>
+            <Ionicons name="warning-outline" size={14} color="#E65100" />
+            <Text style={s.unassignedText}>  {t('notAssigned')}</Text>
+          </View>
+        )}
+
+        {/* Closed date */}
+        {item.status === 'CLOSED' && item.closed_at && (
+          <View style={s.closedRow}>
+            <Ionicons name="checkmark-done-circle" size={14} color={TEXT_MUT} />
+            <Text style={s.closedDate}>
+              {' '}Closed {new Date(item.closed_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
             </Text>
           </View>
-          <Ionicons name="checkmark-circle" size={18} color="#fff" />
-        </View>
-      ) : (
-        <View style={s.unassignedBar}>
-          <Ionicons name="warning-outline" size={14} color="#E65100" />
-          <Text style={s.unassignedText}>  {t('notAssigned')}</Text>
-        </View>
-      )}
+        )}
 
-      {item.status === 'CLOSED' && item.closed_at && (
-        <View style={s.closedRow}>
-          <Ionicons name="checkmark-done-circle" size={14} color={TEXT_MUT} />
-          <Text style={s.closedDate}>
-            {' '}{t('resolvedOn')} {new Date(item.closed_at).toLocaleDateString('en-GB', {
-              day: 'numeric', month: 'short', year: 'numeric',
-            })}
-          </Text>
+        <View style={s.footer}>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Ionicons name="calendar-outline" size={12} color={TEXT_MUT} />
+            <Text style={s.date}>
+              {'  '}{new Date(item.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+            </Text>
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Text style={s.tapHint}>{t('tapToView')}  </Text>
+            <Ionicons name="chevron-forward" size={13} color={TEXT_MUT} />
+          </View>
         </View>
-      )}
-
-      <View style={s.footer}>
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <Ionicons name="calendar-outline" size={12} color={TEXT_MUT} />
-          <Text style={s.date}>
-            {'  '}{new Date(item.created_at).toLocaleDateString('en-GB', {
-              day: 'numeric', month: 'short', year: 'numeric',
-            })}
-          </Text>
-        </View>
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <Text style={s.tapHint}>{t('tapToView')}  </Text>
-          <Ionicons name="chevron-forward" size={13} color={TEXT_MUT} />
-        </View>
-      </View>
-    </TouchableOpacity>
-  );
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <ScreenLayout
@@ -318,6 +330,10 @@ export default function AllComplaints({ navigation, route }) {
         contentContainerStyle={filtered.length === 0 ? { flex: 1 } : { paddingBottom: 140 }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        removeClippedSubviews
+        maxToRenderPerBatch={10}
+        initialNumToRender={10}
+        windowSize={5}
         ListEmptyComponent={
           <View style={s.empty}>
             <Ionicons name="mail-open-outline" size={50} color={TEXT_MUT} />

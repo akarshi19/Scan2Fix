@@ -1,4 +1,4 @@
-const User = require('../models/User');
+const User = require('../models/User_v2');
 
 // POST /api/upload/profile-photo
 exports.uploadProfilePhoto = async (req, res) => {

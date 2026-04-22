@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity, Alert,
   ActivityIndicator,
@@ -22,15 +22,20 @@ export default function StaffDashboard({ navigation, route }) {
   const [loading, setLoading] = useState(true);
   const [isOnLeave, setIsOnLeave] = useState(false);
   const [leaveLoading, setLeaveLoading] = useState(false);
+  const fetchingRef = useRef(false);
 
   useFocusEffect(
     useCallback(() => {
-      fetchJobs();
-      fetchLeaveStatus();
+      if (!fetchingRef.current) {
+        fetchJobs();
+        fetchLeaveStatus();
+      }
     }, [statusFilter])
   );
 
   const fetchJobs = async () => {
+    if (fetchingRef.current) return;
+    fetchingRef.current = true;
     setLoading(true);
     try {
       const response = await complaintsAPI.getStaffJobs(statusFilter);
@@ -39,6 +44,7 @@ export default function StaffDashboard({ navigation, route }) {
       console.error('Error fetching jobs:', error);
     } finally {
       setLoading(false);
+      fetchingRef.current = false;
     }
   };
 
@@ -88,44 +94,67 @@ export default function StaffDashboard({ navigation, route }) {
     return 'JobDetails';
   };
 
-  const renderJob = ({ item }) => (
-    <TouchableOpacity
-      style={[s.card, { backgroundColor: colors.cardBg }]}
-      onPress={() => navigation.navigate(getJobDetailsScreen(), { job: item })}
-      activeOpacity={0.85}
-    >
-      <View style={s.cardHeader}>
-        <Text style={[s.assetId, { color: colors.textPri }]}>{item.asset_id}</Text>
-        <View style={[s.typeBadge, { backgroundColor: `${colors.active}15` }]}>
-          <Text style={[s.assetType, { color: colors.active }]}>{item.assets?.type}</Text>
+  const renderJob = ({ item }) => {
+    const locationStr = [item.station, item.area, item.location].filter(Boolean).join(' › ');
+    return (
+      <TouchableOpacity
+        style={[s.card, { backgroundColor: colors.cardBg }]}
+        onPress={() => navigation.navigate(getJobDetailsScreen(), { job: item })}
+        activeOpacity={0.85}
+      >
+        {/* Header: complaint number + asset type badge */}
+        <View style={s.cardHeader}>
+          <Text style={[s.complaintNum, { color: colors.textPri }]}>
+            {item.complaint_number || '—'}
+          </Text>
+          <View style={[s.typeBadge, { backgroundColor: `${colors.active}15` }]}>
+            <Text style={[s.assetType, { color: colors.active }]} numberOfLines={1}>
+              {item.asset_type || '—'}
+            </Text>
+          </View>
         </View>
-      </View>
-      <View style={s.locationRow}>
-        <Ionicons name="location-outline" size={14} color={colors.textMut} />
-        <Text style={[s.location, { color: colors.textSec }]}> {item.assets?.location}</Text>
-      </View>
-      <Text style={[s.description, { color: colors.textSec }]} numberOfLines={2}>
-        {item.description}
-      </Text>
-      {item.photo_url && (
-        <View style={s.photoIndicator}>
-          <Ionicons name="image-outline" size={14} color={colors.textMut} />
-          <Text style={[s.photoText, { color: colors.textMut }]}> {t('hasPhoto')}</Text>
-        </View>
-      )}
-      <View style={[s.cardFooter, { borderTopColor: colors.divider }]}>
-        <Text style={[s.date, { color: colors.textMut }]}>
-          {new Date(item.created_at).toLocaleDateString('en-GB', {
-            day: '2-digit', month: 'short', year: 'numeric',
-          })}
+
+        {/* Location */}
+        {!!locationStr && (
+          <View style={s.locationRow}>
+            <Ionicons name="location-outline" size={13} color={colors.active} />
+            <Text style={[s.location, { color: colors.textSec }]} numberOfLines={1}>
+              {' '}{locationStr}
+            </Text>
+          </View>
+        )}
+
+        {/* Description */}
+        <Text style={[s.description, { color: colors.textSec }]} numberOfLines={2}>
+          {item.description}
         </Text>
-        <View style={s.tapHintRow}>
-          <Text style={[s.tapHint, { color: colors.active }]}>{t('viewDetails')}</Text>
-          <Ionicons name="chevron-forward" size={14} color={colors.active} />
+
+        {/* Photo indicator */}
+        {item.photo_url && (
+          <View style={s.photoIndicator}>
+            <Ionicons name="image-outline" size={13} color={colors.textMut} />
+            <Text style={[s.photoText, { color: colors.textMut }]}> {t('hasPhoto')}</Text>
+          </View>
+        )}
+
+        {/* Footer */}
+        <View style={[s.cardFooter, { borderTopColor: colors.divider }]}>
+          <View style={s.footerLeft}>
+            <Ionicons name="calendar-outline" size={12} color={colors.textMut} />
+            <Text style={[s.date, { color: colors.textMut }]}>
+              {'  '}{new Date(item.created_at).toLocaleDateString('en-GB', {
+                day: '2-digit', month: 'short', year: 'numeric',
+              })}
+            </Text>
+          </View>
+          <View style={s.tapHintRow}>
+            <Text style={[s.tapHint, { color: colors.active }]}>{t('viewDetails')}</Text>
+            <Ionicons name="chevron-forward" size={14} color={colors.active} />
+          </View>
         </View>
-      </View>
-    </TouchableOpacity>
-  );
+      </TouchableOpacity>
+    );
+  };
 
   // ═══════════════════════════════════════
   // List Header — rendered inside FlatList
@@ -229,6 +258,10 @@ export default function StaffDashboard({ navigation, route }) {
         keyboardShouldPersistTaps="handled"
         refreshing={loading}
         onRefresh={fetchJobs}
+        removeClippedSubviews
+        maxToRenderPerBatch={10}
+        initialNumToRender={10}
+        windowSize={5}
         ListEmptyComponent={
           !loading && (
             <View style={s.empty}>
@@ -369,11 +402,11 @@ const s = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 8,
   },
-  assetId: { fontSize: 18, fontWeight: '700' },
-  typeBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  complaintNum: { fontSize: 15, fontWeight: '800', flex: 1, marginRight: 8 },
+  typeBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, maxWidth: 140 },
   assetType: { fontSize: 11, fontWeight: '600' },
   locationRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
-  location: { fontSize: 13 },
+  location: { fontSize: 12, flex: 1 },
   description: { lineHeight: 20, marginBottom: 8, fontSize: 13 },
   photoIndicator: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
   photoText: { fontSize: 12 },
@@ -384,6 +417,7 @@ const s = StyleSheet.create({
     borderTopWidth: 1,
     paddingTop: 10,
   },
+  footerLeft: { flexDirection: 'row', alignItems: 'center' },
   date: { fontSize: 12 },
   tapHintRow: { flexDirection: 'row', alignItems: 'center' },
   tapHint: { fontSize: 12, fontWeight: '500' },

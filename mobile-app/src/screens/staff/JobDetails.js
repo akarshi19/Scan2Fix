@@ -4,7 +4,8 @@ import {
   TouchableOpacity, Modal, TextInput as RNTextInput, ActivityIndicator
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { complaintsAPI, getFileUrl } from '../../services/api';
+import * as ImagePicker from 'expo-image-picker';
+import { complaintsAPI, uploadAPI, getFileUrl } from '../../services/api';
 import { useTheme } from '../../context/ThemeContext';
 import { useLanguage } from '../../context/LanguageContext';
 import ScreenLayout from '../../components/ScreenLayout';
@@ -34,31 +35,29 @@ export default function JobDetails({ route, navigation }) {
   const [showVerifyOTPModal, setShowVerifyOTPModal] = useState(false);
   const [enteredOTP, setEnteredOTP] = useState(['', '', '', '', '', '']);
   const [verifyingOTP, setVerifyingOTP] = useState(false);
+  const [ackPhoto, setAckPhoto] = useState(null);
+  const [ackLoading, setAckLoading] = useState(false);
   const inputRefs = useRef([]);
 
   const statusInfo = STATUS_COLORS[job.status] ?? { bg: '#F5F5F5', text: '#666', dot: '#999' };
   const photoUrl = getFileUrl(job.photo_url);
   const isClosed = job.status === 'CLOSED';
 
-  const getAssetTypeName = (type) => {
-    switch (type) {
-      case 'AC': return t('airConditioners');
-      case 'WATER_COOLER': return t('waterCoolers');
-      case 'DESERT_COOLER': return t('desertCoolers');
-      default: return t('equipment');
-    }
-  };
+  // OTP flow only when there is an actual email — never rely on source alone
+  const hasRealEmail = !!(job.contact_email && !job.contact_email.includes('@noreply.scan2fix'));
 
   const getStatusLabel = (status) => {
     const key = STATUS_LABEL_KEYS[status];
     return key ? t(key) : status;
   };
 
-  const reporterName = job.reporter?.full_name
-    || job.reporter?.email
-    || job.user?.full_name
-    || job.user?.email
-    || t('unknown');
+  const reporterName = job.source === 'WEB'
+    ? job.contact_name
+    : (job.reporter?.full_name
+      || job.reporter?.email
+      || job.user?.full_name
+      || job.user?.email
+      || t('unknown'));
 
   const resolverName = job.profiles?.full_name
     || job.profiles?.email
@@ -132,6 +131,50 @@ export default function JobDetails({ route, navigation }) {
 
   const isOtpComplete = enteredOTP.every(d => d !== '');
 
+  const takeAckPhoto = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert(t('error'), 'Camera permission is required.');
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync({ allowsEditing: true, aspect: [4, 3], quality: 0.8 });
+    if (!result.canceled && result.assets?.[0]) setAckPhoto(result.assets[0]);
+  };
+
+  const pickAckPhoto = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert(t('error'), 'Gallery permission is required.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({ allowsEditing: true, aspect: [4, 3], quality: 0.8 });
+    if (!result.canceled && result.assets?.[0]) setAckPhoto(result.assets[0]);
+  };
+
+  const submitAck = async () => {
+    if (!ackPhoto) return;
+    setAckLoading(true);
+    try {
+      const uploadRes = await uploadAPI.complaintPhoto(ackPhoto.uri);
+      const ackPhotoUrl = uploadRes.data?.data?.photo_url;
+      if (!ackPhotoUrl) throw new Error('Photo upload failed');
+
+      const jobId = job.id || job._id;
+      const res = await complaintsAPI.closeWithAck(jobId, ackPhotoUrl);
+      if (res.data.success) {
+        Alert.alert(
+          'Complaint Closed',
+          'Acknowledgement uploaded. Complaint has been closed successfully.',
+          [{ text: t('ok'), onPress: () => navigation.goBack() }]
+        );
+      }
+    } catch (error) {
+      Alert.alert(t('error'), error.message || 'Failed to upload acknowledgement. Please try again.');
+    } finally {
+      setAckLoading(false);
+    }
+  };
+
   return (
     <ScreenLayout title={t('jobDetails')} showDecor showBack padBottom={100}>
 
@@ -140,38 +183,38 @@ export default function JobDetails({ route, navigation }) {
       {/* ════════════════════════════════════════ */}
       <View style={[s.card, { backgroundColor: colors.cardBg }]}>
 
-        {/* Title row — "Job Details" + Status badge */}
+        {/* Title row — "Job Details" + Status badge + Source badge */}
         <View style={s.cardTitleRow}>
           <Text style={[s.cardTitle, { color: colors.textPri }]}>{t('jobDetails')}</Text>
-          <View style={[s.statusBadge, { backgroundColor: statusInfo.bg }]}>
-            <View style={[s.statusDot, { backgroundColor: statusInfo.dot }]} />
-            <Text style={[s.statusBadgeText, { color: statusInfo.text }]}>
-              {getStatusLabel(job.status)}
-            </Text>
+          <View style={{ display: 'flex', flexDirection: 'row', gap: 8 }}>
+            <View style={[s.statusBadge, { backgroundColor: statusInfo.bg }]}>
+              <View style={[s.statusDot, { backgroundColor: statusInfo.dot }]} />
+              <Text style={[s.statusBadgeText, { color: statusInfo.text }]}>
+                {getStatusLabel(job.status)}
+              </Text>
+            </View>
+            {job.source && (
+              <View style={[s.statusBadge, { backgroundColor: job.source === 'WEB' ? '#E8F5E9' : '#E1F5FE' }]}>
+                <Text style={[s.statusBadgeText, { color: job.source === 'WEB' ? '#2E7D32' : '#01579B' }]}>
+                  {job.source}
+                </Text>
+              </View>
+            )}
           </View>
         </View>
 
-        {/* Asset Header — ID + type */}
+        {/* Complaint header */}
         <View style={s.assetHeader}>
           <View style={s.assetHeaderInfo}>
-            <Text style={[s.assetIdText, { color: colors.textPri }]}>{job.asset_id}</Text>
-            <Text style={[s.assetTypeText, { color: colors.textSec }]}>
-              {getAssetTypeName(job.assets?.type)}
-            </Text>
+            <Text style={[s.assetIdText, { color: colors.textPri }]}>{job.complaint_number}</Text>
+            <Text style={[s.assetTypeText, { color: colors.textSec }]}>{job.asset_type}</Text>
           </View>
         </View>
 
-        {/* All Asset Details */}
-        <InfoRow icon="location-outline" label={t('location')} value={job.assets?.location} colors={colors} iconColor={colors.active} />
-        <InfoRow icon="pricetag-outline" label={t('brand')} value={job.assets?.brand} colors={colors} />
-        <InfoRow icon="hardware-chip-outline" label={t('model')} value={job.assets?.model} colors={colors} />
-        {job.assets?.install_date && (
-          <InfoRow icon="construct-outline" label={t('installedOn')} value={
-            new Date(job.assets.install_date).toLocaleDateString('en-GB', {
-              day: 'numeric', month: 'short', year: 'numeric'
-            })
-          } colors={colors} />
-        )}
+        {/* Location */}
+        <InfoRow icon="business-outline"  label="Station"  value={job.station}  colors={colors} iconColor={colors.active} />
+        <InfoRow icon="map-outline"       label="Area"     value={job.area}     colors={colors} />
+        <InfoRow icon="location-outline"  label="Location" value={job.location} colors={colors} />
 
         {/* Complaint Meta */}
         <InfoRow icon="calendar-outline" label={t('reportedOn')} value={
@@ -182,6 +225,12 @@ export default function JobDetails({ route, navigation }) {
         } colors={colors} />
 
         <InfoRow icon="person-outline" label={t('reportedBy')} value={reporterName} colors={colors} />
+
+        {/* Contact info — always show phone if available, email only if it's a real one */}
+        <InfoRow icon="call-outline" label={t('phone')} value={job.contact_phone} colors={colors} />
+        {hasRealEmail && (
+          <InfoRow icon="mail-outline" label={t('email')} value={job.contact_email} colors={colors} />
+        )}
 
         {job.complaint_number && (
           <InfoRow icon="document-text-outline" label={t('complaintNo')} value={job.complaint_number} colors={colors} />
@@ -232,6 +281,16 @@ export default function JobDetails({ route, navigation }) {
         </View>
       )}
 
+      {/* Acknowledgement Photo Card — shown when closed via written ack */}
+      {isClosed && job.ack_photo_url && (
+        <View style={[s.card, { backgroundColor: colors.cardBg }]}>
+          <Text style={[s.cardTitleSimple, { color: colors.textPri }]}>Acknowledgement Photo</Text>
+          <View style={s.photoWrap}>
+            <Image source={{ uri: getFileUrl(job.ack_photo_url) }} style={s.photo} />
+          </View>
+        </View>
+      )}
+
       {/* Action Card */}
       {!isClosed && (
         <View style={[s.card, { backgroundColor: colors.cardBg }]}>
@@ -276,8 +335,8 @@ export default function JobDetails({ route, navigation }) {
             </>
           )}
 
-          {/* Step 3: Verify OTP (after user generates it) */}
-          {job.status === 'FINISHING' && (
+          {/* Step 3a: Verify OTP — only if complainant has a real email */}
+          {job.status === 'FINISHING' && hasRealEmail && (
             <>
               <TouchableOpacity
                 style={s.verifyOtpBtn}
@@ -297,6 +356,60 @@ export default function JobDetails({ route, navigation }) {
                   {t('otpHint')}
                 </Text>
               </View>
+            </>
+          )}
+
+          {/* Step 3b: Upload written acknowledgement — for no-email complaints */}
+          {job.status === 'FINISHING' && !hasRealEmail && (
+            <>
+              <View style={s.hintBox}>
+                <Ionicons name="information-circle-outline" size={16} color={colors.active} />
+                <Text style={[s.hintText, { color: colors.textSec }]}>
+                  Take a photo of the signed written acknowledgement from the complainant to close this complaint.
+                </Text>
+              </View>
+
+              {/* Photo preview */}
+              {ackPhoto && (
+                <TouchableOpacity onPress={() => setAckPhoto(null)} activeOpacity={0.85} style={s.ackPreviewWrap}>
+                  <Image source={{ uri: ackPhoto.uri }} style={s.ackPreview} />
+                  <View style={s.ackPreviewRemove}>
+                    <Ionicons name="close-circle" size={22} color="#E53935" />
+                  </View>
+                </TouchableOpacity>
+              )}
+
+              {/* Camera / Gallery buttons */}
+              <View style={s.ackPickRow}>
+                <TouchableOpacity style={s.ackPickBtn} onPress={takeAckPhoto} activeOpacity={0.85}>
+                  <Ionicons name="camera-outline" size={18} color={colors.active} />
+                  <Text style={[s.ackPickText, { color: colors.active }]}>Camera</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={s.ackPickBtn} onPress={pickAckPhoto} activeOpacity={0.85}>
+                  <Ionicons name="images-outline" size={18} color={colors.active} />
+                  <Text style={[s.ackPickText, { color: colors.active }]}>Gallery</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Submit button — only active when photo selected */}
+              <TouchableOpacity
+                style={[s.ackBtn, (!ackPhoto || ackLoading) && s.ackBtnDisabled]}
+                onPress={submitAck}
+                disabled={!ackPhoto || ackLoading}
+                activeOpacity={0.85}
+              >
+                {ackLoading ? (
+                  <>
+                    <ActivityIndicator color="#FFF" size="small" />
+                    <Text style={s.actionBtnText}>  Uploading…</Text>
+                  </>
+                ) : (
+                  <>
+                    <Ionicons name="checkmark-circle-outline" size={20} color="#FFF" />
+                    <Text style={s.actionBtnText}>Close Complaint</Text>
+                  </>
+                )}
+              </TouchableOpacity>
             </>
           )}
         </View>
@@ -717,6 +830,43 @@ const s = StyleSheet.create({
     shadowOpacity: 0,
   },
   verifyButtonText: { color: '#FFF', fontWeight: '700', fontSize: 15 },
+  ackPickRow: {
+    flexDirection: 'row', gap: 10, marginBottom: 12, marginTop: 10,
+  },
+  ackPickBtn: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 6, paddingVertical: 12, borderRadius: 12,
+    backgroundColor: '#EEF6FB', borderWidth: 1, borderColor: '#D0E8F2',
+  },
+  ackPickText: { fontSize: 13, fontWeight: '600' },
+  ackPreviewWrap: {
+    borderRadius: 12, overflow: 'hidden', marginBottom: 4, position: 'relative',
+  },
+  ackPreview: { width: '100%', height: 160, borderRadius: 12 },
+  ackPreviewRemove: {
+    position: 'absolute', top: 8, right: 8,
+    backgroundColor: 'rgba(255,255,255,0.9)', borderRadius: 12,
+  },
+  ackBtn: {
+    backgroundColor: '#2E7D32',
+    borderRadius: 12,
+    paddingVertical: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    shadowColor: '#2E7D32',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 6,
+    marginBottom: 10,
+  },
+  ackBtnDisabled: {
+    backgroundColor: '#A5D6A7',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
   finishBtn: {
     backgroundColor: '#FF9800',
     borderRadius: 12,

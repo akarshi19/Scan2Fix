@@ -3,7 +3,7 @@
 // ============================================
 // Handles: Login, Signup, Get Profile, Update Profile, Delete Account
 
-const User = require('../models/User');
+const User = require('../models/User_v2');
 const generateToken = require('../utils/generateToken');
 const dns = require('dns').promises;
 
@@ -44,7 +44,7 @@ exports.login = async (req, res) => {
     }
 
     // Compare password
-    const isMatch = await user.matchPassword(password);
+    const isMatch = await user.comparePassword(password);
 
     if (!isMatch) {
       return res.status(401).json({
@@ -342,7 +342,7 @@ exports.deleteAccount = async (req, res) => {
     }
 
     const user = await User.findById(req.user._id).select('+password');
-    const isMatch = await user.matchPassword(password);
+    const isMatch = await user.comparePassword(password);
 
     if (!isMatch) {
       return res.status(400).json({

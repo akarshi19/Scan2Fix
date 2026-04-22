@@ -7,7 +7,23 @@ export default {
     version: "1.0.0",
     orientation: "portrait",
     icon: "./assets/images/splash-icon.png",
-    scheme: "scan2fix",  
+    scheme: "scan2fix",
+    // Deep linking configuration for QR code scanning
+    deepLinking: {
+      enabled: true,
+      prefixes: [
+        "scan2fix://",
+        "https://scan2fix.com/",
+        "https://*.scan2fix.com/",
+      ],
+      config: {
+        // Route for complaints from QR scans
+        complaint: "complaint/:assetId",
+        screens: {
+          complaint: "complaint/:assetId",
+        },
+      },
+    },
     userInterfaceStyle: "automatic",
     newArchEnabled: true,
 

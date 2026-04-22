@@ -58,8 +58,8 @@ export default function UserDetail({ route, navigation }) {
   const [editing, setEditing] = useState(false);
   const [fullName, setFullName] = useState(user.full_name || '');
   const [phone, setPhone] = useState(user.phone || '');
-  const [designation, setDesignation] = useState(user.designation || '');
-  const [employeeId, setEmployeeId] = useState(user.employee_id || '');
+  const [designation, setDesignation] = useState(user.staff_details?.designation || '');
+  const [employeeId, setEmployeeId] = useState(user.staff_details?.employee_id || '');
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -82,17 +82,23 @@ export default function UserDetail({ route, navigation }) {
   const fetchDesignations = async () => {
     try {
       const response = await usersAPI.getDesignations();
+      console.log('Designations API response', response.data);
       if (response.data.success) {
         const designations = response.data.data || [];
-        // Ensure current designation is in the list
-        if (designation && !designations.includes(designation)) {
+        // Ensure current designation is in the list (case-insensitive check)
+        if (designation && !designations.some(d => d.toLowerCase() === designation.toLowerCase())) {
           designations.push(designation);
+        }
+        // Normalize current designation to match canonical casing from the list
+        const canonical = designations.find(d => d.toLowerCase() === designation.toLowerCase());
+        if (canonical && canonical !== designation) {
+          setDesignation(canonical);
         }
         setExistingDesignations(designations.sort());
       }
     } catch (error) {
       console.error('Error fetching designations:', error);
-      setExistingDesignations(['JUNIOR', 'SENIOR']);
+      setExistingDesignations(['HELPER', 'SENIOR']);
     }
   };
 
@@ -125,7 +131,7 @@ export default function UserDetail({ route, navigation }) {
     try {
       const r = await usersAPI.toggleLeave(user.id);
       if (r.data.success) {
-        const updatedUser = { ...user, is_on_leave: !user.is_on_leave };
+        const updatedUser = { ...user, availability: { ...user.availability, is_on_leave: !user.availability?.is_on_leave } };
         setUser(updatedUser);
         navigation.setParams({ user: updatedUser });
         Alert.alert(t('success'), r.data.message);
@@ -155,8 +161,7 @@ export default function UserDetail({ route, navigation }) {
           ...user,
           full_name: fullName.trim(),
           phone: phone.trim(),
-          designation,
-          employee_id: employeeId,
+          staff_details: { ...user.staff_details, designation, employee_id: employeeId },
         };
         setUser(updatedUser);
         navigation.setParams({ user: updatedUser });
@@ -173,8 +178,8 @@ export default function UserDetail({ route, navigation }) {
   const handleCancelEdit = () => {
     setFullName(user.full_name || '');
     setPhone(user.phone || '');
-    setDesignation(user.designation || '');
-    setEmployeeId(user.employee_id || '');
+    setDesignation(user.staff_details?.designation || '');
+    setEmployeeId(user.staff_details?.employee_id || '');
     setEditing(false);
   };
 
@@ -232,7 +237,7 @@ export default function UserDetail({ route, navigation }) {
             />
             <Text style={[s.rolePillText, { color: roleStyle.text }]}>  {user.role}</Text>
           </View>
-          {user.is_on_leave && (
+          {user.availability?.is_on_leave && (
             <View style={s.leaveBadge}>
               <Ionicons name="home-outline" size={13} color="#FFF" />
               <Text style={s.leaveBadgeText}>  {t('currentlyOnLeave')}</Text>
@@ -261,8 +266,8 @@ export default function UserDetail({ route, navigation }) {
               <DetailRow iconName="call-outline" label={t('phone')} value={user.phone || t('notProvided')} />
               {user.role === 'STAFF' && (
                 <>
-                  <DetailRow iconName="card-outline" label={t('employeeId')} value={user.employee_id || t('notProvided')} />
-                  <DetailRow iconName="briefcase-outline" label={t('designation')} value={user.designation || t('notSet')} />
+                  <DetailRow iconName="card-outline" label={t('employeeId')} value={user.staff_details?.employee_id || t('notProvided')} />
+                  <DetailRow iconName="briefcase-outline" label={t('designation')} value={user.staff_details?.designation || t('notSet')} />
                 </>
               )}
               <DetailRow
@@ -348,23 +353,23 @@ export default function UserDetail({ route, navigation }) {
           <View style={s.card}>
             <Text style={s.cardTitle}>{t('staffActions')}</Text>
             <TouchableOpacity
-              style={[s.leaveBtn, user.is_on_leave ? s.leaveBtnAvail : s.leaveBtnLeave]}
+              style={[s.leaveBtn, user.availability?.is_on_leave ? s.leaveBtnAvail : s.leaveBtnLeave]}
               onPress={toggleLeaveStatus}
               disabled={loading}
               activeOpacity={0.85}
             >
               <Ionicons
-                name={user.is_on_leave ? 'checkmark-circle-outline' : 'home-outline'}
+                name={user.availability?.is_on_leave ? 'checkmark-circle-outline' : 'home-outline'}
                 size={18}
-                color={user.is_on_leave ? '#2E7D32' : '#E65100'}
+                color={user.availability?.is_on_leave ? '#2E7D32' : '#E65100'}
               />
               <Text style={[
                 s.leaveBtnText,
-                user.is_on_leave ? s.leaveBtnTextAvail : s.leaveBtnTextLeave,
+                user.availability?.is_on_leave ? s.leaveBtnTextAvail : s.leaveBtnTextLeave,
               ]}>
                 {loading 
                   ? t('updating') 
-                  : user.is_on_leave 
+                  : user.availability?.is_on_leave 
                     ? `  ${t('markAsAvailable')}` 
                     : `  ${t('markAsOnLeave')}`
                 }

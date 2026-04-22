@@ -1,7 +1,7 @@
 // User Management Controller
 // Admin manages all users — create, edit, toggle leave, delete
 
-const User = require('../models/User');
+const User = require('../models/User_v2');
 const generateToken = require('../utils/generateToken');
 const dns = require('dns').promises;
 
@@ -32,7 +32,7 @@ exports.getAllUsers = async (req, res) => {
       filter.$or = [
         { full_name: { $regex: search, $options: 'i' } },
         { email: { $regex: search, $options: 'i' } },
-        { employee_id: { $regex: search, $options: 'i' } },
+        { 'staff_details.employee_id': { $regex: search, $options: 'i' } },
       ];
     }
 
@@ -226,11 +226,15 @@ exports.createUser = async (req, res) => {
       full_name: full_name.trim(),
       role: userRole,
       phone: phone.replace(/\D/g, ''),
-      designation: userRole === 'STAFF' ? designation || 'JUNIOR' : null,
-      employee_id: userRole === 'STAFF' ? employee_id.trim() : null,
       photo_url: photo_url || '',
-      is_available: true,
-      is_on_leave: false,
+      staff_details: userRole === 'STAFF' ? {
+        designation: designation || 'HELPER',
+        employee_id: employee_id.trim(),
+      } : undefined,
+      availability: {
+        is_available: true,
+        is_on_leave: false,
+      },
     });
 
     res.status(201).json({
@@ -275,8 +279,8 @@ exports.updateUser = async (req, res) => {
       updateFields.phone = phoneDigits;
     }
 
-    if (designation !== undefined) updateFields.designation = designation;
-    if (employee_id !== undefined) updateFields.employee_id = employee_id;
+    if (designation !== undefined) updateFields['staff_details.designation'] = designation;
+    if (employee_id !== undefined) updateFields['staff_details.employee_id'] = employee_id;
 
     // Email update with verification
     if (email !== undefined) {
@@ -397,13 +401,12 @@ exports.toggleLeave = async (req, res) => {
     }
 
     // Toggle the status
-    const newStatus = !user.is_on_leave;
+    const newStatus = !user.availability.is_on_leave;
 
-    user.is_on_leave = newStatus;
-    user.is_available = !newStatus;
-    user.leave_reason = newStatus
-      ? leave_reason || 'Marked by Admin'
-      : null;
+    user.availability.is_on_leave = newStatus;
+    user.availability.is_available = !newStatus;
+    user.availability.leave_reason = newStatus ? leave_reason || 'Marked by Admin' : null;
+    user.markModified('availability');
 
     await user.save();
 
@@ -435,11 +438,12 @@ exports.toggleSelfLeave = async (req, res) => {
       });
     }
 
-    const newStatus = !user.is_on_leave;
+    const newStatus = !user.availability.is_on_leave;
 
-    user.is_on_leave = newStatus;
-    user.is_available = !newStatus;
-    user.leave_reason = newStatus ? 'Self-marked' : null;
+    user.availability.is_on_leave = newStatus;
+    user.availability.is_available = !newStatus;
+    user.availability.leave_reason = newStatus ? 'Self-marked' : null;
+    user.markModified('availability');
 
     await user.save();
 
@@ -467,9 +471,9 @@ exports.getLeaveStatus = async (req, res) => {
     res.status(200).json({
       success: true,
       data: {
-        is_on_leave: user.is_on_leave,
-        leave_reason: user.leave_reason,
-        leave_until: user.leave_until,
+        is_on_leave: user.availability?.is_on_leave,
+        leave_reason: user.availability?.leave_reason,
+        leave_until: user.availability?.leave_until,
       },
     });
   } catch (error) {
@@ -484,12 +488,27 @@ exports.getLeaveStatus = async (req, res) => {
 // GET /api/users/designations
 exports.getDesignations = async (req, res) => {
   try {
-    const designations = await User.distinct('designation', {
-      designation: { $ne: null, $ne: '' },
+    const { DESIGNATIONS } = require('../config/constants');
+    const predefined = Object.values(DESIGNATIONS); // ['Sr.Tech', 'Tech-I', ...]
+
+    const fromDB = await User.distinct('staff_details.designation', {
+      'staff_details.designation': { $exists: true, $ne: null, $ne: '' },
     });
+
+    // Merge: start with predefined, add DB values only if not already present (case-insensitive)
+    const merged = [...predefined];
+    const lowerSet = new Set(predefined.map(d => d.toLowerCase()));
+    for (const d of fromDB.filter(Boolean)) {
+      if (!lowerSet.has(d.toLowerCase())) {
+        merged.push(d);
+        lowerSet.add(d.toLowerCase());
+      }
+    }
+    merged.sort();
+
     res.status(200).json({
       success: true,
-      data: designations.filter(Boolean).sort(),
+      data: merged,
     });
   } catch (error) {
     console.error('Get designations error:', error);

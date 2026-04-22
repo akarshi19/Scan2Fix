@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   RefreshControl, Image, Alert, TextInput, Modal,
@@ -32,7 +32,10 @@ export default function ManageUsers({ route }) {
   const [filterRole, setFilterRole] = useState('ALL');
   const [showFilterModal, setShowFilterModal] = useState(false);
 
-  useFocusEffect(useCallback(() => { fetchUsers(); }, []));
+  const fetchingRef = useRef(false);
+  useFocusEffect(useCallback(() => {
+    if (!fetchingRef.current) fetchUsers();
+  }, []));
 
   useEffect(() => {
     if (route?.params?.initialFilter) {
@@ -52,6 +55,8 @@ export default function ManageUsers({ route }) {
   }, [navigation, route?.params?.initialFilter]);
 
   const fetchUsers = async () => {
+    if (fetchingRef.current) return;
+    fetchingRef.current = true;
     setLoading(true);
     try {
       const r = await usersAPI.getAll();
@@ -60,6 +65,7 @@ export default function ManageUsers({ route }) {
       console.error(e);
     } finally {
       setLoading(false);
+      fetchingRef.current = false;
     }
   };
 
@@ -78,8 +84,8 @@ export default function ManageUsers({ route }) {
     // Get unique designations from staff users
     const designations = [...new Set(
       users
-        .filter(u => u.role === 'STAFF' && u.designation)
-        .map(u => u.designation)
+        .filter(u => u.role === 'STAFF' && u.staff_details?.designation)
+        .map(u => u.staff_details.designation)
     )].sort();
 
     // Add designation filters
@@ -101,12 +107,12 @@ export default function ManageUsers({ route }) {
   const getFiltered = () => {
     let f = [...users];
     if (filterRole === 'ON_LEAVE') {
-      f = f.filter(u => u.is_on_leave === true);
+      f = f.filter(u => u.availability?.is_on_leave === true);
     } else if (filterRole === 'STAFF_ON_DUTY') {
-      f = f.filter(u => u.role === 'STAFF' && !u.is_on_leave);
+      f = f.filter(u => u.role === 'STAFF' && !u.availability?.is_on_leave);
     } else if (filterRole.startsWith('DESIG_')) {
       const desig = filterRole.replace('DESIG_', '');
-      f = f.filter(u => u.role === 'STAFF' && u.designation === desig);
+      f = f.filter(u => u.role === 'STAFF' && u.staff_details?.designation === desig);
     } else if (filterRole !== 'ALL') {
       f = f.filter(u => u.role === filterRole);
     }
@@ -115,7 +121,7 @@ export default function ManageUsers({ route }) {
       f = f.filter(u =>
         u.full_name?.toLowerCase().includes(q) ||
         u.email?.toLowerCase().includes(q) ||
-        u.employee_id?.toLowerCase().includes(q)
+        u.staff_details?.employee_id?.toLowerCase().includes(q)
       );
     }
     return f;
@@ -123,11 +129,11 @@ export default function ManageUsers({ route }) {
 
   const getFilterCount = (key) => {
     if (key === 'ALL') return users.length;
-    if (key === 'ON_LEAVE') return users.filter(u => u.is_on_leave === true).length;
-    if (key === 'STAFF_ON_DUTY') return users.filter(u => u.role === 'STAFF' && !u.is_on_leave).length;
+    if (key === 'ON_LEAVE') return users.filter(u => u.availability?.is_on_leave === true).length;
+    if (key === 'STAFF_ON_DUTY') return users.filter(u => u.role === 'STAFF' && !u.availability?.is_on_leave).length;
     if (key.startsWith('DESIG_')) {
       const desig = key.replace('DESIG_', '');
-      return users.filter(u => u.role === 'STAFF' && u.designation === desig).length;
+      return users.filter(u => u.role === 'STAFF' && u.staff_details?.designation === desig).length;
     }
     return users.filter(u => u.role === key).length;
   };
@@ -153,13 +159,14 @@ export default function ManageUsers({ route }) {
             try {
               const r = await usersAPI.toggleLeave(userId);
               if (r.data.success) {
-                setUsers(prev => prev.map(u =>
-                  u.id === userId ? { ...u, is_on_leave: newStatus } : u
-                ));
-                Alert.alert(
-                  t('success'), 
-                  `${userName} ${t('userNowStatus')} ${newStatus ? t('onLeaveStatus') : t('available')}`
-                );
+                // Update only this user's availability in local state — no full refetch
+                setUsers(prev => prev.map(u => {
+                  const uid = u._id?.toString() || u.id?.toString();
+                  const target = userId?.toString();
+                  return uid === target
+                    ? { ...u, availability: { ...(u.availability || {}), is_on_leave: newStatus } }
+                    : u;
+                }));
               }
             } catch (e) {
               Alert.alert(t('error'), e.message);
@@ -171,8 +178,8 @@ export default function ManageUsers({ route }) {
   };
 
   const filtered = getFiltered();
-  const onLeaveCount = users.filter(u => u.role === 'STAFF' && u.is_on_leave).length;
-  const availCount = users.filter(u => u.role === 'STAFF' && !u.is_on_leave).length;
+  const onLeaveCount = users.filter(u => u.role === 'STAFF' && u.availability?.is_on_leave).length;
+  const availCount = users.filter(u => u.role === 'STAFF' && !u.availability?.is_on_leave).length;
 
   const fixedHeaderContent = (
     <View style={s.headerRow}>
@@ -209,7 +216,7 @@ export default function ManageUsers({ route }) {
     const rs = ROLE_COLORS.role;
     return (
       <TouchableOpacity
-        style={[s.card, item.is_on_leave && s.cardOnLeave]}
+        style={[s.card, item.availability?.is_on_leave && s.cardOnLeave]}
         onPress={() => navigation.navigate('UserDetail', { user: item })}
         activeOpacity={0.88}
       >
@@ -224,13 +231,13 @@ export default function ManageUsers({ route }) {
           <View style={{ flex: 1 }}>
             <View style={s.nameRow}>
               <Text style={s.userName}>{item.full_name || t('noName')}</Text>
-              {item.is_on_leave && (
+              {item.availability?.is_on_leave && (
                 <View style={s.leavePill}>
                   <Ionicons name="home-outline" size={10} color="#FFF" />
                   <Text style={s.leavePillText}> {t('onLeave')}</Text>
                 </View>
               )}
-              {item.role === 'STAFF' && !item.is_on_leave && (
+              {item.role === 'STAFF' && !item.availability?.is_on_leave && (
                 <View style={s.onDutyPill}>
                   <Ionicons name="checkmark-circle" size={10} color="#FFF" />
                   <Text style={s.onDutyPillText}> {t('onDuty')}</Text>
@@ -238,8 +245,8 @@ export default function ManageUsers({ route }) {
               )}
             </View>
             <Text style={s.userEmail}>{item.email}</Text>
-            {item.employee_id && <Text style={s.userMeta}>ID: {item.employee_id}</Text>}
-            {item.designation && <Text style={[s.userMeta, { color: ACTIVE }]}>{item.designation}</Text>}
+            {item.staff_details?.employee_id && <Text style={s.userMeta}>ID: {item.staff_details.employee_id}</Text>}
+            {item.staff_details?.designation && <Text style={[s.userMeta, { color: ACTIVE }]}>{item.staff_details.designation}</Text>}
           </View>
           <View style={[s.roleBadge, { backgroundColor: rs.bg }]}>
             {ROLE_ICONS[item.role]}
@@ -248,20 +255,20 @@ export default function ManageUsers({ route }) {
         </View>
         {item.role === 'STAFF' && (
           <TouchableOpacity
-            style={[s.actionBtn, item.is_on_leave ? s.actionBtnAvail : s.actionBtnLeave]}
-            onPress={() => toggleAvailability(item.id, item.is_on_leave, item.full_name || item.email)}
+            style={[s.actionBtn, item.availability?.is_on_leave ? s.actionBtnAvail : s.actionBtnLeave]}
+            onPress={() => toggleAvailability(item.id, item.availability?.is_on_leave, item.full_name || item.email)}
             activeOpacity={0.85}
           >
             <Ionicons
-              name={item.is_on_leave ? 'checkmark-circle-outline' : 'home-outline'}
+              name={item.availability?.is_on_leave ? 'checkmark-circle-outline' : 'home-outline'}
               size={15}
-              color={item.is_on_leave ? '#2E7D32' : '#E65100'}
+              color={item.availability?.is_on_leave ? '#2E7D32' : '#E65100'}
             />
             <Text style={[
               s.actionBtnText,
-              item.is_on_leave ? s.actionBtnTextAvail : s.actionBtnTextLeave,
+              item.availability?.is_on_leave ? s.actionBtnTextAvail : s.actionBtnTextLeave,
             ]}>
-              {item.is_on_leave ? `  ${t('markAvailable')}` : `  ${t('markOnLeave')}`}
+              {item.availability?.is_on_leave ? `  ${t('markAvailable')}` : `  ${t('markOnLeave')}`}
             </Text>
           </TouchableOpacity>
         )}

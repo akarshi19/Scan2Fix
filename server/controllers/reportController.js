@@ -1,485 +1,299 @@
 // ============================================
-// Report Controller
-// ============================================
-// Monthly, yearly, and staff-wise analytics
-// ADMIN ONLY — matches your requirement:
-// "Monthly, yearly data for each type of complaints
-//  and maintenance staff wise data should be access
-//  by the admin only"
-//
-// Uses MongoDB Aggregation Pipeline
-// (This is equivalent to SQL GROUP BY queries)
+// Report Controller — complaints + staff analytics
 // ============================================
 
-const Complaint = require('../models/Complaint');
-const User = require('../models/User');
+const Complaint = require('../models/Complaint_v2');
+const User      = require('../models/User_v2');
 
-// ────────────────────────────────────────
-// GET /api/reports/monthly?year=2025
-// ────────────────────────────────────────
-// Monthly complaints grouped by asset type
-//
-// Returns data like:
-// [
-//   { month: 1, monthName: "January", AC: 12, WATER_COOLER: 5, DESERT_COOLER: 3, total: 20 },
-//   { month: 2, monthName: "February", AC: 8, WATER_COOLER: 7, DESERT_COOLER: 1, total: 16 },
-//   ...
-// ]
-// ────────────────────────────────────────
+const MONTH_NAMES = ['', 'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'];
+const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+// ─────────────────────────────────────────────
+// GET /api/reports/overview
+// ─────────────────────────────────────────────
+exports.getOverview = async (req, res) => {
+  try {
+    const statusCounts = await Complaint.aggregate([{ $group: { _id: '$status', count: { $sum: 1 } } }]);
+    const stats = { total: 0, open: 0, assigned: 0, inProgress: 0, finishing: 0, closed: 0 };
+    statusCounts.forEach(item => {
+      stats.total += item.count;
+      if (item._id === 'OPEN')        stats.open        = item.count;
+      if (item._id === 'ASSIGNED')    stats.assigned    = item.count;
+      if (item._id === 'IN_PROGRESS') stats.inProgress  = item.count;
+      if (item._id === 'FINISHING')   stats.finishing   = item.count;
+      if (item._id === 'CLOSED')      stats.closed      = item.count;
+    });
+
+    const userCounts = await User.aggregate([{ $group: { _id: '$role', count: { $sum: 1 } } }]);
+    const users = { totalUsers: 0, admins: 0, staff: 0, regularUsers: 0, staffOnLeave: 0, staffAvailable: 0 };
+    userCounts.forEach(item => {
+      users.totalUsers += item.count;
+      if (item._id === 'ADMIN') users.admins       = item.count;
+      if (item._id === 'STAFF') users.staff        = item.count;
+      if (item._id === 'USER')  users.regularUsers = item.count;
+    });
+    users.staffOnLeave  = await User.countDocuments({ role: 'STAFF', 'availability.is_on_leave': true });
+    users.staffAvailable = users.staff - users.staffOnLeave;
+
+    // Group by asset_type directly from complaint
+    const typeCounts = await Complaint.aggregate([
+      { $group: { _id: '$asset_type', count: { $sum: 1 } } },
+      { $sort: { count: -1 } },
+    ]);
+    const byType = {};
+    typeCounts.forEach(item => { if (item._id) byType[item._id] = item.count; });
+
+    res.status(200).json({ success: true, data: { complaints: stats, users, byType } });
+  } catch (error) {
+    console.error('Overview error:', error);
+    res.status(500).json({ success: false, message: 'Server error generating overview' });
+  }
+};
+
+// ─────────────────────────────────────────────
+// GET /api/reports/weekly
+// Last 7 days — complaints per day + by asset_type
+// ─────────────────────────────────────────────
+exports.getWeeklyReport = async (req, res) => {
+  try {
+    const now   = new Date();
+    const start = new Date(now);
+    start.setDate(start.getDate() - 6);
+    start.setHours(0, 0, 0, 0);
+
+    const rawData = await Complaint.aggregate([
+      { $match: { created_at: { $gte: start, $lte: now } } },
+      {
+        $group: {
+          _id: {
+            day:       { $dayOfMonth: '$created_at' },
+            month:     { $month: '$created_at' },
+            year:      { $year: '$created_at' },
+            dayOfWeek: { $dayOfWeek: '$created_at' },
+            assetType: '$asset_type',
+          },
+          count: { $sum: 1 },
+        },
+      },
+      { $sort: { '_id.year': 1, '_id.month': 1, '_id.day': 1 } },
+    ]);
+
+    const allTypes = [...new Set(rawData.map(d => d._id.assetType).filter(Boolean))].sort();
+
+    // Build 7-day array
+    const days = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      const day   = d.getDate();
+      const month = d.getMonth() + 1;
+      const year  = d.getFullYear();
+      const entry = {
+        label: `${DAY_NAMES[d.getDay()]} ${day}/${month}`,
+        date: `${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`,
+        total: 0,
+        byType: {},
+      };
+      allTypes.forEach(t => { entry.byType[t] = 0; });
+      rawData.forEach(item => {
+        if (item._id.day === day && item._id.month === month && item._id.year === year && item._id.assetType) {
+          entry.byType[item._id.assetType] = (entry.byType[item._id.assetType] || 0) + item.count;
+          entry.total += item.count;
+        }
+      });
+      days.push(entry);
+    }
+
+    const totalWeek = days.reduce((s, d) => s + d.total, 0);
+
+    res.status(200).json({ success: true, data: { days, assetTypes: allTypes, totalComplaints: totalWeek } });
+  } catch (error) {
+    console.error('Weekly report error:', error);
+    res.status(500).json({ success: false, message: 'Server error generating weekly report' });
+  }
+};
+
+// ─────────────────────────────────────────────
+// GET /api/reports/monthly?year=2026
+// Monthly complaints grouped by asset_type
+// ─────────────────────────────────────────────
 exports.getMonthlyReport = async (req, res) => {
   try {
     const year = parseInt(req.query.year) || new Date().getFullYear();
 
-    const monthNames = [
-      '', 'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December',
-    ];
+    const rawData = await Complaint.aggregate([
+      { $match: { created_at: { $gte: new Date(`${year}-01-01`), $lt: new Date(`${year+1}-01-01`) } } },
+      { $group: { _id: { month: { $month: '$created_at' }, assetType: '$asset_type' }, count: { $sum: 1 } } },
+      { $sort: { '_id.month': 1 } },
+    ]);
 
-    // Aggregate: group by month and asset type
-    const pipeline = [
-      {
-        $match: {
-          created_at: {
-            $gte: new Date(`${year}-01-01`),
-            $lt: new Date(`${year + 1}-01-01`),
-          },
-        },
-      },
-      {
-        // Join with assets collection to get asset type
-        $lookup: {
-          from: 'assets',
-          localField: 'asset',
-          foreignField: '_id',
-          as: 'assetInfo',
-        },
-      },
-      {
-        $unwind: {
-          path: '$assetInfo',
-          preserveNullAndEmptyArrays: true,
-        },
-      },
-      {
-        $group: {
-          _id: {
-            month: { $month: '$created_at' },
-            assetType: '$assetInfo.type',
-          },
-          count: { $sum: 1 },
-        },
-      },
-      {
-        $sort: { '_id.month': 1 },
-      },
-    ];
+    const allTypes = [...new Set(rawData.map(d => d._id.assetType).filter(Boolean))].sort();
 
-    const rawData = await Complaint.aggregate(pipeline);
-
-    // Transform into a clean format for charts
-    // Initialize all 12 months
-    const monthlyData = [];
+    const months = [];
     for (let m = 1; m <= 12; m++) {
-      const monthEntry = {
-        month: m,
-        monthName: monthNames[m],
-        AC: 0,
-        WATER_COOLER: 0,
-        DESERT_COOLER: 0,
-        total: 0,
-      };
-
-      // Fill in data from aggregation
-      rawData.forEach((item) => {
+      const entry = { month: m, monthName: MONTH_NAMES[m], total: 0, byType: {} };
+      allTypes.forEach(t => { entry.byType[t] = 0; });
+      rawData.forEach(item => {
         if (item._id.month === m && item._id.assetType) {
-          monthEntry[item._id.assetType] = item.count;
-          monthEntry.total += item.count;
-        }
-      });
-
-      monthlyData.push(monthEntry);
-    }
-
-    // Summary totals
-    const summary = {
-      year,
-      totalComplaints: monthlyData.reduce((sum, m) => sum + m.total, 0),
-      totalAC: monthlyData.reduce((sum, m) => sum + m.AC, 0),
-      totalWaterCooler: monthlyData.reduce(
-        (sum, m) => sum + m.WATER_COOLER,
-        0
-      ),
-      totalDesertCooler: monthlyData.reduce(
-        (sum, m) => sum + m.DESERT_COOLER,
-        0
-      ),
-    };
-
-    res.status(200).json({
-      success: true,
-      data: {
-        summary,
-        monthly: monthlyData,
-      },
-    });
-  } catch (error) {
-    console.error('Monthly report error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error generating monthly report',
-    });
-  }
-};
-
-// ────────────────────────────────────────
-// GET /api/reports/yearly
-// ────────────────────────────────────────
-// Yearly summary — complaints per year grouped by type
-//
-// Returns:
-// [
-//   { year: 2024, AC: 45, WATER_COOLER: 23, DESERT_COOLER: 12, total: 80 },
-//   { year: 2025, AC: 30, WATER_COOLER: 15, DESERT_COOLER: 8, total: 53 },
-// ]
-// ────────────────────────────────────────
-exports.getYearlyReport = async (req, res) => {
-  try {
-    const pipeline = [
-      {
-        $lookup: {
-          from: 'assets',
-          localField: 'asset',
-          foreignField: '_id',
-          as: 'assetInfo',
-        },
-      },
-      {
-        $unwind: {
-          path: '$assetInfo',
-          preserveNullAndEmptyArrays: true,
-        },
-      },
-      {
-        $group: {
-          _id: {
-            year: { $year: '$created_at' },
-            assetType: '$assetInfo.type',
-          },
-          count: { $sum: 1 },
-        },
-      },
-      {
-        $sort: { '_id.year': -1 },
-      },
-    ];
-
-    const rawData = await Complaint.aggregate(pipeline);
-
-    // Get unique years
-    const years = [...new Set(rawData.map((d) => d._id.year))].sort(
-      (a, b) => b - a
-    );
-
-    const yearlyData = years.map((year) => {
-      const entry = {
-        year,
-        AC: 0,
-        WATER_COOLER: 0,
-        DESERT_COOLER: 0,
-        total: 0,
-      };
-
-      rawData.forEach((item) => {
-        if (item._id.year === year && item._id.assetType) {
-          entry[item._id.assetType] = item.count;
+          entry.byType[item._id.assetType] = item.count;
           entry.total += item.count;
         }
       });
+      months.push(entry);
+    }
 
-      return entry;
-    });
+    const total = months.reduce((s, m) => s + m.total, 0);
 
-    res.status(200).json({
-      success: true,
-      data: yearlyData,
-    });
+    res.status(200).json({ success: true, data: { months, assetTypes: allTypes, total, year } });
   } catch (error) {
-    console.error('Yearly report error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error generating yearly report',
-    });
+    console.error('Monthly report error:', error);
+    res.status(500).json({ success: false, message: 'Server error generating monthly report' });
   }
 };
 
-// ────────────────────────────────────────
-// GET /api/reports/staff
-// ────────────────────────────────────────
-// Staff-wise performance report
-//
-// Returns:
-// [
-//   {
-//     staffName: "Rahul Sharma",
-//     staffEmail: "rahul@test.com",
-//     designation: "SENIOR",
-//     totalAssigned: 25,
-//     closed: 20,
-//     open: 5,
-//     avgResolutionHours: 4.5,
-//     isOnLeave: false
-//   },
-//   ...
-// ]
-// ────────────────────────────────────────
+// ─────────────────────────────────────────────
+// GET /api/reports/yearly
+// ─────────────────────────────────────────────
+exports.getYearlyReport = async (req, res) => {
+  try {
+    const rawData = await Complaint.aggregate([
+      { $match: { created_at: { $exists: true, $ne: null, $type: 'date' } } },
+      { $group: { _id: { year: { $year: '$created_at' }, assetType: '$asset_type' }, count: { $sum: 1 } } },
+      { $sort: { '_id.year': -1 } },
+    ]);
+
+    const years    = [...new Set(rawData.map(d => d._id.year).filter(y => y != null))].sort((a, b) => b - a);
+    const allTypes = [...new Set(rawData.map(d => d._id.assetType).filter(Boolean))].sort();
+
+    const yearlyData = years.map(year => {
+      const byType = {};
+      allTypes.forEach(t => { byType[t] = 0; });
+      let total = 0;
+      rawData.forEach(item => {
+        if (item._id.year === year && item._id.assetType) {
+          byType[item._id.assetType] = item.count;
+          total += item.count;
+        }
+      });
+      return { year, total, byType };
+    });
+
+    res.status(200).json({ success: true, data: yearlyData });
+  } catch (error) {
+    console.error('Yearly report error:', error);
+    res.status(500).json({ success: false, message: 'Server error generating yearly report' });
+  }
+};
+
+// ─────────────────────────────────────────────
+// GET /api/reports/staff   (ADMIN)
+// ─────────────────────────────────────────────
 exports.getStaffReport = async (req, res) => {
   try {
-    const pipeline = [
-      {
-        // Only complaints that have been assigned
-        $match: {
-          assigned_staff_id: { $ne: null },
-        },
-      },
+    const allStaff = await User.find({ role: 'STAFF', is_active: true }).lean();
+
+    const complaintStats = await Complaint.aggregate([
+      { $match: { 'assigned_staff.staff_id': { $ne: null } } },
       {
         $group: {
-          _id: '$assigned_staff_id',
-          totalAssigned: { $sum: 1 },
-          closed: {
-            $sum: {
-              $cond: [{ $eq: ['$status', 'CLOSED'] }, 1, 0],
-            },
-          },
-          open: {
-            $sum: {
-              $cond: [{ $ne: ['$status', 'CLOSED'] }, 1, 0],
-            },
-          },
+          _id:             '$assigned_staff.staff_id',
+          totalAssigned:   { $sum: 1 },
+          closed:          { $sum: { $cond: [{ $eq: ['$status', 'CLOSED'] }, 1, 0] } },
+          open:            { $sum: { $cond: [{ $ne: ['$status', 'CLOSED'] }, 1, 0] } },
           avgResolutionMs: {
             $avg: {
               $cond: [
-                {
-                  $and: [
-                    { $eq: ['$status', 'CLOSED'] },
-                    { $ne: ['$closed_at', null] },
-                  ],
-                },
-                { $subtract: ['$closed_at', '$created_at'] },
+                { $and: [{ $eq: ['$status', 'CLOSED'] }, { $ne: ['$closed_at', null] }, { $ne: ['$assigned_staff.assigned_at', null] }] },
+                { $subtract: ['$closed_at', '$assigned_staff.assigned_at'] },
                 null,
               ],
             },
           },
         },
       },
-      {
-        // Join with users to get staff details
-        $lookup: {
-          from: 'users',
-          localField: '_id',
-          foreignField: '_id',
-          as: 'staffInfo',
-        },
-      },
-      {
-        $unwind: '$staffInfo',
-      },
-      {
-        $project: {
-          _id: 0,
-          staffId: '$_id',
-          staffName: '$staffInfo.full_name',
-          staffEmail: '$staffInfo.email',
-          designation: '$staffInfo.designation',
-          isOnLeave: '$staffInfo.is_on_leave',
-          photoUrl: '$staffInfo.photo_url',
-          totalAssigned: 1,
-          closed: 1,
-          open: 1,
-          avgResolutionHours: {
-            $cond: [
-              { $ne: ['$avgResolutionMs', null] },
-              {
-                $round: [
-                  { $divide: ['$avgResolutionMs', 3600000] }, // ms to hours
-                  1,
-                ],
-              },
-              null,
-            ],
-          },
-          completionRate: {
-            $cond: [
-              { $gt: ['$totalAssigned', 0] },
-              {
-                $round: [
-                  {
-                    $multiply: [
-                      { $divide: ['$closed', '$totalAssigned'] },
-                      100,
-                    ],
-                  },
-                  1,
-                ],
-              },
-              0,
-            ],
-          },
-        },
-      },
-      {
-        $sort: { totalAssigned: -1 },
-      },
-    ];
+    ]);
 
-    const staffData = await Complaint.aggregate(pipeline);
+    const statsMap = {};
+    for (const s of complaintStats) statsMap[s._id.toString()] = s;
 
-    res.status(200).json({
-      success: true,
-      count: staffData.length,
-      data: staffData,
-    });
+    const staffData = allStaff.map(staff => {
+      const stats       = statsMap[staff._id.toString()] || { totalAssigned: 0, closed: 0, open: 0, avgResolutionMs: null };
+      const avgHours    = stats.avgResolutionMs ? Math.round((stats.avgResolutionMs / 3600000) * 10) / 10 : null;
+      const completionRate = stats.totalAssigned > 0 ? Math.round((stats.closed / stats.totalAssigned) * 1000) / 10 : 0;
+      return {
+        staffId: staff._id, staffName: staff.full_name, staffEmail: staff.email,
+        designation: staff.staff_details?.designation || null,
+        isOnLeave: staff.availability?.is_on_leave || false,
+        photoUrl: staff.photo_url || null,
+        totalAssigned: stats.totalAssigned, closed: stats.closed, open: stats.open,
+        avgResolutionHours: avgHours, completionRate,
+      };
+    }).sort((a, b) => b.totalAssigned - a.totalAssigned || (a.staffName || '').localeCompare(b.staffName || ''));
+
+    const withComplaints = staffData.filter(s => s.totalAssigned > 0);
+    let starStaff = null;
+    if (withComplaints.length > 0) {
+      const scored = withComplaints.map(s => ({
+        ...s,
+        score: (s.completionRate * 0.5) + (s.closed * 2) - (s.avgResolutionHours != null ? s.avgResolutionHours * 0.1 : 0),
+      })).sort((a, b) => b.score - a.score);
+      starStaff = scored[0];
+    }
+
+    res.status(200).json({ success: true, count: staffData.length, data: staffData, starStaff });
   } catch (error) {
     console.error('Staff report error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error generating staff report',
-    });
+    res.status(500).json({ success: false, message: 'Server error generating staff report' });
   }
 };
 
-// ────────────────────────────────────────
-// GET /api/reports/overview
-// ────────────────────────────────────────
-// Quick stats for admin dashboard
-//
-// Replaces (AdminDashboard.js):
-//   Fetches all complaints and computes stats client-side
-//   Now computed server-side for better performance
-// ────────────────────────────────────────
-exports.getOverview = async (req, res) => {
+// ─────────────────────────────────────────────
+// GET /api/reports/staff/me   (STAFF)
+// ─────────────────────────────────────────────
+exports.getMyStaffReport = async (req, res) => {
   try {
-    // Count complaints by status
-    const statusCounts = await Complaint.aggregate([
+    const staffUser = await User.findById(req.user._id).lean();
+    if (!staffUser) return res.status(404).json({ success: false, message: 'Staff not found' });
+
+    const stats = await Complaint.aggregate([
+      { $match: { 'assigned_staff.staff_id': req.user._id } },
       {
         $group: {
-          _id: '$status',
-          count: { $sum: 1 },
+          _id: null,
+          totalAssigned: { $sum: 1 },
+          closed: { $sum: { $cond: [{ $eq: ['$status', 'CLOSED'] }, 1, 0] } },
+          open:   { $sum: { $cond: [{ $ne: ['$status', 'CLOSED'] }, 1, 0] } },
+          avgResolutionMs: {
+            $avg: {
+              $cond: [
+                { $and: [{ $eq: ['$status', 'CLOSED'] }, { $ne: ['$closed_at', null] }, { $ne: ['$assigned_staff.assigned_at', null] }] },
+                { $subtract: ['$closed_at', '$assigned_staff.assigned_at'] },
+                null,
+              ],
+            },
+          },
         },
       },
     ]);
 
-    // Transform to object
-    const stats = {
-      total: 0,
-      open: 0,
-      assigned: 0,
-      inProgress: 0,
-      closed: 0,
-    };
-
-    statusCounts.forEach((item) => {
-      stats.total += item.count;
-      switch (item._id) {
-        case 'OPEN':
-          stats.open = item.count;
-          break;
-        case 'ASSIGNED':
-          stats.assigned = item.count;
-          break;
-        case 'IN_PROGRESS':
-          stats.inProgress = item.count;
-          break;
-        case 'CLOSED':
-          stats.closed = item.count;
-          break;
-      }
-    });
-
-    // Count users by role
-    const userCounts = await User.aggregate([
-      {
-        $group: {
-          _id: '$role',
-          count: { $sum: 1 },
-        },
-      },
-    ]);
-
-    const users = {
-      totalUsers: 0,
-      admins: 0,
-      staff: 0,
-      regularUsers: 0,
-      staffOnLeave: 0,
-      staffAvailable: 0,
-    };
-
-    userCounts.forEach((item) => {
-      users.totalUsers += item.count;
-      switch (item._id) {
-        case 'ADMIN':
-          users.admins = item.count;
-          break;
-        case 'STAFF':
-          users.staff = item.count;
-          break;
-        case 'USER':
-          users.regularUsers = item.count;
-          break;
-      }
-    });
-
-    // Count staff on leave
-    users.staffOnLeave = await User.countDocuments({
-      role: 'STAFF',
-      is_on_leave: true,
-    });
-    users.staffAvailable = users.staff - users.staffOnLeave;
-
-    // Count by asset type
-    const typeCounts = await Complaint.aggregate([
-      {
-        $lookup: {
-          from: 'assets',
-          localField: 'asset',
-          foreignField: '_id',
-          as: 'assetInfo',
-        },
-      },
-      { $unwind: { path: '$assetInfo', preserveNullAndEmptyArrays: true } },
-      {
-        $group: {
-          _id: '$assetInfo.type',
-          count: { $sum: 1 },
-        },
-      },
-    ]);
-
-    const byType = {
-      AC: 0,
-      WATER_COOLER: 0,
-      DESERT_COOLER: 0,
-    };
-
-    typeCounts.forEach((item) => {
-      if (item._id && byType.hasOwnProperty(item._id)) {
-        byType[item._id] = item.count;
-      }
-    });
+    const s       = stats[0] || { totalAssigned: 0, closed: 0, open: 0, avgResolutionMs: null };
+    const avgHours = s.avgResolutionMs ? Math.round((s.avgResolutionMs / 3600000) * 10) / 10 : null;
 
     res.status(200).json({
       success: true,
       data: {
-        complaints: stats,
-        users,
-        byType,
+        staffId: staffUser._id, staffName: staffUser.full_name, staffEmail: staffUser.email,
+        designation: staffUser.staff_details?.designation || null,
+        isOnLeave: staffUser.availability?.is_on_leave || false,
+        photoUrl: staffUser.photo_url || null,
+        totalAssigned: s.totalAssigned, closed: s.closed, open: s.open,
+        avgResolutionHours: avgHours,
+        completionRate: s.totalAssigned > 0 ? Math.round((s.closed / s.totalAssigned) * 1000) / 10 : 0,
       },
     });
   } catch (error) {
-    console.error('Overview error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error generating overview',
-    });
+    console.error('My staff report error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
   }
 };

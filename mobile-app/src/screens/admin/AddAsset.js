@@ -7,6 +7,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { assetsAPI } from '../../services/api';
+
 import { useTheme } from '../../context/ThemeContext';
 import { useLanguage } from '../../context/LanguageContext';
 import ScreenLayout from '../../components/ScreenLayout';
@@ -15,6 +16,7 @@ export default function AddAsset({ navigation }) {
   const { colors } = useTheme();
   const { t } = useLanguage();
   const [assetId, setAssetId] = useState('');
+  const [idLoading, setIdLoading] = useState(false);
   const [type, setType] = useState('');
   const [customType, setCustomType] = useState('');
   const [location, setLocation] = useState('');
@@ -32,6 +34,19 @@ export default function AddAsset({ navigation }) {
     fetchAssetTypes();
   }, []);
 
+  const fetchNextId = async (selectedType) => {
+    if (!selectedType) return;
+    setIdLoading(true);
+    try {
+      const res = await assetsAPI.getNextId(selectedType);
+      if (res.data.success) setAssetId(res.data.data);
+    } catch (_) {
+      // silently fail — user can type manually
+    } finally {
+      setIdLoading(false);
+    }
+  };
+
   const fetchAssetTypes = async () => {
     try {
       const response = await assetsAPI.getTypes();
@@ -40,6 +55,7 @@ export default function AddAsset({ navigation }) {
         // Auto-select first type if available
         if (response.data.data?.length > 0 && !type) {
           setType(response.data.data[0]);
+          fetchNextId(response.data.data[0]);
         }
       }
     } catch (error) {
@@ -81,6 +97,7 @@ export default function AddAsset({ navigation }) {
     // Add to local list and select it
     setExistingTypes(prev => [...prev, trimmed]);
     setType(trimmed);
+    fetchNextId(trimmed);
     setCustomType('');
     setIsAddingCustomType(false);
     setShowTypeModal(false);
@@ -103,6 +120,7 @@ export default function AddAsset({ navigation }) {
   };
 
   const handleSubmit = async () => {
+    console.log("Submit clicked with:", { assetId, type, location, brand, model, installDate });
     if (!assetId.trim()) {
       Alert.alert(t('error'), t('assetidalert'));
       return;
@@ -115,8 +133,13 @@ export default function AddAsset({ navigation }) {
       Alert.alert(t('error'), t('locationalert'));
       return;
     }
+    if (!installDate) {
+      Alert.alert(t('error'), t('installdatealert'));
+      return;
+    }
 
     setLoading(true);
+    console.log("Submitting Asset:", { assetId, type, location, brand, model, installDate });
     try {
       const response = await assetsAPI.create({
         asset_id: assetId.trim().toUpperCase(),
@@ -126,6 +149,7 @@ export default function AddAsset({ navigation }) {
         model: model.trim(),
         install_date: installDate ? installDate.toISOString() : null,
       });
+      console.log("Create Asset Response:", response.data);
       if (response.data.success) {
         Alert.alert(
           t('createalert'),
@@ -146,8 +170,282 @@ export default function AddAsset({ navigation }) {
     }
   };
 
+  // Styles remain exactly the same
+  const s = StyleSheet.create({
+    card: {
+      borderRadius: 16,
+      padding: 18,
+      marginBottom: 14,
+      shadowColor: '#A0BDD0',
+      shadowOffset: { width: 0, height: 3 },
+      shadowOpacity: 0.12,
+      shadowRadius: 8,
+      elevation: 3,
+    },
+    cardTitle: {
+      fontSize: 15,
+      fontWeight: '800',
+      marginBottom: 14,
+    },
+    typeSelector: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      borderRadius: 12,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      borderWidth: 1,
+    },
+    typeSelectorIcon: {
+      width: 36,
+      height: 36,
+      borderRadius: 10,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: 12,
+    },
+    typeSelectorText: {
+      flex: 1,
+      fontSize: 14,
+      fontWeight: '500',
+    },
+    selectedTypeRow: {
+      marginTop: 10,
+    },
+    selectedTypePill: {
+      alignSelf: 'flex-start',
+      paddingHorizontal: 12,
+      paddingVertical: 5,
+      borderRadius: 8,
+    },
+    selectedTypeText: {
+      fontSize: 12,
+      fontWeight: '700',
+    },
+    fieldLabel: {
+      fontSize: 12,
+      fontWeight: '600',
+      marginBottom: 6,
+      marginTop: 4,
+    },
+    fieldInput: {
+      borderRadius: 10,
+      paddingHorizontal: 14,
+      paddingVertical: 13,
+      fontSize: 14,
+      borderWidth: 1,
+      marginBottom: 2,
+    },
+    datePickerBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      borderRadius: 10,
+      paddingHorizontal: 14,
+      paddingVertical: 13,
+      borderWidth: 1,
+      marginBottom: 2,
+      gap: 10,
+    },
+    datePickerText: {
+      flex: 1,
+      fontSize: 14,
+    },
+    dateModalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.4)',
+      justifyContent: 'flex-end',
+    },
+    dateModalContent: {
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
+      paddingBottom: 34,
+      paddingTop: 16,
+      paddingHorizontal: 20,
+    },
+    dateModalHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 10,
+    },
+    dateModalTitle: { fontSize: 18, fontWeight: '700' },
+    dateModalDone: { fontSize: 16, fontWeight: '700' },
+    submitBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      backgroundColor: colors.button,
+      borderRadius: 12,
+      paddingVertical: 16,
+      marginTop: 10,
+      shadowColor: colors.button,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.35,
+      shadowRadius: 8,
+      elevation: 6,
+      marginBottom: 62,
+    },
+    submitBtnDisabled: { backgroundColor: `${colors.assigned}80` },
+    submitBtnText: { color: colors.white, fontWeight: '700', fontSize: 16 },
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.4)',
+      justifyContent: 'flex-end',
+    },
+    modalContent: {
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
+      paddingHorizontal: 20,
+      paddingBottom: 34,
+      paddingTop: 12,
+      maxHeight: '75%',
+    },
+    modalHandle: {
+      width: 40,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: '#DDD',
+      alignSelf: 'center',
+      marginBottom: 16,
+    },
+    modalTitle: {
+      fontSize: 18,
+      fontWeight: '800',
+      marginBottom: 16,
+    },
+    typesList: {
+      maxHeight: 280,
+    },
+    typeOption: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: 14,
+      paddingHorizontal: 12,
+      borderRadius: 12,
+      marginBottom: 4,
+      gap: 12,
+      borderWidth: 1,
+      borderColor: 'transparent',
+    },
+    typeOptionActive: {
+      backgroundColor: `${colors.active}15`,
+    },
+    typeOptionIcon: {
+      width: 36,
+      height: 36,
+      borderRadius: 10,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    typeOptionLabel: {
+      fontSize: 15,
+      fontWeight: '500',
+    },
+    typeOptionKey: {
+      fontSize: 11,
+      marginTop: 2,
+    },
+    noTypes: {
+      padding: 20,
+      alignItems: 'center',
+    },
+    noTypesText: {
+      fontSize: 13,
+    },
+    modalDivider: {
+      height: 1,
+      marginVertical: 12,
+    },
+    addTypeBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: 14,
+      paddingHorizontal: 12,
+      borderRadius: 12,
+      gap: 12,
+    },
+    addTypeIcon: {
+      width: 36,
+      height: 36,
+      borderRadius: 10,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    addTypeText: {
+      fontSize: 15,
+      fontWeight: '600',
+    },
+    customTypeWrap: {
+      marginBottom: 8,
+    },
+    customTypeLabel: {
+      fontSize: 12,
+      fontWeight: '600',
+      marginBottom: 8,
+    },
+    customTypeInputRow: {
+      marginBottom: 6,
+    },
+    customTypeInput: {
+      borderRadius: 10,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      fontSize: 14,
+      borderWidth: 1.5,
+    },
+    customTypePreview: {
+      fontSize: 11,
+      marginBottom: 10,
+      marginLeft: 4,
+    },
+    customTypeActions: {
+      flexDirection: 'row',
+      gap: 8,
+    },
+    customTypeCancelBtn: {
+      flex: 1,
+      backgroundColor: colors.pageBg,
+      borderRadius: 10,
+      paddingVertical: 12,
+      alignItems: 'center',
+    },
+    customTypeCancelText: {
+      color: colors.textSec,
+      fontWeight: '600',
+      fontSize: 13,
+    },
+    customTypeAddBtn: {
+      flex: 1.5,
+      backgroundColor: colors.button,
+      borderRadius: 10,
+      paddingVertical: 12,
+      alignItems: 'center',
+      flexDirection: 'row',
+      justifyContent: 'center',
+    },
+    customTypeAddBtnDisabled: {
+      backgroundColor: `${colors.button}80`,
+    },
+    customTypeAddText: {
+      color: colors.white,
+      fontWeight: '700',
+      fontSize: 13,
+    },
+    modalCloseBtn: {
+      marginTop: 12,
+      paddingVertical: 14,
+      borderRadius: 12,
+      alignItems: 'center',
+    },
+    modalCloseBtnText: {
+      fontSize: 15,
+      fontWeight: '600',
+      color: colors.textSec,
+    },
+  });
+
   return (
-    <ScreenLayout title={t('addEquipment')} showBack>
+    <ScreenLayout title={t('addEquipment')} showBack scroll={true} showDecor>
       {/* Equipment Type Card */}
       <View style={[s.card, { backgroundColor: colors.cardBg }]}>
         <Text style={[s.cardTitle, { color: colors.textPri }]}>{t('equipmentType')}</Text>
@@ -157,7 +455,7 @@ export default function AddAsset({ navigation }) {
           onPress={() => setShowTypeModal(true)}
           activeOpacity={0.8}
         >
-          <View style={[s.typeSelectorIcon, { backgroundColor: type ? `${colors.active}15` : '#F2F6F8' }]}>
+          <View style={[s.typeSelectorIcon, { backgroundColor: type ? `${colors.active}15` : colors.pageBg }]}>
             <Ionicons name="cube-outline" size={20} color={type ? colors.active : colors.textMut} />
           </View>
           <Text style={[s.typeSelectorText, { color: type ? colors.textPri : colors.textMut }]}>
@@ -184,14 +482,24 @@ export default function AddAsset({ navigation }) {
         <Text style={[s.cardTitle, { color: colors.textPri }]}>{t('equipmentDetails')}</Text>
 
         <Text style={[s.fieldLabel, { color: colors.textSec }]}>{t('assetId')} *</Text>
-        <TextInput
-          style={[s.fieldInput, { backgroundColor: colors.inputBg, borderColor: colors.inputBorder, color: colors.textPri }]}
-          value={assetId}
-          onChangeText={setAssetId}
-          placeholder={t('assetIdPlaceholder')}
-          placeholderTextColor={colors.textMut}
-          autoCapitalize="characters"
-        />
+        <View style={{ position: 'relative' }}>
+          <TextInput
+            style={[s.fieldInput, { backgroundColor: colors.inputBg, borderColor: colors.inputBorder, color: colors.textPri, paddingRight: idLoading ? 40 : 14 }]}
+            value={assetId}
+            onChangeText={setAssetId}
+            placeholder={idLoading ? 'Generating ID…' : t('assetIdPlaceholder')}
+            placeholderTextColor={colors.textMut}
+            autoCapitalize="characters"
+            editable={!idLoading}
+          />
+          {idLoading && (
+            <ActivityIndicator
+              size={16}
+              color={colors.active}
+              style={{ position: 'absolute', right: 12, top: 14 }}
+            />
+          )}
+        </View>
 
         <Text style={[s.fieldLabel, { color: colors.textSec }]}>{t('location')} *</Text>
         <TextInput
@@ -221,7 +529,7 @@ export default function AddAsset({ navigation }) {
         />
 
         {/* Install Date */}
-        <Text style={[s.fieldLabel, { color: colors.textSec }]}>{t('installDate')}</Text>
+        <Text style={[s.fieldLabel, { color: colors.textSec }]}>{t('installDate')} *</Text>
         <TouchableOpacity
           style={[s.datePickerBtn, { backgroundColor: colors.inputBg, borderColor: colors.inputBorder }]}
           onPress={() => setShowDatePicker(true)}
@@ -289,10 +597,10 @@ export default function AddAsset({ navigation }) {
         activeOpacity={0.85}
       >
         {loading ? (
-          <ActivityIndicator size="small" color="#fff" />
+          <ActivityIndicator size="small" color={colors.white} />
         ) : (
           <>
-            <Ionicons name="add-circle-outline" size={20} color="#FFF" />
+            <Ionicons name="add-circle-outline" size={20} color={colors.white} />
             <Text style={s.submitBtnText}>{t('createEquipment')}</Text>
           </>
         )}
@@ -342,6 +650,7 @@ export default function AddAsset({ navigation }) {
                   ]}
                   onPress={() => {
                     setType(item);
+                    fetchNextId(item);
                     setShowTypeModal(false);
                     setIsAddingCustomType(false);
                     setCustomType('');
@@ -350,7 +659,7 @@ export default function AddAsset({ navigation }) {
                 >
                   <View style={[
                     s.typeOptionIcon,
-                    { backgroundColor: type === item ? `${colors.active}15` : '#F2F6F8' },
+                    { backgroundColor: type === item ? `${colors.active}15` : colors.pageBg },
                   ]}>
                     <Ionicons
                       name="cube-outline"
@@ -394,10 +703,10 @@ export default function AddAsset({ navigation }) {
                 onPress={() => setIsAddingCustomType(true)}
                 activeOpacity={0.8}
               >
-                <View style={[s.addTypeIcon, { backgroundColor: '#E8F5E9' }]}>
-                  <Ionicons name="add" size={20} color="#4CAF50" />
+                <View style={[s.addTypeIcon, { backgroundColor: `${colors.active}15` }]}>
+                  <Ionicons name="add" size={20} color={colors.active} />
                 </View>
-                <Text style={[s.addTypeText, { color: '#4CAF50' }]}>
+                <Text style={[s.addTypeText, { color: colors.textPri }]}>
                   {t('addNewType')}
                 </Text>
               </TouchableOpacity>
@@ -445,7 +754,7 @@ export default function AddAsset({ navigation }) {
                     disabled={!customType.trim()}
                     activeOpacity={0.85}
                   >
-                    <Ionicons name="checkmark" size={16} color="#FFF" />
+                    <Ionicons name="checkmark" size={16} color={colors.white} />
                     <Text style={s.customTypeAddText}> {t('addAndSelect')}</Text>
                   </TouchableOpacity>
                 </View>
@@ -454,7 +763,7 @@ export default function AddAsset({ navigation }) {
 
             {/* Close Button */}
             <TouchableOpacity
-              style={[s.modalCloseBtn, { backgroundColor: '#F2F6F8' }]}
+              style={[s.modalCloseBtn, { backgroundColor: colors.pageBg }]}
               onPress={() => {
                 setShowTypeModal(false);
                 setIsAddingCustomType(false);
@@ -469,276 +778,3 @@ export default function AddAsset({ navigation }) {
     </ScreenLayout>
   );
 }
-
-// Styles remain exactly the same
-const s = StyleSheet.create({
-  card: {
-    borderRadius: 16,
-    padding: 18,
-    marginBottom: 14,
-    shadowColor: '#A0BDD0',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  cardTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-    marginBottom: 14,
-  },
-  typeSelector: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderWidth: 1,
-  },
-  typeSelectorIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  typeSelectorText: {
-    flex: 1,
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  selectedTypeRow: {
-    marginTop: 10,
-  },
-  selectedTypePill: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 8,
-  },
-  selectedTypeText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  fieldLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    marginBottom: 6,
-    marginTop: 4,
-  },
-  fieldInput: {
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 13,
-    fontSize: 14,
-    borderWidth: 1,
-    marginBottom: 2,
-  },
-  datePickerBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 13,
-    borderWidth: 1,
-    marginBottom: 2,
-    gap: 10,
-  },
-  datePickerText: {
-    flex: 1,
-    fontSize: 14,
-  },
-  dateModalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'flex-end',
-  },
-  dateModalContent: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingBottom: 34,
-    paddingTop: 16,
-    paddingHorizontal: 20,
-  },
-  dateModalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  dateModalTitle: { fontSize: 18, fontWeight: '700' },
-  dateModalDone: { fontSize: 16, fontWeight: '700' },
-  submitBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: '#5BA8D4',
-    borderRadius: 12,
-    paddingVertical: 16,
-    marginTop: 10,
-    shadowColor: '#5BA8D4',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  submitBtnDisabled: { backgroundColor: '#B0CDD8' },
-  submitBtnText: { color: '#FFF', fontWeight: '700', fontSize: 16 },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: 20,
-    paddingBottom: 34,
-    paddingTop: 12,
-    maxHeight: '75%',
-  },
-  modalHandle: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#DDD',
-    alignSelf: 'center',
-    marginBottom: 16,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    marginBottom: 16,
-  },
-  typesList: {
-    maxHeight: 280,
-  },
-  typeOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    marginBottom: 4,
-    gap: 12,
-    borderWidth: 1,
-    borderColor: 'transparent',
-  },
-  typeOptionActive: {
-    backgroundColor: '#F0F8FF',
-  },
-  typeOptionIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  typeOptionLabel: {
-    fontSize: 15,
-    fontWeight: '500',
-  },
-  typeOptionKey: {
-    fontSize: 11,
-    marginTop: 2,
-  },
-  noTypes: {
-    padding: 20,
-    alignItems: 'center',
-  },
-  noTypesText: {
-    fontSize: 13,
-  },
-  modalDivider: {
-    height: 1,
-    marginVertical: 12,
-  },
-  addTypeBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    gap: 12,
-  },
-  addTypeIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  addTypeText: {
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  customTypeWrap: {
-    marginBottom: 8,
-  },
-  customTypeLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  customTypeInputRow: {
-    marginBottom: 6,
-  },
-  customTypeInput: {
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 14,
-    borderWidth: 1.5,
-  },
-  customTypePreview: {
-    fontSize: 11,
-    marginBottom: 10,
-    marginLeft: 4,
-  },
-  customTypeActions: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  customTypeCancelBtn: {
-    flex: 1,
-    backgroundColor: '#F2F6F8',
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  customTypeCancelText: {
-    color: '#5A7A8A',
-    fontWeight: '600',
-    fontSize: 13,
-  },
-  customTypeAddBtn: {
-    flex: 1.5,
-    backgroundColor: '#4CAF50',
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'center',
-  },
-  customTypeAddBtnDisabled: {
-    backgroundColor: '#A5D6A7',
-  },
-  customTypeAddText: {
-    color: '#FFF',
-    fontWeight: '700',
-    fontSize: 13,
-  },
-  modalCloseBtn: {
-    marginTop: 12,
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  modalCloseBtnText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#5A7A8A',
-  },
-});

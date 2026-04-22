@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
-  View, Text, StyleSheet, Alert,
-  TouchableOpacity, Image, ActivityIndicator, TextInput,
+  View, Text, StyleSheet, Alert, TouchableOpacity, Image,
+  ActivityIndicator, TextInput, ScrollView, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,387 +11,342 @@ import { useTheme } from '../../context/ThemeContext';
 import { useLanguage } from '../../context/LanguageContext';
 import ScreenLayout from '../../components/ScreenLayout';
 
-const ACTIVE = '#5BA8D4';
-const SKY = '#7DD3F0';
-const CARD_BG = '#FFFFFF';
-const TEXT_PRI = '#1A1A2E';
-const TEXT_SEC = '#5A7A8A';
-const TEXT_MUT = '#9DB5C0';
+const ASSET_TYPES = [
+  'Window AC', 'Split AC', 'Tower AC', 'AC Plant',
+  'Water Cooler', 'Desert Cooler', 'Other',
+];
 
-export default function LodgeComplaint({ route, navigation }) {
-  const {
-    assetId,
-    assetType,
-    assetLocation,
-    assetBrand,
-    assetModel,
-    assetInstallDate,
-  } = route.params || {};
-
+export default function LodgeComplaint({ navigation }) {
   const { user } = useAuth();
   const { colors } = useTheme();
   const { t } = useLanguage();
+
+  // Pre-fill from user profile where available
+  const [station, setStation]         = useState('');
+  const [area, setArea]               = useState('');
+  const [location, setLocation]       = useState('');
+  const [contactName, setContactName] = useState(user?.full_name || '');
+  const [contactPhone, setContactPhone] = useState(user?.phone || '');
+  const [assetType, setAssetType]     = useState('');
   const [description, setDescription] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [photo, setPhoto] = useState(null);
+  const [photo, setPhoto]             = useState(null);
+  const [loading, setLoading]         = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
-  const [descFocused, setDescFocused] = useState(false);
-
-  const getAssetIcon = (type) => {
-    switch (type) {
-      case 'AC': return 'snow-outline';
-      case 'WATER_COOLER': return 'water-outline';
-      case 'DESERT_COOLER': return 'thunderstorm-outline';
-      default: return 'build-outline';
-    }
-  };
-
-  const getAssetTypeName = (type) => {
-    switch (type) {
-      case 'AC': return t('airConditioners');
-      case 'WATER_COOLER': return t('waterCoolers');
-      case 'DESERT_COOLER': return t('desertCoolers');
-      default: return t('equipment');
-    }
-  };
+  const [showTypePicker, setShowTypePicker] = useState(false);
+  const [focusedField, setFocusedField] = useState(null);
 
   const takePhoto = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert(t('permissionNeeded'), t('cameraPermission'));
-      return;
-    }
-    const result = await ImagePicker.launchCameraAsync({
-      allowsEditing: true, aspect: [4, 3], quality: 0.7,
-    });
+    if (status !== 'granted') { Alert.alert('Permission needed', 'Camera access is required.'); return; }
+    const result = await ImagePicker.launchCameraAsync({ allowsEditing: true, aspect: [4, 3], quality: 0.7 });
     if (!result.canceled && result.assets[0]) setPhoto(result.assets[0]);
   };
 
   const pickFromGallery = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert(t('permissionNeeded'), t('galleryPermission'));
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      allowsEditing: true, aspect: [4, 3], quality: 0.7,
-    });
+    if (status !== 'granted') { Alert.alert('Permission needed', 'Gallery access is required.'); return; }
+    const result = await ImagePicker.launchImageLibraryAsync({ allowsEditing: true, aspect: [4, 3], quality: 0.7 });
     if (!result.canceled && result.assets[0]) setPhoto(result.assets[0]);
   };
 
   const uploadPhoto = async () => {
     if (!photo) return null;
+    setUploadingPhoto(true);
     try {
-      setUploadingPhoto(true);
-      const response = await uploadAPI.complaintPhoto(photo.uri);
-      return response.data.data.photo_url;
-    } catch (error) { throw error; }
-    finally { setUploadingPhoto(false); }
+      const res = await uploadAPI.complaintPhoto(photo.uri);
+      return res.data?.data?.photo_url || res.data?.data?.url || null;
+    } finally { setUploadingPhoto(false); }
   };
 
+  const isFormValid = station.trim() && area.trim() && location.trim() &&
+    contactName.trim() && contactPhone.trim().length >= 10 && assetType && description.trim().length >= 10;
+
   const handleSubmit = async () => {
-    if (!description.trim()) {
-      Alert.alert(t('error'), t('describeIssueError'));
+    if (!isFormValid) {
+      Alert.alert('Incomplete', 'Please fill all required fields (minimum 10 characters for description).');
       return;
     }
     setLoading(true);
     try {
       let photoUrl = null;
       if (photo) photoUrl = await uploadPhoto();
+
       const response = await complaintsAPI.create({
-        asset_id: assetId,
-        description: description.trim(),
-        photo_url: photoUrl,
+        station:       station.trim(),
+        area:          area.trim(),
+        location:      location.trim(),
+        contact_name:  contactName.trim(),
+        contact_phone: contactPhone.trim(),
+        asset_type:    assetType,
+        description:   description.trim(),
+        photo_url:     photoUrl,
       });
+
       if (response.data.success) {
-        Alert.alert(
-          t('success'), 
-          t('complaintSubmitted'),
-          [{ text: t('ok'), onPress: () => navigation.navigate('UserHome') }]
+        Alert.alert('Submitted!', 'Your complaint has been registered.',
+          [{ text: 'OK', onPress: () => navigation.navigate('UserHome') }]
         );
       }
-    } catch (error) { 
-      Alert.alert(t('error'), error.message); 
+    } catch (error) {
+      Alert.alert('Error', error.message || 'Failed to submit. Please try again.');
+    } finally {
+      setLoading(false);
     }
-    finally { setLoading(false); }
   };
 
+  const inputStyle = (field) => [
+    s.input, focusedField === field && s.inputFocused, { color: colors.textPri },
+  ];
+
   return (
-    <ScreenLayout title={t('lodgeComplaint')} showDecor showBack padBottom={100}>
-      <View style={s.mainCard}>
+    <ScreenLayout title="Lodge Complaint" showDecor showBack padBottom={40}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
 
-        {/* ════════════════════════════════════════ */}
-        {/* Asset Info Header                        */}
-        {/* ════════════════════════════════════════ */}
-        <View style={s.assetHeader}>
-          <View style={s.assetInfo}>
-            <Text style={s.assetId}>{assetId}</Text>
-            <Text style={s.assetType}>{getAssetTypeName(assetType)}</Text>
-          </View>
-        </View>
+        {/* ── Location ── */}
+        <View style={[s.card, { backgroundColor: colors.cardBg }]}>
+          <Text style={[s.sectionTitle, { color: colors.textPri }]}>📍 Location</Text>
 
-        {/* ════════════════════════════════════════ */}
-        {/* Full Asset Details                       */}
-        {/* ════════════════════════════════════════ */}
-        <View style={s.detailsGrid}>
-          <DetailRow 
-            icon="location-outline" 
-            label={t('location')} 
-            value={assetLocation} 
-            iconColor={TEXT_MUT} 
-          />
-          {assetBrand ? (
-            <DetailRow 
-              icon="pricetag-outline" 
-              label={t('brand')} 
-              value={assetBrand} 
-            />
-          ) : null}
-          {assetModel ? (
-            <DetailRow 
-              icon="hardware-chip-outline" 
-              label={t('model')} 
-              value={assetModel} 
-            />
-          ) : null}
-          {assetInstallDate ? (
-            <DetailRow
-              icon="construct-outline"
-              label={t('installedOn')}
-              value={new Date(assetInstallDate).toLocaleDateString('en-GB', {
-                day: 'numeric', month: 'short', year: 'numeric',
-              })}
-              last
-            />
-          ) : null}
-        </View>
-
-        <View style={s.divider} />
-
-        {/* ════════════════════════════════════════ */}
-        {/* Description                              */}
-        {/* ════════════════════════════════════════ */}
-        <Text style={s.sectionLabel}>{t('describeIssueLabel')}</Text>
-        <View style={[s.inputWrap, descFocused && s.inputWrapFocused]}>
+          <Text style={[s.label, { color: colors.textSec }]}>Station / Site <Text style={s.req}>*</Text></Text>
           <TextInput
-            style={s.input}
-            placeholder={t('issuePlaceholder')}
-            placeholderTextColor={TEXT_MUT}
-            multiline
+            style={inputStyle('station')}
+            placeholder="e.g. Central Depot, North Gate"
+            placeholderTextColor={colors.textMut}
+            value={station}
+            onChangeText={setStation}
+            onFocus={() => setFocusedField('station')}
+            onBlur={() => setFocusedField(null)}
+          />
+
+          <Text style={[s.label, { color: colors.textSec }]}>Area <Text style={s.req}>*</Text></Text>
+          <TextInput
+            style={inputStyle('area')}
+            placeholder="e.g. Main Building, Workshop, Canteen"
+            placeholderTextColor={colors.textMut}
+            value={area}
+            onChangeText={setArea}
+            onFocus={() => setFocusedField('area')}
+            onBlur={() => setFocusedField(null)}
+          />
+
+          <Text style={[s.label, { color: colors.textSec }]}>Exact Location <Text style={s.req}>*</Text></Text>
+          <TextInput
+            style={inputStyle('location')}
+            placeholder="e.g. 2nd Floor, Room 201, Near Lift"
+            placeholderTextColor={colors.textMut}
+            value={location}
+            onChangeText={setLocation}
+            onFocus={() => setFocusedField('location')}
+            onBlur={() => setFocusedField(null)}
+          />
+        </View>
+
+        {/* ── Your Details ── */}
+        <View style={[s.card, { backgroundColor: colors.cardBg }]}>
+          <Text style={[s.sectionTitle, { color: colors.textPri }]}>👤 Your Details</Text>
+
+          <Text style={[s.label, { color: colors.textSec }]}>Full Name <Text style={s.req}>*</Text></Text>
+          <TextInput
+            style={inputStyle('name')}
+            placeholder="Your full name"
+            placeholderTextColor={colors.textMut}
+            value={contactName}
+            onChangeText={setContactName}
+            onFocus={() => setFocusedField('name')}
+            onBlur={() => setFocusedField(null)}
+          />
+
+          <Text style={[s.label, { color: colors.textSec }]}>Contact Number <Text style={s.req}>*</Text></Text>
+          <TextInput
+            style={inputStyle('phone')}
+            placeholder="10-digit mobile number"
+            placeholderTextColor={colors.textMut}
+            value={contactPhone}
+            onChangeText={v => setContactPhone(v.replace(/\D/g, '').slice(0, 10))}
+            keyboardType="phone-pad"
+            maxLength={10}
+            onFocus={() => setFocusedField('phone')}
+            onBlur={() => setFocusedField(null)}
+          />
+        </View>
+
+        {/* ── Issue ── */}
+        <View style={[s.card, { backgroundColor: colors.cardBg }]}>
+          <Text style={[s.sectionTitle, { color: colors.textPri }]}>🔧 Issue Details</Text>
+
+          <Text style={[s.label, { color: colors.textSec }]}>Type of Asset <Text style={s.req}>*</Text></Text>
+          <TouchableOpacity
+            style={[s.picker, { borderColor: assetType ? colors.active : colors.divider }]}
+            onPress={() => setShowTypePicker(true)}
+            activeOpacity={0.8}
+          >
+            <Text style={[s.pickerTxt, { color: assetType ? colors.textPri : colors.textMut }]}>
+              {assetType || 'Select asset type'}
+            </Text>
+            <Ionicons name="chevron-down" size={18} color={colors.textMut} />
+          </TouchableOpacity>
+
+          <Text style={[s.label, { color: colors.textSec }]}>Description <Text style={s.req}>*</Text></Text>
+          <TextInput
+            style={[inputStyle('desc'), s.textarea]}
+            placeholder="Describe the defect in detail (minimum 10 characters)"
+            placeholderTextColor={colors.textMut}
             value={description}
             onChangeText={setDescription}
-            onFocus={() => setDescFocused(true)}
-            onBlur={() => setDescFocused(false)}
+            multiline
+            numberOfLines={4}
+            textAlignVertical="top"
+            onFocus={() => setFocusedField('desc')}
+            onBlur={() => setFocusedField(null)}
           />
-          <View style={s.charCount}>
-            <Text style={[s.charCountText, description.length > 0 && { color: ACTIVE }]}>
-              {description.length} {t('characters')}
-            </Text>
-          </View>
+          <Text style={[s.charCount, { color: description.length >= 10 ? '#22C55E' : colors.textMut }]}>
+            {description.length} characters{description.length >= 10 ? ' ✓' : ' (min 10)'}
+          </Text>
+
+          {/* Photo */}
+          <Text style={[s.label, { color: colors.textSec }]}>
+            Photo <Text style={[s.label, { color: colors.textMut, fontWeight: '400' }]}>(optional)</Text>
+          </Text>
+          {!photo ? (
+            <View style={s.photoRow}>
+              <TouchableOpacity style={[s.photoBtn, { borderColor: colors.divider }]} onPress={takePhoto} activeOpacity={0.8}>
+                <View style={[s.photoBtnIcon, { backgroundColor: `${colors.active}12` }]}>
+                  <Ionicons name="camera-outline" size={22} color={colors.active} />
+                </View>
+                <Text style={[s.photoBtnLbl, { color: colors.textPri }]}>Camera</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[s.photoBtn, { borderColor: colors.divider }]} onPress={pickFromGallery} activeOpacity={0.8}>
+                <View style={[s.photoBtnIcon, { backgroundColor: `${colors.active}12` }]}>
+                  <Ionicons name="images-outline" size={22} color={colors.active} />
+                </View>
+                <Text style={[s.photoBtnLbl, { color: colors.textPri }]}>Gallery</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={s.previewWrap}>
+              <Image source={{ uri: photo.uri }} style={s.preview} />
+              <TouchableOpacity style={s.removeBtn} onPress={() => setPhoto(null)}>
+                <Ionicons name="close-circle" size={28} color="#E53935" />
+              </TouchableOpacity>
+              <View style={s.previewOverlay}>
+                <Ionicons name="checkmark-circle" size={14} color="#4CAF50" />
+                <Text style={s.previewTxt}> Photo attached</Text>
+              </View>
+            </View>
+          )}
         </View>
 
-        {/* ════════════════════════════════════════ */}
-        {/* Photo Section                            */}
-        {/* ════════════════════════════════════════ */}
-        <Text style={s.sectionLabel}>{t('attachPhoto')}</Text>
-        {!photo ? (
-          <View style={s.photoPickerRow}>
-            <TouchableOpacity style={s.photoOption} onPress={takePhoto} activeOpacity={0.8}>
-              <View style={s.photoOptionIcon}>
-                <Ionicons name="camera-outline" size={24} color={ACTIVE} />
-              </View>
-              <Text style={s.photoOptionLabel}>{t('camera')}</Text>
-              <Text style={s.photoOptionHint}>{t('takePhotoLabel')}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={s.photoOption} onPress={pickFromGallery} activeOpacity={0.8}>
-              <View style={s.photoOptionIcon}>
-                <Ionicons name="images-outline" size={24} color={ACTIVE} />
-              </View>
-              <Text style={s.photoOptionLabel}>{t('gallery')}</Text>
-              <Text style={s.photoOptionHint}>{t('chooseExisting')}</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <View style={s.previewWrap}>
-            <Image source={{ uri: photo.uri }} style={s.preview} />
-            <TouchableOpacity style={s.removePhotoBtn} onPress={() => setPhoto(null)} activeOpacity={0.8}>
-              <Ionicons name="close-circle" size={28} color="#E53935" />
-            </TouchableOpacity>
-            <View style={s.previewOverlay}>
-              <Ionicons name="checkmark-circle" size={16} color="#4CAF50" />
-              <Text style={s.previewText}> {t('photoAttached')}</Text>
-            </View>
-          </View>
-        )}
-
-        <View style={s.divider} />
-
-        {/* ════════════════════════════════════════ */}
-        {/* Submit                                   */}
-        {/* ════════════════════════════════════════ */}
+        {/* ── Submit ── */}
         <TouchableOpacity
-          style={[s.submitBtn, (loading || uploadingPhoto || !description.trim()) && s.submitBtnDisabled]}
+          style={[s.submitBtn, (!isFormValid || loading || uploadingPhoto) && s.submitBtnDisabled]}
           onPress={handleSubmit}
-          disabled={loading || uploadingPhoto || !description.trim()}
+          disabled={!isFormValid || loading || uploadingPhoto}
           activeOpacity={0.85}
         >
           {(loading || uploadingPhoto) ? (
-            <View style={s.loadingRow}>
+            <View style={s.row}>
               <ActivityIndicator color="#fff" size="small" />
-              <Text style={s.submitText}>
-                {uploadingPhoto ? `  ${t('uploadingPhoto')}` : `  ${t('submitting')}`}
-              </Text>
+              <Text style={s.submitTxt}>{uploadingPhoto ? '  Uploading photo…' : '  Submitting…'}</Text>
             </View>
           ) : (
-            <View style={s.loadingRow}>
+            <View style={s.row}>
               <Ionicons name="send-outline" size={18} color="#FFF" />
-              <Text style={s.submitText}>  {t('submitComplaint')}</Text>
+              <Text style={s.submitTxt}>  Submit Complaint</Text>
             </View>
           )}
         </TouchableOpacity>
 
-        {/* Cancel */}
         <TouchableOpacity style={s.cancelBtn} onPress={() => navigation.goBack()} activeOpacity={0.8}>
-          <Text style={s.cancelText}>{t('cancel')}</Text>
+          <Text style={[s.cancelTxt, { color: colors.textMut }]}>Cancel</Text>
         </TouchableOpacity>
-      </View>
+
+      </KeyboardAvoidingView>
+
+      {/* Asset Type Picker Modal */}
+      {showTypePicker && (
+        <View style={s.modalOverlay}>
+          <View style={[s.modalSheet, { backgroundColor: colors.cardBg }]}>
+            <View style={s.modalHandle} />
+            <Text style={[s.modalTitle, { color: colors.textPri }]}>Select Asset Type</Text>
+            {ASSET_TYPES.map(type => (
+              <TouchableOpacity
+                key={type}
+                style={[s.typeOption, assetType === type && { backgroundColor: `${colors.active}12` }]}
+                onPress={() => { setAssetType(type); setShowTypePicker(false); }}
+                activeOpacity={0.7}
+              >
+                <Text style={[s.typeOptionTxt, { color: assetType === type ? colors.active : colors.textPri, fontWeight: assetType === type ? '700' : '500' }]}>
+                  {type}
+                </Text>
+                {assetType === type && <Ionicons name="checkmark-circle" size={18} color={colors.active} />}
+              </TouchableOpacity>
+            ))}
+            <TouchableOpacity style={[s.modalCancel, { backgroundColor: colors.navBg }]} onPress={() => setShowTypePicker(false)}>
+              <Text style={[s.modalCancelTxt, { color: colors.textSec }]}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
     </ScreenLayout>
   );
 }
 
-// ════════════════════════════════════════
-// Detail Row Component
-// ════════════════════════════════════════
-function DetailRow({ icon, label, value, iconColor, last }) {
-  if (!value) return null;
-  return (
-    <View style={[s.detailRow, !last && s.detailRowBorder]}>
-      <Ionicons
-        name={icon}
-        size={15}
-        color={iconColor || TEXT_MUT}
-        style={{ marginRight: 8, width: 22, textAlign: 'center' }}
-      />
-      <Text style={s.detailLabel}>{label}</Text>
-      <Text style={s.detailValue}>{value}</Text>
-    </View>
-  );
-}
-
 const s = StyleSheet.create({
-  mainCard: {
-    backgroundColor: CARD_BG, borderRadius: 18, padding: 20,
-    marginTop: 0, shadowColor: '#A0BDD0',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15, shadowRadius: 12, elevation: 4,
+  card: {
+    borderRadius: 16, padding: 16, marginBottom: 14,
+    shadowColor: '#A0BDD0', shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.1, shadowRadius: 8, elevation: 3,
   },
-
-  // Asset Header
-  assetHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 14 },
-  assetIconWrap: {
-    width: 48, height: 48, borderRadius: 14,
-    backgroundColor: `${ACTIVE}15`, alignItems: 'center',
-    justifyContent: 'center', marginRight: 14,
-  },
-  assetInfo: { flex: 1 },
-  assetId: { fontSize: 18, fontWeight: '800', color: TEXT_PRI },
-  assetType: { fontSize: 13, color: TEXT_SEC, marginTop: 2 },
-
-  // Asset Details Grid
-  detailsGrid: {
-    backgroundColor: '#F8FAFB',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#EEF4F8',
-    overflow: 'hidden',
-    marginBottom: 4,
-  },
-  detailRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-  },
-  detailRowBorder: {
-    borderBottomWidth: 1,
-    borderBottomColor: '#EEF4F8',
-  },
-  detailLabel: {
-    width: 100,
-    fontSize: 12,
-    color: TEXT_MUT,
-    fontWeight: '600',
-  },
-  detailValue: {
-    flex: 1,
-    fontSize: 13,
-    color: TEXT_PRI,
-    fontWeight: '500',
-    textAlign: 'left',
-  },
-
-  // Divider
-  divider: { height: 1, backgroundColor: '#EEF4F8', marginVertical: 6 },
-
-  // Section label
-  sectionLabel: { fontSize: 14, fontWeight: '700', color: TEXT_PRI, marginBottom: 10 },
-
-  // Description input
-  inputWrap: {
-    backgroundColor: '#F8FAFB', borderRadius: 12, borderWidth: 1.5,
-    borderColor: '#EEF4F8', marginBottom: 20, overflow: 'hidden',
-  },
-  inputWrapFocused: { borderColor: SKY, backgroundColor: '#F0F8FF' },
+  sectionTitle: { fontSize: 15, fontWeight: '800', marginBottom: 14 },
+  label: { fontSize: 12, fontWeight: '600', marginBottom: 6, marginTop: 2 },
+  req: { color: '#E53935' },
   input: {
-    paddingHorizontal: 16, paddingTop: 14, paddingBottom: 10,
-    minHeight: 120, fontSize: 14, color: TEXT_PRI,
-    textAlignVertical: 'top', lineHeight: 21,
+    borderWidth: 1.5, borderColor: '#E0EBF0', borderRadius: 10,
+    paddingHorizontal: 12, paddingVertical: 10, fontSize: 14,
+    marginBottom: 12, backgroundColor: '#F8FAFB',
   },
-  charCount: { alignItems: 'flex-end', paddingHorizontal: 16, paddingBottom: 10 },
-  charCountText: { fontSize: 11, color: TEXT_MUT },
-
-  // Photo picker
-  photoPickerRow: { flexDirection: 'row', gap: 12, marginBottom: 8 },
-  photoOption: {
-    flex: 1, backgroundColor: '#F8FAFB', borderRadius: 14,
-    borderWidth: 1.5, borderColor: '#EEF4F8', borderStyle: 'dashed',
-    paddingVertical: 20, alignItems: 'center', gap: 6,
+  inputFocused: { borderColor: '#5BA8D4', backgroundColor: '#F0F8FF' },
+  textarea: { minHeight: 100, textAlignVertical: 'top', paddingTop: 12 },
+  charCount: { fontSize: 11, marginBottom: 12, marginTop: -8 },
+  picker: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    borderWidth: 1.5, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 12,
+    marginBottom: 12, backgroundColor: '#F8FAFB',
   },
-  photoOptionIcon: {
-    width: 48, height: 48, borderRadius: 24,
-    backgroundColor: `${ACTIVE}12`, alignItems: 'center',
-    justifyContent: 'center', marginBottom: 4,
+  pickerTxt: { fontSize: 14 },
+  photoRow: { flexDirection: 'row', gap: 12, marginBottom: 4 },
+  photoBtn: {
+    flex: 1, borderWidth: 1.5, borderStyle: 'dashed', borderRadius: 12,
+    paddingVertical: 18, alignItems: 'center', gap: 6,
   },
-  photoOptionLabel: { fontSize: 14, fontWeight: '700', color: TEXT_PRI },
-  photoOptionHint: { fontSize: 11, color: TEXT_MUT },
-
-  // Photo preview
-  previewWrap: { position: 'relative', borderRadius: 14, overflow: 'hidden', marginBottom: 8 },
-  preview: { width: '100%', height: 200, borderRadius: 14 },
-  removePhotoBtn: {
-    position: 'absolute', top: 8, right: 8,
-    backgroundColor: 'rgba(255,255,255,0.9)', borderRadius: 14, padding: 2,
-  },
+  photoBtnIcon: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  photoBtnLbl: { fontSize: 13, fontWeight: '700' },
+  previewWrap: { position: 'relative', borderRadius: 12, overflow: 'hidden', marginBottom: 8 },
+  preview: { width: '100%', height: 180, borderRadius: 12 },
+  removeBtn: { position: 'absolute', top: 8, right: 8, backgroundColor: 'rgba(255,255,255,0.9)', borderRadius: 14 },
   previewOverlay: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
     backgroundColor: 'rgba(255,255,255,0.92)', flexDirection: 'row',
-    alignItems: 'center', justifyContent: 'center', paddingVertical: 8,
+    alignItems: 'center', justifyContent: 'center', paddingVertical: 6,
   },
-  previewText: { fontSize: 12, fontWeight: '600', color: '#4CAF50' },
-
-  // Buttons
+  previewTxt: { fontSize: 12, fontWeight: '600', color: '#4CAF50' },
   submitBtn: {
     backgroundColor: '#004e68', borderRadius: 12, paddingVertical: 16,
-    alignItems: 'center', justifyContent: 'center',
-    shadowColor: ACTIVE, shadowOffset: { width: 0, height: 4 },
+    alignItems: 'center', justifyContent: 'center', marginBottom: 10,
+    shadowColor: '#004e68', shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3, shadowRadius: 8, elevation: 5,
   },
   submitBtnDisabled: { backgroundColor: '#B0CDD8', shadowOpacity: 0, elevation: 0 },
-  submitText: { color: '#FFF', fontWeight: '700', fontSize: 15 },
-  loadingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
-  cancelBtn: {
-    backgroundColor: '#F2F6F8', borderRadius: 12,
-    paddingVertical: 14, alignItems: 'center', marginTop: 10,
-  },
-  cancelText: { color: TEXT_SEC, fontWeight: '600', fontSize: 14 },
+  submitTxt: { color: '#FFF', fontWeight: '700', fontSize: 15 },
+  row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
+  cancelBtn: { paddingVertical: 14, alignItems: 'center', marginBottom: 10 },
+  cancelTxt: { fontWeight: '600', fontSize: 14 },
+  // Modal
+  modalOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+  modalSheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingBottom: 34, paddingTop: 12 },
+  modalHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: '#DDD', alignSelf: 'center', marginBottom: 14 },
+  modalTitle: { fontSize: 17, fontWeight: '800', marginBottom: 12 },
+  typeOption: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 13, paddingHorizontal: 10, borderRadius: 10, marginBottom: 4 },
+  typeOptionTxt: { fontSize: 15 },
+  modalCancel: { marginTop: 8, paddingVertical: 14, borderRadius: 12, alignItems: 'center' },
+  modalCancelTxt: { fontSize: 14, fontWeight: '600' },
 });

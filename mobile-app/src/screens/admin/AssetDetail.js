@@ -1,12 +1,9 @@
-import React, { useRef, useState } from 'react';
+import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Alert, Platform,
   TextInput, ActivityIndicator, Modal,
 } from 'react-native';
 import { Ionicons, AntDesign } from '@expo/vector-icons';
-import QRCode from 'react-native-qrcode-svg';
-import * as Sharing from 'expo-sharing';
-import { captureRef } from 'react-native-view-shot';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { assetsAPI } from '../../services/api';
 import { useTheme } from '../../context/ThemeContext';
@@ -21,9 +18,6 @@ export default function AssetDetail({ route, navigation }) {
   const { asset } = route.params;
   const { colors } = useTheme();
   const { t } = useLanguage();
-  const printableRef = useRef(null);
-  const [downloading, setDownloading] = useState(false);
-
   // Editable state
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -136,29 +130,6 @@ export default function AssetDetail({ route, navigation }) {
   const handleDateChange = (event, selectedDate) => {
     if (Platform.OS === 'android') setShowDatePicker(false);
     if (event.type === 'set' && selectedDate) setInstallDate(selectedDate);
-  };
-
-  // QR download
-  const handleDownloadQR = async () => {
-    setDownloading(true);
-    try {
-      await new Promise(resolve => setTimeout(resolve, 300));
-      const uri = await captureRef(printableRef, {
-        format: 'png', quality: 1, result: 'tmpfile',
-      });
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(uri, {
-          mimeType: 'image/png',
-          dialogTitle: `QR Code - ${asset.asset_id}`,
-        });
-      } else {
-        Alert.alert(t('success'), t('qrSaved'));
-      }
-    } catch (error) {
-      Alert.alert(t('error'), t('qrFailed'));
-    } finally {
-      setDownloading(false);
-    }
   };
 
   return ( 
@@ -368,66 +339,6 @@ export default function AssetDetail({ route, navigation }) {
         </View>
       </View>
 
-      {/* QR Code Card  */}
-      <View style={[s.card, { backgroundColor: colors.cardBg }]}>
-        <Text style={[s.cardTitleSimple, { color: colors.textPri }]}>{t('qrCode')}</Text>
-        <View style={s.qrContainer}>
-          <View style={s.qrWrapper}>
-            <QRCode value={asset.asset_id} size={180} backgroundColor="#FFFFFF" color="#1A1A2E" />
-          </View>
-          <Text style={[s.qrId, { color: '#004e68' }]}>{asset.asset_id}</Text>
-          <Text style={[s.qrHint, { color: colors.textMut }]}>
-            {t('scanHint')}
-          </Text>
-        </View>
-        <View style={s.qrActions}>
-          <TouchableOpacity
-            style={[s.qrBtn, { backgroundColor: '#004e68' }]}
-            onPress={handleDownloadQR}
-            disabled={downloading}
-            activeOpacity={0.85}
-          >
-            <Ionicons
-              name={downloading ? 'hourglass-outline' : 'download-outline'}
-              size={20}
-              color="#FFF"
-            />
-            <Text style={s.qrBtnText}>
-              {downloading ? t('generating') : t('getQrCode')}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* Hidden Printable QR Card */}
-      <View style={s.hiddenContainer} pointerEvents="none">
-        <View ref={printableRef} style={s.printCard} collapsable={false}>
-          <View style={s.printHeader}>
-            <Text style={s.printLogo}>🔧 Scan2Fix</Text>
-          </View>
-          <View style={[s.printTypeBadge, { backgroundColor: `${ACTIVE_COLOR}15` }]}>
-            <Ionicons name="cube-outline" size={18} color={ACTIVE_COLOR} />
-            <Text style={[s.printTypeText, { color: ACTIVE_COLOR }]}> {typeLabel}</Text>
-          </View>
-          <View style={s.printQrWrap}>
-            <QRCode value={asset.asset_id} size={220} backgroundColor="#FFFFFF" color="#1A1A2E" />
-          </View>
-          <Text style={s.printAssetId}>{asset.asset_id}</Text>
-          <View style={s.printLocationRow}>
-            <Ionicons name="location" size={14} color="#5A7A8A" />
-            <Text style={s.printLocation}> {location}</Text>
-          </View>
-          {(brand || model) && (
-            <Text style={s.printBrand}>{[brand, model].filter(Boolean).join(' • ')}</Text>
-          )}
-          <View style={s.printFooter}>
-            <View style={s.printFooterLine} />
-            <Text style={s.printFooterText}>
-              {t('scanHint')}
-            </Text>
-          </View>
-        </View>
-      </View>
     </ScreenLayout>
   );
 }
@@ -674,77 +585,4 @@ const s = StyleSheet.create({
   },
   saveBtnDisabled: { backgroundColor: '#B0CDD8', shadowOpacity: 0, elevation: 0 },
   saveBtnText: { color: '#FFF', fontWeight: '700', fontSize: 14 },
-  qrContainer: { alignItems: 'center', paddingVertical: 20 },
-  qrWrapper: {
-    padding: 16,
-    backgroundColor: '#FFF',
-    borderRadius: 16,
-    borderWidth: 2,
-    borderColor: '#EEF4F8',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  qrId: { fontSize: 18, fontWeight: '800', marginTop: 12 },
-  qrHint: { fontSize: 12, marginTop: 8, textAlign: 'center', lineHeight: 18 },
-  qrActions: { flexDirection: 'row', gap: 10, marginTop: 10 },
-  qrBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    borderRadius: 10,
-    paddingVertical: 14,
-    shadowColor: '#5BA8D4',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    elevation: 4,
-  },
-  qrBtnText: { color: '#FFF', fontWeight: '700', fontSize: 13 },
-  hiddenContainer: { position: 'absolute', left: -1000, top: 0, opacity: 1 },
-  printCard: {
-    width: 350,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 28,
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#E8EFF3',
-  },
-  printHeader: { marginBottom: 16 },
-  printLogo: { fontSize: 24, fontWeight: '800', color: '#1A1A2E' },
-  printTypeBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    marginBottom: 20,
-  },
-  printTypeText: { fontSize: 14, fontWeight: '600' },
-  printQrWrap: {
-    padding: 12,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: '#EEF4F8',
-    marginBottom: 16,
-  },
-  printAssetId: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: '#1A1A2E',
-    letterSpacing: 1,
-    marginBottom: 8,
-  },
-  printLocationRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
-  printLocation: { fontSize: 14, color: '#5A7A8A', fontWeight: '500' },
-  printBrand: { fontSize: 12, color: '#9DB5C0', marginBottom: 16 },
-  printFooter: { alignItems: 'center', marginTop: 10, width: '100%' },
-  printFooterLine: { width: '80%', height: 1, backgroundColor: '#EEF4F8', marginBottom: 12 },
-  printFooterText: { fontSize: 11, color: '#9DB5C0', textAlign: 'center', lineHeight: 16 },
 });

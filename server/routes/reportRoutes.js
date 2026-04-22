@@ -13,15 +13,21 @@ const { protect } = require('../middleware/auth');
 const { authorize } = require('../middleware/role');
 const {
   getOverview,
+  getWeeklyReport,
   getMonthlyReport,
   getYearlyReport,
   getStaffReport,
+  getMyStaffReport,
 } = require('../controllers/reportController');
 
-// All report routes are ADMIN only
+// Staff can only access their own report
+router.get('/staff/me', protect, authorize('STAFF', 'ADMIN'), getMyStaffReport);
+
+// All other report routes are ADMIN only
 router.use(protect, authorize('ADMIN'));
 
 router.get('/overview', getOverview);
+router.get('/weekly', getWeeklyReport);
 router.get('/monthly', getMonthlyReport);
 router.get('/yearly', getYearlyReport);
 router.get('/staff', getStaffReport);
