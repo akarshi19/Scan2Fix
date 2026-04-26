@@ -19,6 +19,10 @@ dotenv.config();
 // Connect to MongoDB
 connectDB();
 
+// Start scheduled jobs
+const { startMonthlyReportJob } = require('./jobs/monthlyReportJob');
+startMonthlyReportJob();
+
 // Initialize Express
 const app = express();
 

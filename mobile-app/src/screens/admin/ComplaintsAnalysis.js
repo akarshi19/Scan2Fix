@@ -50,6 +50,9 @@ const STATUS_COLORS = {
 };
 function statusColor(st) { return STATUS_COLORS[st] || TEXT_MUT; }
 
+const MONTH_NAMES = ['January','February','March','April','May','June',
+  'July','August','September','October','November','December'];
+
 export default function ComplaintsAnalysis() {
   const [activeTab, setActiveTab]       = useState('weekly');
   const [weeklyData, setWeeklyData]     = useState(null);
@@ -67,6 +70,16 @@ export default function ComplaintsAnalysis() {
   const [drillTitle, setDrillTitle]           = useState('');
   const [drillComplaints, setDrillComplaints] = useState([]);
   const [drillLoading, setDrillLoading]       = useState(false);
+
+  // Export Excel modal state
+  const now = new Date();
+  const defaultMonth = now.getMonth() === 0 ? 12 : now.getMonth(); // previous month
+  const defaultYear  = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
+  const [exportVisible, setExportVisible]   = useState(false);
+  const [exportYear, setExportYear]         = useState(defaultYear);
+  const [exportMonth, setExportMonth]       = useState(defaultMonth);
+  const [exportLoading, setExportLoading]   = useState(false);
+  const [exportResult, setExportResult]     = useState(null); // null | { success, data/message }
 
   useEffect(() => { fetchAllData(); }, []);
   useEffect(() => { if (!loading) fetchMonthlyData(selectedYear); }, [selectedYear]);
@@ -141,6 +154,24 @@ export default function ComplaintsAnalysis() {
       Alert.alert('Error', 'Could not load complaints for this period');
     } finally {
       setDrillLoading(false);
+    }
+  };
+
+  // ─── Generate Excel report ───
+  const handleGenerateExcel = async () => {
+    setExportLoading(true);
+    setExportResult(null);
+    try {
+      const res = await reportsAPI.generateExcel(exportYear, exportMonth);
+      if (res.data.success) {
+        setExportResult({ success: true, data: res.data.data });
+      } else {
+        setExportResult({ success: false, message: res.data.message || 'Generation failed' });
+      }
+    } catch (e) {
+      setExportResult({ success: false, message: e.message || 'Server error' });
+    } finally {
+      setExportLoading(false);
     }
   };
 
@@ -629,6 +660,17 @@ export default function ComplaintsAnalysis() {
   return (
     <ScreenLayout title="Complaint Analysis" showBack showDecor>
       <View style={{ flex: 1 }} {...swipePan.panHandlers}>
+
+        {/* ── Export Excel button ── */}
+        <TouchableOpacity
+          style={s.exportBtn}
+          onPress={() => { setExportResult(null); setExportVisible(true); }}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="document-text-outline" size={15} color="#FFFFFF" />
+          <Text style={s.exportBtnText}>Export Excel</Text>
+        </TouchableOpacity>
+
         <View style={s.tabRow}>
           {TABS.map(tab => (
             <TouchableOpacity
@@ -660,6 +702,142 @@ export default function ComplaintsAnalysis() {
           </ScrollView>
         )}
       </View>
+
+      {/* ── Export Excel Modal ── */}
+      <Modal
+        visible={exportVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setExportVisible(false)}
+      >
+        <View style={s.modalOverlay}>
+          <View style={s.exportSheet}>
+            {/* Header */}
+            <View style={s.modalHeader}>
+              <View style={s.exportIconWrap}>
+                <Ionicons name="document-text" size={20} color="#4CAF50" />
+              </View>
+              <Text style={s.modalTitle}>Export Monthly Report</Text>
+              <TouchableOpacity onPress={() => setExportVisible(false)} style={s.modalClose}>
+                <Ionicons name="close" size={20} color={TEXT_SEC} />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={s.exportSubtitle}>
+              Generates daily Excel files + one combined file for the selected month.
+              Saved on the server in <Text style={{ fontWeight: '700' }}>server/reports/</Text>
+            </Text>
+
+            {/* Year picker */}
+            <Text style={s.exportPickerLabel}>Year</Text>
+            <View style={s.exportPickerRow}>
+              <TouchableOpacity
+                style={s.exportNavBtn}
+                onPress={() => setExportYear(y => y - 1)}
+              >
+                <Ionicons name="chevron-back" size={18} color={ACTIVE} />
+              </TouchableOpacity>
+              <Text style={s.exportPickerValue}>{exportYear}</Text>
+              <TouchableOpacity
+                style={[s.exportNavBtn, exportYear >= now.getFullYear() && { opacity: 0.3 }]}
+                onPress={() => setExportYear(y => y + 1)}
+                disabled={exportYear >= now.getFullYear()}
+              >
+                <Ionicons name="chevron-forward" size={18} color={ACTIVE} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Month grid */}
+            <Text style={s.exportPickerLabel}>Month</Text>
+            <View style={s.monthGrid}>
+              {MONTH_NAMES.map((name, idx) => {
+                const mo       = idx + 1;
+                const isSelected = mo === exportMonth;
+                const isFuture   = exportYear === now.getFullYear() && mo > now.getMonth();
+                return (
+                  <TouchableOpacity
+                    key={mo}
+                    style={[
+                      s.monthCell,
+                      isSelected && s.monthCellActive,
+                      isFuture && s.monthCellDisabled,
+                    ]}
+                    onPress={() => !isFuture && setExportMonth(mo)}
+                    disabled={isFuture}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[
+                      s.monthCellText,
+                      isSelected && s.monthCellTextActive,
+                      isFuture && s.monthCellTextDisabled,
+                    ]}>
+                      {name.slice(0, 3)}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {/* Selected summary */}
+            <View style={s.exportSummary}>
+              <Ionicons name="calendar-outline" size={14} color={ACTIVE} />
+              <Text style={s.exportSummaryText}>
+                {MONTH_NAMES[exportMonth - 1]} {exportYear}
+              </Text>
+            </View>
+
+            {/* Result */}
+            {exportResult && (
+              <View style={[s.exportResultBox,
+                { backgroundColor: exportResult.success ? '#E8F5E9' : '#FFEBEE' }]}>
+                <Ionicons
+                  name={exportResult.success ? 'checkmark-circle' : 'alert-circle'}
+                  size={18}
+                  color={exportResult.success ? '#4CAF50' : '#F44336'}
+                />
+                {exportResult.success ? (
+                  <View style={{ flex: 1 }}>
+                    <Text style={[s.exportResultText, { color: '#2E7D32', fontWeight: '700' }]}>
+                      Report generated successfully!
+                    </Text>
+                    <Text style={[s.exportResultText, { color: '#388E3C', fontSize: 12 }]}>
+                      {exportResult.data.totalComplaints} complaints · {exportResult.data.dailyFiles} daily files + 1 combined
+                    </Text>
+                    <Text style={[s.exportResultText, { color: '#66BB6A', fontSize: 11 }]}>
+                      📁 server/reports/{exportResult.data.label}/
+                    </Text>
+                  </View>
+                ) : (
+                  <Text style={[s.exportResultText, { color: '#C62828', flex: 1 }]}>
+                    {exportResult.message}
+                  </Text>
+                )}
+              </View>
+            )}
+
+            {/* Generate button */}
+            <TouchableOpacity
+              style={[s.exportGenerateBtn, exportLoading && { opacity: 0.7 }]}
+              onPress={handleGenerateExcel}
+              disabled={exportLoading}
+              activeOpacity={0.85}
+            >
+              {exportLoading ? (
+                <>
+                  <ActivityIndicator size="small" color="#FFF" />
+                  <Text style={s.exportGenerateBtnText}>Generating…</Text>
+                </>
+              ) : (
+                <>
+                  <Ionicons name="cloud-download-outline" size={18} color="#FFF" />
+                  <Text style={s.exportGenerateBtnText}>Generate Report</Text>
+                </>
+              )}
+            </TouchableOpacity>
+
+          </View>
+        </View>
+      </Modal>
 
       {/* ── Drill-down Modal ── */}
       <Modal
@@ -897,4 +1075,84 @@ const s = StyleSheet.create({
   drillItemStatus: { fontSize: 10, fontWeight: '700' },
   drillEmptyWrap: { alignItems: 'center', paddingVertical: 40, gap: 10 },
   drillEmpty: { color: TEXT_MUT, fontSize: 14 },
+
+  // ── Export Excel button ───────────────────────────────────
+  exportBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 7, backgroundColor: '#4CAF50',
+    paddingVertical: 10, paddingHorizontal: 18,
+    borderRadius: 12, marginBottom: 12, alignSelf: 'flex-end',
+    shadowColor: '#4CAF50', shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3, shadowRadius: 6, elevation: 4,
+  },
+  exportBtnText: { fontSize: 13, fontWeight: '700', color: '#FFF' },
+
+  // ── Export modal sheet ────────────────────────────────────
+  exportSheet: {
+    backgroundColor: '#F5F9FC', borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    paddingHorizontal: 20, paddingTop: 20, paddingBottom: 28,
+  },
+  exportIconWrap: {
+    width: 34, height: 34, borderRadius: 10,
+    backgroundColor: '#E8F5E9', alignItems: 'center', justifyContent: 'center',
+    marginRight: 10,
+  },
+  exportSubtitle: {
+    fontSize: 12, color: TEXT_SEC, lineHeight: 18,
+    marginBottom: 18, marginTop: 6,
+  },
+  exportPickerLabel: {
+    fontSize: 12, fontWeight: '700', color: TEXT_MUT,
+    textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8,
+  },
+  exportPickerRow: {
+    flexDirection: 'row', alignItems: 'center',
+    justifyContent: 'center', gap: 24, marginBottom: 18,
+    backgroundColor: '#FFF', borderRadius: 14, paddingVertical: 10,
+    shadowColor: '#A0BDD0', shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08, shadowRadius: 6, elevation: 2,
+  },
+  exportNavBtn: {
+    width: 36, height: 36, borderRadius: 10,
+    backgroundColor: `${ACTIVE}15`, alignItems: 'center', justifyContent: 'center',
+  },
+  exportPickerValue: { fontSize: 22, fontWeight: '800', color: TEXT_PRI, minWidth: 60, textAlign: 'center' },
+
+  // ── Month grid ────────────────────────────────────────────
+  monthGrid: {
+    flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16,
+  },
+  monthCell: {
+    width: '22%', paddingVertical: 10, borderRadius: 10,
+    backgroundColor: '#FFF', alignItems: 'center',
+    shadowColor: '#A0BDD0', shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08, shadowRadius: 4, elevation: 1,
+  },
+  monthCellActive:   { backgroundColor: ACTIVE },
+  monthCellDisabled: { opacity: 0.35 },
+  monthCellText:     { fontSize: 12, fontWeight: '600', color: TEXT_SEC },
+  monthCellTextActive:   { color: '#FFF' },
+  monthCellTextDisabled: { color: TEXT_MUT },
+
+  // ── Export summary + result ───────────────────────────────
+  exportSummary: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    marginBottom: 14, justifyContent: 'center',
+  },
+  exportSummaryText: { fontSize: 15, fontWeight: '700', color: ACTIVE },
+  exportResultBox: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 10,
+    borderRadius: 12, padding: 14, marginBottom: 14,
+  },
+  exportResultText: { fontSize: 13, lineHeight: 18 },
+
+  // ── Generate button ───────────────────────────────────────
+  exportGenerateBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 8, backgroundColor: '#4CAF50',
+    paddingVertical: 14, borderRadius: 14,
+    shadowColor: '#4CAF50', shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35, shadowRadius: 8, elevation: 6,
+  },
+  exportGenerateBtnText: { fontSize: 15, fontWeight: '800', color: '#FFF' },
 });

@@ -1,13 +1,14 @@
 import React, { useRef, useEffect } from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
-import { View, Text, TouchableOpacity, StyleSheet, Animated, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Animated, Platform, PanResponder } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import StaffDashboard from '../screens/staff/StaffDashboard';
 import JobDetails from '../screens/staff/JobDetails';
 import ProfileScreen from '../screens/shared/ProfileScreen';
 import StaffReportAnalysis from '../screens/shared/StaffReportAnalysis';
+import UniversalQR from '../screens/admin/UniversalQR';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -17,10 +18,11 @@ const NAVBAR_BG = '#EEF6FB';
 const CIRCLE = 56; const BAR_H = 70; const LIFT = 30;
 
 const TAB_CONFIG = [
-  { name: 'NotStarted',  label: 'Not Started',  icon: 'clipboard-outline', iconActive: 'clipboard' },
-  { name: 'InProgress',  label: 'In Progress',  icon: 'sync-outline',      iconActive: 'sync' },
-  { name: 'Finishing',   label: 'Finishing',    icon: 'flag-outline',      iconActive: 'flag' },
+  { name: 'NotStarted',  label: 'Not Started',  icon: 'clipboard-outline',        iconActive: 'clipboard' },
+  { name: 'InProgress',  label: 'In Progress',  icon: 'sync-outline',             iconActive: 'sync' },
+  { name: 'Finishing',   label: 'Finishing',    icon: 'flag-outline',             iconActive: 'flag' },
   { name: 'Completed',   label: 'Completed',    icon: 'checkmark-circle-outline', iconActive: 'checkmark-circle' },
+  { name: 'QRCode',      label: 'QR Code',      icon: 'qr-code-outline',          iconActive: 'qr-code' },
 ];
 
 function NotStartedStack() {
@@ -62,7 +64,16 @@ function CompletedStack() {
       <Stack.Screen name="StaffDashboardC" component={StaffDashboard} initialParams={{ statusFilter: 'CLOSED' }} />
       <Stack.Screen name="JobDetailsC" component={JobDetails} />
       <Stack.Screen name="StaffReportAnalysis" component={StaffReportAnalysis} />
-       <Stack.Screen name="ProfileScreen" component={ProfileScreen} />
+      <Stack.Screen name="ProfileScreen" component={ProfileScreen} />
+    </Stack.Navigator>
+  );
+}
+
+function QRCodeStack() {
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="UniversalQR" component={UniversalQR} />
+      <Stack.Screen name="ProfileScreen" component={ProfileScreen} />
     </Stack.Navigator>
   );
 }
@@ -94,7 +105,31 @@ function TabItem({ route, isFocused, onPress }) {
   );
 }
 
+// Refs so PanResponder can read current nav state without re-creating
+const tabNavRef   = { current: null };
+const tabStateRef = { current: { index: 0 } };
+
+const tabSwipePan = PanResponder.create({
+  onStartShouldSetPanResponder: () => false,
+  onMoveShouldSetPanResponder: (_, { dx, dy }) =>
+    Math.abs(dx) > 20 && Math.abs(dx) > Math.abs(dy) * 1.5,
+  onPanResponderRelease: (_, { dx, vx }) => {
+    if (Math.abs(dx) < 60 && Math.abs(vx) < 0.4) return;
+    const nav = tabNavRef.current;
+    const s   = tabStateRef.current;
+    if (!nav || !s) return;
+    if (dx < 0 && s.index < TAB_CONFIG.length - 1) {
+      nav.navigate(TAB_CONFIG[s.index + 1].name);
+    } else if (dx > 0 && s.index > 0) {
+      nav.navigate(TAB_CONFIG[s.index - 1].name);
+    }
+  },
+});
+
 function CustomTabBar({ state, navigation }) {
+  tabNavRef.current   = navigation;
+  tabStateRef.current = state;
+
   return (
     <View style={st.outerWrapper} pointerEvents="box-none">
       <View style={st.spacerAboveBar} pointerEvents="box-none" />
@@ -120,11 +155,14 @@ const st = StyleSheet.create({
 
 export default function StaffStack() {
   return (
-    <Tab.Navigator tabBar={(props) => <CustomTabBar {...props} />} screenOptions={{ headerShown: false }}>
-      <Tab.Screen name="NotStarted" component={NotStartedStack} />
-      <Tab.Screen name="InProgress" component={InProgressStack} />
-      <Tab.Screen name="Finishing" component={FinishingStack} />
-      <Tab.Screen name="Completed" component={CompletedStack} />
-    </Tab.Navigator>
+    <View style={{ flex: 1 }} {...tabSwipePan.panHandlers}>
+      <Tab.Navigator tabBar={(props) => <CustomTabBar {...props} />} screenOptions={{ headerShown: false }}>
+        <Tab.Screen name="NotStarted" component={NotStartedStack} />
+        <Tab.Screen name="InProgress" component={InProgressStack} />
+        <Tab.Screen name="Finishing"  component={FinishingStack} />
+        <Tab.Screen name="Completed"  component={CompletedStack} />
+        <Tab.Screen name="QRCode"     component={QRCodeStack} />
+      </Tab.Navigator>
+    </View>
   );
 }

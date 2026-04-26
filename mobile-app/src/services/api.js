@@ -311,6 +311,9 @@ export const reportsAPI = {
   yearly:   ()      => api.get('/reports/yearly'),
   staff:    ()      => api.get('/reports/staff'),
   staffMe:  ()      => api.get('/reports/staff/me'),
+  generateExcel: (year, month) =>
+    api.post(`/reports/excel/generate?year=${year}&month=${month}`),
+  listExcelReports: () => api.get('/reports/excel'),
 };
 
 // ════════════════════════════════════════

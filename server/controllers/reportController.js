@@ -309,3 +309,78 @@ exports.getMyStaffReport = async (req, res) => {
     res.status(500).json({ success: false, message: 'Server error' });
   }
 };
+
+// ─────────────────────────────────────────────
+// POST /api/reports/excel/generate?year=2026&month=3
+// Manually generate Excel report for any month
+// ─────────────────────────────────────────────
+exports.generateExcelReport = async (req, res) => {
+  try {
+    const year  = parseInt(req.query.year  || new Date().getFullYear());
+    const month = parseInt(req.query.month || new Date().getMonth()); // default = last month
+
+    if (isNaN(year) || isNaN(month) || month < 1 || month > 12) {
+      return res.status(400).json({ success: false, message: 'Provide valid year (e.g. 2026) and month (1–12)' });
+    }
+
+    const { generateMonthlyReport } = require('../utils/monthlyReportService');
+    const result = await generateMonthlyReport(year, month);
+
+    res.status(200).json({ success: true, data: result });
+  } catch (error) {
+    console.error('Generate Excel report error:', error);
+    res.status(500).json({ success: false, message: 'Server error generating report' });
+  }
+};
+
+// ─────────────────────────────────────────────
+// GET /api/reports/excel/download?year=2026&month=3&file=combined-2026-03.xlsx
+// Stream a specific Excel file to the client
+// ─────────────────────────────────────────────
+exports.downloadExcelFile = async (req, res) => {
+  try {
+    const path = require('path');
+    const fs   = require('fs');
+    const { REPORTS_DIR } = require('../utils/monthlyReportService');
+
+    const { year, month, file } = req.query;
+    if (!year || !month || !file) {
+      return res.status(400).json({ success: false, message: 'year, month and file are required' });
+    }
+
+    // Sanitise filename — only allow alphanumeric, dash, dot
+    const safeFile = file.replace(/[^a-zA-Z0-9\-_.]/g, '');
+    if (!safeFile.endsWith('.xlsx')) {
+      return res.status(400).json({ success: false, message: 'Only .xlsx files can be downloaded' });
+    }
+
+    const monthStr = String(month).padStart(2, '0');
+    const filePath = path.join(REPORTS_DIR, `${year}-${monthStr}`, safeFile);
+
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ success: false, message: 'File not found. Generate the report first.' });
+    }
+
+    res.setHeader('Content-Disposition', `attachment; filename="${safeFile}"`);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    fs.createReadStream(filePath).pipe(res);
+  } catch (error) {
+    console.error('Download Excel error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+// ─────────────────────────────────────────────
+// GET /api/reports/excel
+// List all generated report folders and their files
+// ─────────────────────────────────────────────
+exports.listExcelReports = async (req, res) => {
+  try {
+    const { listReports } = require('../utils/monthlyReportService');
+    const reports = listReports();
+    res.status(200).json({ success: true, count: reports.length, data: reports });
+  } catch (error) {
+    console.error('List Excel reports error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+};

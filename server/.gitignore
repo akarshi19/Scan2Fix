@@ -10,6 +10,9 @@ uploads/complaints/*
 !uploads/profiles/.gitkeep
 !uploads/complaints/.gitkeep
 
+# Generated Excel reports (too large for git — stored on server only)
+reports/
+
 # Logs
 logs/
 
