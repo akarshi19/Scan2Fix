@@ -30,7 +30,7 @@ const complaintSchema = new mongoose.Schema(
     source: { type: String, enum: ['APP', 'WEB'], required: true },
     status: {
       type: String,
-      enum: ['OPEN', 'ASSIGNED', 'IN_PROGRESS', 'FINISHING', 'CLOSED'],
+      enum: ['OPEN', 'ASSIGNED', 'IN_PROGRESS', 'FINISHING', 'RESOLVED', 'CLOSED'],
       default: 'OPEN',
     },
 
@@ -42,8 +42,9 @@ const complaintSchema = new mongoose.Schema(
     },
 
     // ── Closure ──
-    ack_photo_url: { type: String, default: null },
-    closed_at:     { type: Date, default: null },
+    resolution_notes: { type: String, default: null },
+    ack_photo_url:    { type: String, default: null },
+    closed_at:        { type: Date, default: null },
   },
   { timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' } }
 );

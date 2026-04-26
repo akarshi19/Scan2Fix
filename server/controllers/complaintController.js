@@ -5,6 +5,7 @@
 const Complaint = require('../models/Complaint_v2');
 const User      = require('../models/User_v2');
 const generateOTP = require('../utils/generateOTP');
+const { notifyAdmins, sendPushNotification } = require('../utils/notificationService');
 
 // ── helpers ──────────────────────────────────
 const POPULATE_STAFF    = { path: 'assigned_staff.staff_id',  select: 'full_name email photo_url availability' };
@@ -81,6 +82,12 @@ exports.createComplaint = async (req, res) => {
       message: 'Complaint submitted successfully',
       data: transformComplaint(complaint.toObject()),
     });
+
+    notifyAdmins(
+      'New Complaint',
+      `${asset_type} issue at ${station} — ${location}`,
+      { complaintId: complaint._id.toString() }
+    ).catch(() => {});
   } catch (error) {
     console.error('Create complaint error:', error);
     res.status(500).json({ success: false, message: 'Server error creating complaint' });
@@ -112,10 +119,18 @@ exports.getMyComplaints = async (req, res) => {
 // ─────────────────────────────────────────────
 exports.getAllComplaints = async (req, res) => {
   try {
-    const { status, asset_type } = req.query;
+    const { status, asset_type, dateFrom, dateTo } = req.query;
     const filter = {};
     if (status)     filter.status = status.toUpperCase();
     if (asset_type) filter.asset_type = { $regex: asset_type, $options: 'i' };
+    if (dateFrom || dateTo) {
+      // Use $expr + $toDate to match the same approach as the report controller's aggregation,
+      // ensuring type-safe comparison regardless of how created_at is stored in MongoDB.
+      const dateConditions = [];
+      if (dateFrom) dateConditions.push({ $gte: [{ $toDate: '$created_at' }, new Date(dateFrom)] });
+      if (dateTo)   dateConditions.push({ $lte: [{ $toDate: '$created_at' }, new Date(dateTo)] });
+      filter.$expr = dateConditions.length === 1 ? dateConditions[0] : { $and: dateConditions };
+    }
 
     const complaints = await Complaint.find(filter)
       .populate([POPULATE_STAFF, POPULATE_REPORTER])
@@ -200,6 +215,16 @@ exports.assignStaff = async (req, res) => {
       message: `Complaint assigned to ${staff.full_name || staff.email}`,
       data: transformComplaint(complaint.toObject()),
     });
+
+    const staffWithToken = await User.findById(staffId).select('+push_token');
+    if (staffWithToken?.push_token) {
+      sendPushNotification(
+        staffWithToken.push_token,
+        'New Job Assigned',
+        `${complaint.asset_type} at ${complaint.station} — ${complaint.location}`,
+        { complaintId: complaint._id.toString() }
+      ).catch(() => {});
+    }
   } catch (error) {
     console.error('Assign staff error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
@@ -300,13 +325,8 @@ exports.sendOTPByEmail = async (req, res) => {
     }
 
     const otp = generateOTP();
-    const emailService = require('../utils/emailService');
-    const emailSent = await emailService.sendComplaintOTP(
-      recipientEmail, otp, complaint.complaint_number,
-      complaint.reported_by?.name, complaint.asset_type
-    );
-    if (!emailSent) return res.status(500).json({ success: false, message: 'Failed to send OTP email.' });
 
+    // Save OTP record first, then send email
     const ComplaintOTP = require('../models/ComplaintOTP');
     await ComplaintOTP.deleteMany({ complaint_id: complaint._id });
     await ComplaintOTP.create({
@@ -318,14 +338,20 @@ exports.sendOTPByEmail = async (req, res) => {
       expires_at:       new Date(Date.now() + 5 * 60 * 1000),
     });
 
+    const emailService = require('../utils/emailService');
+    await emailService.sendComplaintOTP(
+      recipientEmail, otp, complaint.complaint_number,
+      complaint.reported_by?.name, complaint.asset_type
+    );
+
     res.status(200).json({
       success: true,
-      message: 'OTP sent to complainant email',
+      message: `OTP sent to ${recipientEmail}`,
       data: { complaint_id: complaint._id, email_sent_to: recipientEmail, expires_in: '5 minutes' },
     });
   } catch (error) {
-    console.error('Send OTP error:', error);
-    res.status(500).json({ success: false, message: 'Server error' });
+    console.error('Send OTP error:', error.message);
+    res.status(500).json({ success: false, message: error.message || 'Failed to send OTP email' });
   }
 };
 
@@ -457,6 +483,12 @@ exports.createQRComplaint = async (req, res) => {
         station:          complaint.station,
       },
     });
+
+    notifyAdmins(
+      'New Complaint (Web)',
+      `${asset_type} issue at ${station} — ${location}`,
+      { complaintId: complaint._id.toString() }
+    ).catch(() => {});
   } catch (error) {
     console.error('Create QR complaint error:', error);
     res.status(500).json({ success: false, message: 'Server error creating complaint' });

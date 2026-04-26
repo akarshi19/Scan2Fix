@@ -78,16 +78,16 @@ export default function ProfileMenu() {
             </TouchableOpacity>
 
             {/* Theme Toggle */}
-            <TouchableOpacity style={s.menuItem} onPress={toggleTheme}>
+            {/* <TouchableOpacity style={s.menuItem} onPress={toggleTheme}>
               <Ionicons name={theme === 'light' ? 'moon-outline' : 'sunny-outline'} size={20} color={colors.textSec} />
               <Text style={[s.menuItemText, { color: colors.textPri }]}>{t('theme')}</Text>
               <View style={[s.toggleTrack, { backgroundColor: theme === 'dark' ? colors.active : '#E0E0E0' }]}>
                 <View style={[s.toggleThumb, { left: theme === 'dark' ? 20 : 2 }]} />
               </View>
-            </TouchableOpacity>
+            </TouchableOpacity> */}
 
             {/* Language */}
-            <TouchableOpacity
+            {/* <TouchableOpacity
               style={s.menuItem}
               onPress={() => setLanguage(language === 'en' ? 'hi' : 'en')}
             >
@@ -98,7 +98,7 @@ export default function ProfileMenu() {
                   {language === 'en' ? 'EN' : 'हि'}
                 </Text>
               </View>
-            </TouchableOpacity>
+            </TouchableOpacity> */}
 
             <View style={[s.menuDivider, { backgroundColor: colors.divider }]} />
 

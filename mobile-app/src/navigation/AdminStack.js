@@ -1,7 +1,7 @@
 import React, { useRef, useEffect } from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
-import { View, Text, TouchableOpacity, StyleSheet, Animated, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Animated, Platform, PanResponder } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -24,6 +24,10 @@ export default function AdminStack() {
   const { colors } = useTheme();
   const { t } = useLanguage();
 
+  // Refs so the PanResponder can access current tab nav state without re-creating
+  const tabNavRef   = useRef(null);
+  const tabStateRef = useRef({ index: 0 });
+
   const TAB_CONFIG = [
     { name: 'Dashboard',   label: 'Home',       icon: 'home-outline',      iconActive: 'home' },
     { name: 'Complaints',  label: 'Complaints', icon: 'clipboard-outline', iconActive: 'clipboard' },
@@ -31,11 +35,32 @@ export default function AdminStack() {
     { name: 'QRCode',      label: 'QR Code',    icon: 'qr-code-outline',   iconActive: 'qr-code' },
   ];
 
+  // Swipe-between-tabs PanResponder — wraps the whole Tab.Navigator
+  const tabSwipePan = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_, { dx, dy }) =>
+        Math.abs(dx) > 20 && Math.abs(dx) > Math.abs(dy) * 1.5,
+      onPanResponderRelease: (_, { dx, vx }) => {
+        if (Math.abs(dx) < 60 && Math.abs(vx) < 0.4) return;
+        const nav = tabNavRef.current;
+        const st  = tabStateRef.current;
+        if (!nav || !st) return;
+        if (dx < 0 && st.index < TAB_CONFIG.length - 1) {
+          nav.navigate(TAB_CONFIG[st.index + 1].name);
+        } else if (dx > 0 && st.index > 0) {
+          nav.navigate(TAB_CONFIG[st.index - 1].name);
+        }
+      },
+    })
+  ).current;
+
   function QRCodeStack() {
     return (
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         <Stack.Screen name="UniversalQR" component={UniversalQR} />
         <Stack.Screen name="ProfileScreen" component={ProfileScreen} />
+        <Stack.Screen name="StaffReportAnalysis" component={StaffReportAnalysis} />
       </Stack.Navigator>
     );
   }
@@ -118,6 +143,10 @@ export default function AdminStack() {
   }
 
   function CustomTabBar({ state, navigation }) {
+    // Keep refs current so the PanResponder (created once) can read latest nav state
+    tabNavRef.current   = navigation;
+    tabStateRef.current = state;
+
     const currentTab = state.routes[state.index].name;
 
     // Check if we're on the ROOT screen of Users or Assets stack
@@ -161,7 +190,7 @@ export default function AdminStack() {
   }
   
   const st = StyleSheet.create({
-    outerWrapper: { position: 'absolute', left: 12, right: 12, bottom: Platform.OS === 'ios' ? 24 : 12, overflow: 'visible' },
+    outerWrapper: { position: 'absolute', left: 12, right: 12, bottom: Platform.OS === 'ios' ? 24 : 8, overflow: 'visible' },
     spacerAboveBar: { height: LIFT, overflow: 'visible' },
     pill: {
       flexDirection: 'row', alignItems: 'center', backgroundColor: colors.navBg,
@@ -200,11 +229,13 @@ export default function AdminStack() {
   });
 
   return (
-    <Tab.Navigator tabBar={(props) => <CustomTabBar {...props} />} screenOptions={{ headerShown: false }}>
-      <Tab.Screen name="Dashboard"  component={DashboardStack} />
-      <Tab.Screen name="Complaints" component={ComplaintsStack} />
-      <Tab.Screen name="Users"      component={UsersStack} />
-      <Tab.Screen name="QRCode"     component={QRCodeStack} />
-    </Tab.Navigator>
+    <View style={{ flex: 1 }} {...tabSwipePan.panHandlers}>
+      <Tab.Navigator tabBar={(props) => <CustomTabBar {...props} />} screenOptions={{ headerShown: false }}>
+        <Tab.Screen name="Dashboard"  component={DashboardStack} />
+        <Tab.Screen name="Complaints" component={ComplaintsStack} />
+        <Tab.Screen name="Users"      component={UsersStack} />
+        <Tab.Screen name="QRCode"     component={QRCodeStack} />
+      </Tab.Navigator>
+    </View>
   );
 }

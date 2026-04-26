@@ -18,6 +18,8 @@ const verifyEmailDomain = async (email) => {
   }
 };
 
+const MASTER_ADMIN_EMAIL = 'adminscan2fix@gmail.com';
+
 // POST /api/auth/login
 exports.login = async (req, res) => {
   try {
@@ -325,7 +327,6 @@ exports.deleteAccount = async (req, res) => {
     const { password } = req.body;
 
     // MASTER ADMIN PROTECTION
-    const MASTER_ADMIN_EMAIL = 'adminscan2fix@gmail.com';
     if (req.user.email === MASTER_ADMIN_EMAIL) {
       return res.status(403).json({
         success: false,
@@ -396,16 +397,20 @@ exports.forgotPassword = async (req, res) => {
     user.reset_code_expires = resetExpiry;
     await user.save();
 
-    // In production, send email here
-    console.log(`Password reset code for ${email}: ${resetCode}`);
+    const emailService = require('../utils/emailService');
+    const emailSent = await emailService.sendPasswordReset(email, resetCode, user.full_name);
+
+    if (!emailSent) {
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to send reset email. Please try again.',
+      });
+    }
 
     res.status(200).json({
       success: true,
-      message: 'Password reset code generated. Contact your admin for the code.',
-      data: {
-        resetCode,
-        expiresIn: '15 minutes',
-      },
+      message: 'Password reset code sent to your email.',
+      data: { expiresIn: '15 minutes' },
     });
   } catch (error) {
     console.error('Forgot password error:', error);
@@ -532,6 +537,21 @@ exports.changePassword = async (req, res) => {
   }
 };
 
+// PUT /api/auth/push-token
+exports.savePushToken = async (req, res) => {
+  try {
+    const { push_token } = req.body;
+    if (!push_token) {
+      return res.status(400).json({ success: false, message: 'push_token is required' });
+    }
+    await User.findByIdAndUpdate(req.user._id, { push_token });
+    res.status(200).json({ success: true, message: 'Push token saved' });
+  } catch (error) {
+    console.error('Save push token error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
 // POST /api/auth/send-verification-code
 exports.sendVerificationCode = async (req, res) => {
   try {
@@ -593,11 +613,7 @@ exports.sendVerificationCode = async (req, res) => {
     res.status(200).json({
       success: true,
       message: 'Verification code sent to your email',
-      data: {
-        expiresIn: '10 minutes',
-        // Remove in production - only for development
-        devCode: process.env.NODE_ENV === 'development' ? verificationCode : undefined,
-      },
+      data: { expiresIn: '10 minutes' },
     });
   } catch (error) {
     console.error('Send verification code error:', error);

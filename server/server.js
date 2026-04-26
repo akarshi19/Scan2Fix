@@ -22,6 +22,10 @@ connectDB();
 // Initialize Express
 const app = express();
 
+// Trust proxy — required when running behind Nginx, Render, Railway, etc.
+// Allows express-rate-limit to correctly identify client IPs from X-Forwarded-For
+app.set('trust proxy', 1);
+
 // ============================================
 // MIDDLEWARE
 // ============================================
@@ -125,13 +129,16 @@ app.use('/auth', require('./routes/oauthCallbackRoutes'));
 
 // Serve complaint form
 // Access via: /complaint?assetId=ASSET-ID or /complaint?qrId=ASSET-ID
+// ngrok-skip-browser-warning header/cookie lets free ngrok accounts bypass the browser interstitial
 app.get('/complaint', (req, res) => {
+  res.setHeader('ngrok-skip-browser-warning', 'true');
+  res.cookie('ngrok-skip-browser-warning', 'true', { path: '/', httpOnly: false });
   res.sendFile(path.join(__dirname, 'public', 'complaint-form.html'));
 });
 
 // Alternative route for web app scanning
 app.get('/scan2fix/complaint/:assetId', (req, res) => {
-  res.redirect(`/complaint?assetId=${req.params.assetId}`);
+  res.redirect(`/complaint?assetId=${req.params.assetId}&ngrok-skip-browser-warning=true`);
 });
 
 // ============================================

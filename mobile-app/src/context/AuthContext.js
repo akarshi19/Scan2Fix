@@ -20,6 +20,7 @@ import {
   getUserData,
   removeUserData,
 } from '../services/api';
+import { registerForPushNotifications } from '../utils/notificationSetup';
 
 const AuthContext = createContext({});
 
@@ -55,19 +56,17 @@ export const AuthProvider = ({ children }) => {
         setUser(userData);
         setRole(userData.role);
         await saveUserData(userData);
+        registerForPushNotifications().catch(() => {});
       } else {
         // Token is invalid — clear everything
         await clearAuth();
       }
     } catch (error) {
-      console.log('Auth check failed (token may be expired):', error.message);
-      // Token expired or server unreachable
-      // Try to use cached user data for offline capability
+      // Token expired or server unreachable — use cached user data for offline capability
       const cachedUser = await getUserData();
       if (cachedUser) {
         setUser(cachedUser);
         setRole(cachedUser.role);
-        console.log('Using cached user data');
       } else {
         await clearAuth();
       }
@@ -96,6 +95,8 @@ export const AuthProvider = ({ children }) => {
         // Update state
         setUser(userData);
         setRole(userData.role);
+
+        registerForPushNotifications().catch(() => {});
 
         return { error: null };
       } else {

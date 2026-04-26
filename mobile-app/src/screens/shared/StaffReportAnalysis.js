@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  ActivityIndicator, Alert, Dimensions, Modal,
+  ActivityIndicator, Alert, Dimensions, Modal, PanResponder, FlatList,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Polyline, Line, Circle, Path, Rect, Text as SvgText, Defs, LinearGradient, Stop } from 'react-native-svg';
@@ -126,6 +126,46 @@ export default function StaffReportAnalysis({ navigation }) {
     ? staffData.find(s => s.staffId?.toString() === selectedStaffId)
     : null;
 
+  // ─── Drill-down: fetch complaints for a time range ───
+  const [drillVisible, setDrillVisible]       = useState(false);
+  const [drillTitle, setDrillTitle]           = useState('');
+  const [drillComplaints, setDrillComplaints] = useState([]);
+  const [drillLoading, setDrillLoading]       = useState(false);
+
+  const openDrill = async (title, dateFrom, dateTo) => {
+    setDrillTitle(title);
+    setDrillVisible(true);
+    setDrillLoading(true);
+    setDrillComplaints([]);
+    try {
+      const res = await complaintsAPI.getAll({ dateFrom, dateTo });
+      if (res.data.success) setDrillComplaints(res.data.data || []);
+    } catch {
+      Alert.alert('Error', 'Could not load complaints for this period');
+    } finally {
+      setDrillLoading(false);
+    }
+  };
+
+  // ─── Swipe-to-switch-tab PanResponder (ADMIN tabs: staff → monthly → yearly) ───
+  const ADMIN_TABS = ['staff', 'monthly', 'yearly'];
+  const swipePan = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_, { dx, dy }) =>
+        Math.abs(dx) > 20 && Math.abs(dx) > Math.abs(dy) * 1.5,
+      onPanResponderRelease: (_, { dx, vx }) => {
+        if (Math.abs(dx) < 60 && Math.abs(vx) < 0.4) return;
+        setActiveTab(prev => {
+          const idx = ADMIN_TABS.indexOf(prev);
+          return dx < 0
+            ? ADMIN_TABS[Math.min(idx + 1, ADMIN_TABS.length - 1)]
+            : ADMIN_TABS[Math.max(idx - 1, 0)];
+        });
+      },
+    })
+  ).current;
+
   // ─── Loading screen ───
   if (loading) {
     return (
@@ -140,6 +180,7 @@ export default function StaffReportAnalysis({ navigation }) {
 
   return (
     <ScreenLayout title={t('reportAnalysis')} showBack showProfile={true} showDecor>
+      <View style={{ flex: 1 }} {...swipePan.panHandlers}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
 
         {/* ── Header ── */}
@@ -249,7 +290,7 @@ export default function StaffReportAnalysis({ navigation }) {
                 <ActivityIndicator color={ACTIVE} />
               </View>
             ) : monthlyData ? (
-              <MonthlySection monthlyData={monthlyData} />
+              <MonthlySection monthlyData={monthlyData} openDrill={openDrill} />
             ) : (
               <EmptyState message="No monthly data" />
             )}
@@ -263,7 +304,7 @@ export default function StaffReportAnalysis({ navigation }) {
               <EmptyState message="No yearly data available" />
             ) : (
               yearlyData.map((yr, idx) => (
-                <YearlyCard key={idx} yr={yr} />
+                <YearlyCard key={idx} yr={yr} openDrill={openDrill} />
               ))
             )}
           </View>
@@ -311,56 +352,131 @@ export default function StaffReportAnalysis({ navigation }) {
           </View>
         </View>
       </Modal>
+
+      {/* ── Drill-down modal ── */}
+      <Modal visible={drillVisible} animationType="slide" transparent onRequestClose={() => setDrillVisible(false)}>
+        <View style={s.drillOverlay}>
+          <View style={s.drillSheet}>
+            <View style={s.drillHeader}>
+              <Text style={s.drillTitle}>{drillTitle}</Text>
+              <TouchableOpacity onPress={() => setDrillVisible(false)} style={s.drillClose}>
+                <Ionicons name="close" size={20} color={TEXT_SEC} />
+              </TouchableOpacity>
+            </View>
+            {drillLoading ? (
+              <ActivityIndicator color={ACTIVE} style={{ marginTop: 32 }} />
+            ) : drillComplaints.length === 0 ? (
+              <View style={s.drillEmptyWrap}>
+                <Ionicons name="clipboard-outline" size={40} color={TEXT_MUT} />
+                <Text style={s.drillEmptyText}>No complaints in this period</Text>
+              </View>
+            ) : (
+              <>
+                <Text style={s.drillCount}>{drillComplaints.length} complaint{drillComplaints.length !== 1 ? 's' : ''}</Text>
+                <FlatList
+                  data={drillComplaints}
+                  keyExtractor={item => (item.id || item._id)?.toString()}
+                  renderItem={({ item }) => {
+                    const sc = { OPEN: '#FF6B6B', ASSIGNED: '#FFA726', IN_PROGRESS: ACTIVE, FINISHING: '#AB47BC', RESOLVED: '#66BB6A', CLOSED: '#4CAF50' };
+                    const color = sc[item.status] || TEXT_MUT;
+                    return (
+                      <View style={s.drillItem}>
+                        <View style={s.drillItemLeft}>
+                          <Text style={s.drillItemType}>{item.asset_type}</Text>
+                          <Text style={s.drillItemDesc} numberOfLines={2}>{item.description}</Text>
+                          <Text style={s.drillItemMeta}>{item.station}{item.location ? ` · ${item.location}` : ''}</Text>
+                        </View>
+                        <View style={[s.drillItemBadge, { backgroundColor: color + '22' }]}>
+                          <Text style={[s.drillItemStatus, { color }]}>{item.status?.replace('_', ' ')}</Text>
+                        </View>
+                      </View>
+                    );
+                  }}
+                  ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
+                  contentContainerStyle={{ paddingBottom: 32 }}
+                  showsVerticalScrollIndicator={false}
+                />
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
+      </View>
     </ScreenLayout>
   );
 }
 
 // MONTHLY SECTION (dynamic asset types)
-function MonthlySection({ monthlyData }) {
-  const summary = monthlyData.summary;
-  const monthly = monthlyData.monthly || [];
-  const allTypes = summary?.assetTypes || [];
-  const nonZeroTypes = allTypes.filter(type => (summary[type] || 0) > 0);
+function MonthlySection({ monthlyData, openDrill }) {
+  const months   = monthlyData.months || [];
+  const allTypes = monthlyData.assetTypes || [];
+  const total    = monthlyData.total || 0;
+  const year     = monthlyData.year;
+
+  // Sum each type across all months for the summary chips
+  const typeTotals = {};
+  allTypes.forEach(type => {
+    typeTotals[type] = months.reduce((sum, m) => sum + (m.byType?.[type] || 0), 0);
+  });
+  const nonZeroTypes = allTypes.filter(type => (typeTotals[type] || 0) > 0);
+
   // Descending: latest month first
-  const activeMonths = monthly.filter(m => m.total > 0).slice().reverse();
+  const activeMonths = months.filter(m => m.total > 0).slice().reverse();
 
   return (
     <View>
       {/* ── Trend Line Chart ── */}
       <View style={s.chartCard}>
-        <Text style={s.chartCardTitle}>Complaint Trend {summary.year}</Text>
-        <TrendLineChart months={monthly} />
+        <Text style={s.chartCardTitle}>Complaint Trend {year}</Text>
+        <TrendLineChart months={months} />
       </View>
 
       {/* ── Summary Cards ── */}
       <View style={s.summaryGrid}>
-        <SummaryCard label="Total" value={summary.totalComplaints || 0} color="#3B82F6" icon="layers-outline" wide />
+        <SummaryCard label="Total" value={total} color="#3B82F6" icon="layers-outline" wide />
         {nonZeroTypes.map((type, idx) => (
-          <SummaryCard key={type} label={typeLabel(type)} value={summary[type] || 0}
+          <SummaryCard key={type} label={typeLabel(type)} value={typeTotals[type] || 0}
             color={typeColor(type, idx)} icon="construct-outline" />
         ))}
       </View>
 
       {activeMonths.length === 0 ? (
-        <EmptyState message={`No complaints in ${summary.year}`} />
+        <EmptyState message={`No complaints in ${year}`} />
       ) : (
         <View>
           <Text style={s.sectionTitle}>Monthly Breakdown</Text>
           {activeMonths.map((month) => (
-            <View key={month.month} style={s.monthCard}>
+            <TouchableOpacity
+              key={month.month}
+              style={s.monthCard}
+              activeOpacity={openDrill ? 0.75 : 1}
+              onPress={() => {
+                if (!openDrill) return;
+                const mo      = month.month;
+                const nextMo  = mo === 12 ? 1 : mo + 1;
+                const nextYr  = mo === 12 ? year + 1 : year;
+                const fromStr = `${year}-${String(mo).padStart(2,'0')}-01T00:00:00.000Z`;
+                const toDate  = new Date(`${nextYr}-${String(nextMo).padStart(2,'0')}-01T00:00:00.000Z`);
+                toDate.setMilliseconds(toDate.getMilliseconds() - 1);
+                openDrill(`${month.monthName} ${year}`, fromStr, toDate.toISOString());
+              }}
+            >
               <View style={s.monthCardHeader}>
                 <Text style={s.monthName}>{month.monthName}</Text>
-                <View style={s.monthTotalBadge}>
-                  <Text style={s.monthTotalText}>{month.total} total</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <View style={s.monthTotalBadge}>
+                    <Text style={s.monthTotalText}>{month.total} total</Text>
+                  </View>
+                  {openDrill && <Ionicons name="list-outline" size={13} color={TEXT_MUT} />}
                 </View>
               </View>
               <View style={s.barsWrap}>
                 {allTypes.map((type, idx) => (
-                  <BarRow key={type} label={typeLabel(type)} count={month[type] || 0}
+                  <BarRow key={type} label={typeLabel(type)} count={month.byType?.[type] || 0}
                     monthTotal={month.total} color={typeColor(type, idx)} />
                 ))}
               </View>
-            </View>
+            </TouchableOpacity>
           ))}
         </View>
       )}
@@ -592,9 +708,9 @@ function StarOfMonthCard({ staff }) {
 }
 
 // YEARLY CARD  (sticky Y-axis + horizontally scrollable bars)
-function YearlyCard({ yr }) {
-  const allTypes    = yr.assetTypes || [];
-  const nonZeroTypes = allTypes.filter(type => (yr[type] || 0) > 0);
+function YearlyCard({ yr, openDrill }) {
+  const allTypes    = Object.keys(yr.byType || {});
+  const nonZeroTypes = allTypes.filter(type => (yr.byType?.[type] || 0) > 0);
 
   const barW     = 38;
   const barGap   = 12;
@@ -610,7 +726,7 @@ function YearlyCard({ yr }) {
   const totalBars = 1 + nonZeroTypes.length;
   const scrollW  = totalBars * barW + (totalBars - 1) * barGap + groupGap + 16;
 
-  const maxVal   = Math.max(...nonZeroTypes.map(t => yr[t] || 0), yr.total || 1, 1);
+  const maxVal   = Math.max(...nonZeroTypes.map(t => yr.byType?.[t] || 0), yr.total || 1, 1);
   // Nice round Y-axis ticks
   const niceMax  = Math.ceil(maxVal / 5) * 5 || 5;
   const ticks    = [0, 0.25, 0.5, 0.75, 1].map(f => ({
@@ -628,12 +744,24 @@ function YearlyCard({ yr }) {
 
   return (
     <View style={s.yearCard}>
-      <View style={s.yearCardHeader}>
+      <TouchableOpacity
+        style={s.yearCardHeader}
+        activeOpacity={openDrill ? 0.7 : 1}
+        onPress={() => {
+          if (!openDrill) return;
+          const toDate = new Date(`${yr.year + 1}-01-01T00:00:00.000Z`);
+          toDate.setMilliseconds(toDate.getMilliseconds() - 1);
+          openDrill(`${yr.year} complaints`, `${yr.year}-01-01T00:00:00.000Z`, toDate.toISOString());
+        }}
+      >
         <Text style={s.yearCardYear}>{yr.year}</Text>
-        <View style={s.yearTotalBadge}>
-          <Text style={s.yearTotalText}>{yr.total} total</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <View style={s.yearTotalBadge}>
+            <Text style={s.yearTotalText}>{yr.total} total</Text>
+          </View>
+          {openDrill && <Ionicons name="list-outline" size={13} color={TEXT_MUT} />}
         </View>
-      </View>
+      </TouchableOpacity>
 
       {nonZeroTypes.length > 0 ? (
         <>
@@ -697,7 +825,7 @@ function YearlyCard({ yr }) {
 
                 {/* Type bars */}
                 {nonZeroTypes.map((type, idx) => {
-                  const val   = yr[type] || 0;
+                  const val   = yr.byType?.[type] || 0;
                   const x     = typeBarXs[idx];
                   const color = typeColor(type, idx);
                   const lbl   = typeLabel(type).split(' ')[0];
@@ -850,7 +978,7 @@ function TrendLineChart({ months }) {
 // SVG CHART: Completion Donut
 function CompletionDonut({ rate, size = 100 }) {
   const r  = (size - 20) / 2;
-  const cx = size / 2;
+  const cx = size  / 2;
   const cy = size / 2;
   const toRad = deg => (deg * Math.PI) / 180;
   const color = rate >= 80 ? '#10B981' : rate >= 50 ? '#F59E0B' : '#EF4444';
@@ -869,13 +997,14 @@ function CompletionDonut({ rate, size = 100 }) {
 
   return (
     <Svg width={size} height={size}>
-      <Circle cx={cx} cy={cy} r={r} fill="none" stroke="#EEF4F7" strokeWidth="10" />
+      <Circle cx={cx} cy={cy} r={r} fill="none" stroke="#EEF4F7" strokeWidth="5" />
       {rate > 0 && (
-        <Path d={arcPath} fill="none" stroke={color} strokeWidth="10" strokeLinecap="round" />
+        <Path d={arcPath} fill="none" stroke={color} strokeWidth="5" strokeLinecap="round" />
       )}
-      <SvgText x={cx} y={cy - 4} fontSize="18" fontWeight="bold"
-        fill={TEXT_PRI} textAnchor="middle">{rate}%</SvgText>
-      <SvgText x={cx} y={cy + 13} fontSize="9"
+      {/* Use string concat — JSX {rate}% creates two text nodes with a space in between */}
+      <SvgText x={cx} y={cy + 7} fontSize="18" fontWeight="bold"
+        fill={TEXT_PRI} textAnchor="middle">{rate + '%'}</SvgText>
+      <SvgText x={cx} y={cy + 20} fontSize="9"
         fill={TEXT_MUT} textAnchor="middle">complete</SvgText>
     </Svg>
   );
@@ -1302,4 +1431,28 @@ const s = StyleSheet.create({
 
   empty: { alignItems: 'center', paddingVertical: 50 },
   emptyText: { fontSize: 14, color: TEXT_MUT, marginTop: 12 },
+
+  // ── Drill-down modal ──────────────────────────────────────
+  drillOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
+  drillSheet: {
+    backgroundColor: '#F5F9FC', borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    paddingHorizontal: 20, paddingTop: 20, paddingBottom: 12, maxHeight: '80%',
+  },
+  drillHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 },
+  drillTitle: { fontSize: 17, fontWeight: '800', color: TEXT_PRI, flex: 1 },
+  drillClose: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#EEF4F8', alignItems: 'center', justifyContent: 'center' },
+  drillCount: { fontSize: 12, color: TEXT_MUT, marginBottom: 12 },
+  drillItem: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12,
+    shadowColor: '#A0BDD0', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.07, shadowRadius: 6, elevation: 2,
+  },
+  drillItemLeft: { flex: 1, marginRight: 10 },
+  drillItemType: { fontSize: 11, fontWeight: '700', color: ACTIVE, marginBottom: 2 },
+  drillItemDesc: { fontSize: 13, color: TEXT_PRI, marginBottom: 3 },
+  drillItemMeta: { fontSize: 11, color: TEXT_MUT },
+  drillItemBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, alignItems: 'center' },
+  drillItemStatus: { fontSize: 10, fontWeight: '700' },
+  drillEmptyWrap: { alignItems: 'center', paddingVertical: 40, gap: 10 },
+  drillEmptyText: { color: TEXT_MUT, fontSize: 14 },
 });

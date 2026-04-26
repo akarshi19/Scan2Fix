@@ -181,6 +181,13 @@ const userSchema = new mongoose.Schema(
       default: null,
     },
 
+    // ╔─── PUSH NOTIFICATIONS ───╗
+    push_token: {
+      type:    String,
+      default: null,
+      select:  false,
+    },
+
     // ╔─── TIMESTAMPS ───╗
     created_at: {
       type: Date,
@@ -243,54 +250,6 @@ userSchema.methods.comparePassword = async function (inputPassword) {
   return await bcrypt.compare(inputPassword, this.password);
 };
 
-/**
- * Check if user is staff member
- */
-userSchema.methods.isStaff = function () {
-  return this.role === 'STAFF';
-};
-
-/**
- * Check if user is admin
- */
-userSchema.methods.isAdmin = function () {
-  return this.role === 'ADMIN';
-};
-
-/**
- * Check if user is regular user
- */
-userSchema.methods.isUser = function () {
-  return this.role === 'USER';
-};
-
-/**
- * Check if staff is available for assignment
- */
-userSchema.methods.canBeAssigned = function () {
-  return (
-    this.is_active &&
-    this.availability.is_available &&
-    !this.availability.is_on_leave &&
-    this.availability.current_workload < this.availability.workload_capacity
-  );
-};
-
-/**
- * Get staff specialization
- */
-userSchema.methods.getSpecialization = function () {
-  if (!this.isStaff()) return null;
-  return this.staff_details?.specialization || 'General';
-};
-
-/**
- * Update last login
- */
-userSchema.methods.updateLastLogin = async function () {
-  this.last_login = new Date();
-  return await this.save();
-};
 
 /**
  * Return safe user profile (no password, no internal fields)
@@ -314,71 +273,5 @@ userSchema.methods.toProfileJSON = function () {
   };
 };
 
-// ╔════════════════════════════════════════════════════════════════╗
-// ║                STATIC METHODS                                 ║
-// ╚════════════════════════════════════════════════════════════════╝
-
-/**
- * Find staff by specialization
- */
-userSchema.statics.findStaffBySpecialization = async function (specialization) {
-  return await this.find({
-    role: 'STAFF',
-    is_active: true,
-    'staff_details.specialization': specialization,
-    'availability.is_available': true,
-    'availability.is_on_leave': false,
-  }).sort({ 'availability.current_workload': 1 }); // Least loaded first
-};
-
-/**
- * Find available staff
- */
-userSchema.statics.findAvailableStaff = async function () {
-  return await this.find({
-    role: 'STAFF',
-    is_active: true,
-    'availability.is_available': true,
-    'availability.is_on_leave': false,
-  }).sort({ 'availability.current_workload': 1 }); // Least loaded first
-};
-
-/**
- * Get top performing staff
- */
-userSchema.statics.getTopPerformers = async function (limit = 10) {
-  return await this.find({
-    role: 'STAFF',
-    is_active: true,
-  })
-    .sort({ 'stats.customer_satisfaction_rating': -1, 'stats.total_complaints_resolved': -1 })
-    .limit(limit);
-};
-
-/**
- * Get staff statistics
- */
-userSchema.statics.getStaffStats = async function () {
-  return await this.aggregate([
-    { $match: { role: 'STAFF', is_active: true } },
-    {
-      $group: {
-        _id: null,
-        total_staff: { $sum: 1 },
-        available: {
-          $sum: {
-            $cond: ['$availability.is_available', 1, 0],
-          },
-        },
-        on_leave: {
-          $sum: {
-            $cond: ['$availability.is_on_leave', 1, 0],
-          },
-        },
-        average_satisfaction: { $avg: '$stats.customer_satisfaction_rating' },
-      },
-    },
-  ]);
-};
 
 module.exports = mongoose.model('UserV2', userSchema);

@@ -57,20 +57,29 @@ exports.getOverview = async (req, res) => {
 // ─────────────────────────────────────────────
 exports.getWeeklyReport = async (req, res) => {
   try {
-    const now   = new Date();
-    const start = new Date(now);
-    start.setDate(start.getDate() - 6);
-    start.setHours(0, 0, 0, 0);
+    // Optional weekEnd param for previous-week navigation
+    let windowEnd = new Date();
+    if (req.query.weekEnd) {
+      const parsed = new Date(req.query.weekEnd);
+      if (!isNaN(parsed)) windowEnd = parsed;
+    }
+    windowEnd.setHours(23, 59, 59, 999);
+
+    const windowStart = new Date(windowEnd);
+    windowStart.setDate(windowStart.getDate() - 6);
+    windowStart.setHours(0, 0, 0, 0);
 
     const rawData = await Complaint.aggregate([
-      { $match: { created_at: { $gte: start, $lte: now } } },
+      { $match: { created_at: { $exists: true, $ne: null } } },
+      { $addFields: { created_at_date: { $toDate: '$created_at' } } },
+      { $match: { created_at_date: { $gte: windowStart, $lte: windowEnd } } },
       {
         $group: {
           _id: {
-            day:       { $dayOfMonth: '$created_at' },
-            month:     { $month: '$created_at' },
-            year:      { $year: '$created_at' },
-            dayOfWeek: { $dayOfWeek: '$created_at' },
+            day:       { $dayOfMonth: '$created_at_date' },
+            month:     { $month:     '$created_at_date' },
+            year:      { $year:      '$created_at_date' },
+            dayOfWeek: { $dayOfWeek: '$created_at_date' },
             assetType: '$asset_type',
           },
           count: { $sum: 1 },
@@ -84,7 +93,7 @@ exports.getWeeklyReport = async (req, res) => {
     // Build 7-day array
     const days = [];
     for (let i = 6; i >= 0; i--) {
-      const d = new Date(now);
+      const d = new Date(windowEnd);
       d.setDate(d.getDate() - i);
       const day   = d.getDate();
       const month = d.getMonth() + 1;
@@ -123,8 +132,10 @@ exports.getMonthlyReport = async (req, res) => {
     const year = parseInt(req.query.year) || new Date().getFullYear();
 
     const rawData = await Complaint.aggregate([
-      { $match: { created_at: { $gte: new Date(`${year}-01-01`), $lt: new Date(`${year+1}-01-01`) } } },
-      { $group: { _id: { month: { $month: '$created_at' }, assetType: '$asset_type' }, count: { $sum: 1 } } },
+      { $match: { created_at: { $exists: true, $ne: null } } },
+      { $addFields: { created_at_date: { $toDate: '$created_at' } } },
+      { $match: { created_at_date: { $gte: new Date(`${year}-01-01`), $lt: new Date(`${year+1}-01-01`) } } },
+      { $group: { _id: { month: { $month: '$created_at_date' }, assetType: '$asset_type' }, count: { $sum: 1 } } },
       { $sort: { '_id.month': 1 } },
     ]);
 
@@ -158,8 +169,9 @@ exports.getMonthlyReport = async (req, res) => {
 exports.getYearlyReport = async (req, res) => {
   try {
     const rawData = await Complaint.aggregate([
-      { $match: { created_at: { $exists: true, $ne: null, $type: 'date' } } },
-      { $group: { _id: { year: { $year: '$created_at' }, assetType: '$asset_type' }, count: { $sum: 1 } } },
+      { $match: { created_at: { $exists: true, $ne: null } } },
+      { $addFields: { created_at_date: { $toDate: '$created_at' } } },
+      { $group: { _id: { year: { $year: '$created_at_date' }, assetType: '$asset_type' }, count: { $sum: 1 } } },
       { $sort: { '_id.year': -1 } },
     ]);
 

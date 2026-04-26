@@ -11,7 +11,7 @@ import { SERVER_URL } from '../../services/api';
 import { useTheme } from '../../context/ThemeContext';
 import ScreenLayout from '../../components/ScreenLayout';
 
-const QR_URL = `${SERVER_URL}/complaint`;
+const QR_URL = `${SERVER_URL}/complaint?ngrok-skip-browser-warning=true`;
 
 export default function UniversalQR() {
   const { colors } = useTheme();
@@ -53,10 +53,10 @@ export default function UniversalQR() {
 </head>
 <body>
   <div class="card">
-    <div class="logo">🔧 Scan2Fix</div>
+    <div class="logo">Scan2Fix</div>
     <div class="tagline">Maintenance Issue Reporting</div>
     <div class="qr-box">${qrBase64 ? `<img src="${qrBase64}" alt="QR"/>` : ''}</div>
-    <div class="instruction">Scan this QR code with your phone camera<br/>to report a maintenance issue.<br/><strong>No app download required.</strong></div>
+    <div class="instruction">Scan this QR code with your phone camera to report a maintenance issue.<br/><strong>No app download required.</strong></div>
     <div class="url">${QR_URL}</div>
   </div>
 </body></html>`;
@@ -87,7 +87,7 @@ export default function UniversalQR() {
   }
 
   const s = StyleSheet.create({
-    wrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24, paddingBottom: 40 },
+    wrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24, paddingBottom: 40, paddingTop: 50 },
     qrCard: {
       backgroundColor: colors.cardBg, borderRadius: 20, padding: 28, alignItems: 'center', width: '100%',
       shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 5,
@@ -106,7 +106,7 @@ export default function UniversalQR() {
   });
 
   return (
-    <ScreenLayout title="Universal QR Code" showDecor>
+    <ScreenLayout title="Universal QR Code" showDecor >
       <View style={s.wrap}>
         <View style={s.qrCard}>
           <View style={s.qrWrap} ref={qrRef} collapsable={false}>
@@ -116,7 +116,7 @@ export default function UniversalQR() {
             Scan with any phone camera{'\n'}
             <Text style={{ fontWeight: '700' }}>No app download required</Text>
           </Text>
-          <Text style={s.urlText}>{QR_URL}</Text>
+          {/* <Text style={s.urlText}>{QR_URL}</Text> */}
         </View>
 
         <View style={s.btnRow}>

@@ -89,6 +89,16 @@ export default {
           "cameraPermission": "The app needs access to your camera to take profile pictures."
         }
       ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/splash-icon.png",
+          "color": "#ffffff",
+          "sounds": [],
+          "androidMode": "default",
+          "androidCollapsedTitle": "Scan2Fix"
+        }
+      ],
     ],
 
     experiments: {

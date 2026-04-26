@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
-  RefreshControl, Image, Alert, TextInput, Modal,
+  Pressable, RefreshControl, Image, Alert, TextInput, Modal,
 } from 'react-native';
 import { Ionicons, FontAwesome } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
@@ -17,10 +17,10 @@ const TEXT_SEC = '#5A7A8A';
 const TEXT_MUT = '#9DB5C0';
 
 const ROLE_COLORS = { role: { bg: '#E8F5FB', text: ACTIVE, dot: ACTIVE } };
-const ROLE_ICONS = {
-  ADMIN: <FontAwesome name="star" size={12} color={ACTIVE} />,
-  STAFF: <Ionicons name="build" size={12} color={ACTIVE} />,
-  USER: <Ionicons name="person" size={12} color={ACTIVE} />,
+const getRoleIcon = (role) => {
+  if (role === 'ADMIN') return <FontAwesome name="star" size={12} color={ACTIVE} />;
+  if (role === 'STAFF') return <Ionicons name="build" size={12} color={ACTIVE} />;
+  return <Ionicons name="person" size={12} color={ACTIVE} />;
 };
 
 export default function ManageUsers({ route }) {
@@ -146,33 +146,47 @@ export default function ManageUsers({ route }) {
     return filterOptions.find(o => o.key === filterRole)?.color || ACTIVE;
   };
 
-  const toggleAvailability = async (userId, currentStatus, userName) => {
+  const doToggle = async (userId, isCurrentlyOnLeave) => {
+    // Optimistic update — patch only this one user, keep all other item references unchanged.
+    // Replacing the whole array via getAll() forces FlatList to reconcile every cell at once,
+    // which can leave one cell blank on Android. Patching a single item avoids that.
+    setUsers(prev =>
+      prev.map(u => {
+        const uid = u._id?.toString() || u.id?.toString();
+        if (uid !== userId) return u; // same reference — FlatList skips this cell
+        return {
+          ...u,
+          availability: { ...(u.availability || {}), is_on_leave: !isCurrentlyOnLeave },
+        };
+      })
+    );
+
+    try {
+      await usersAPI.toggleLeave(userId);
+    } catch (e) {
+      // Revert on server error
+      setUsers(prev =>
+        prev.map(u => {
+          const uid = u._id?.toString() || u.id?.toString();
+          if (uid !== userId) return u;
+          return {
+            ...u,
+            availability: { ...(u.availability || {}), is_on_leave: isCurrentlyOnLeave },
+          };
+        })
+      );
+      Alert.alert(t('error'), e.message);
+    }
+  };
+
+  const toggleAvailability = (userId, currentStatus, userName) => {
     const newStatus = !currentStatus;
     Alert.alert(
       newStatus ? t('markOnLeaveTitle') : t('markAvailableTitle'),
       t('markStatusMessage').replace('user', userName).replace('status', newStatus ? t('onLeaveStatus') : t('available')),
       [
         { text: t('cancel'), style: 'cancel' },
-        {
-          text: t('confirm'),
-          onPress: async () => {
-            try {
-              const r = await usersAPI.toggleLeave(userId);
-              if (r.data.success) {
-                // Update only this user's availability in local state — no full refetch
-                setUsers(prev => prev.map(u => {
-                  const uid = u._id?.toString() || u.id?.toString();
-                  const target = userId?.toString();
-                  return uid === target
-                    ? { ...u, availability: { ...(u.availability || {}), is_on_leave: newStatus } }
-                    : u;
-                }));
-              }
-            } catch (e) {
-              Alert.alert(t('error'), e.message);
-            }
-          },
-        },
+        { text: t('confirm'), onPress: () => doToggle(userId, currentStatus) },
       ]
     );
   };
@@ -213,66 +227,73 @@ export default function ManageUsers({ route }) {
   );
 
   const renderUser = ({ item }) => {
+    if (!item || (!item._id && !item.id)) return null; // skip corrupted items
     const rs = ROLE_COLORS.role;
+    const userId = item._id?.toString() || item.id?.toString();
+    const isOnLeave = item.availability?.is_on_leave ?? false;
     return (
-      <TouchableOpacity
-        style={[s.card, item.availability?.is_on_leave && s.cardOnLeave]}
-        onPress={() => navigation.navigate('UserDetail', { user: item })}
-        activeOpacity={0.88}
-      >
+      <View style={[s.card, isOnLeave && s.cardOnLeave]}>
         <View style={s.cardRow}>
-          {item.photo_url ? (
-            <Image source={{ uri: getFileUrl(item.photo_url) }} style={s.avatar} />
-          ) : (
-            <View style={[s.avatarFallback, { backgroundColor: rs.dot }]}>
-              <Text style={s.avatarInitial}>{item.full_name?.charAt(0) ?? '?'}</Text>
+            {/* Left: avatar + info — tapping navigates to UserDetail */}
+          <Pressable
+            style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}
+            onPress={() => navigation.navigate('UserDetail', { user: item })}
+            android_ripple={{ color: '#E8F4FB', borderless: false }}
+          >
+            {item.photo_url && typeof item.photo_url === 'string' ? (
+              <Image source={{ uri: getFileUrl(item.photo_url) }} style={s.avatar} />
+            ) : (
+              <View style={[s.avatarFallback, { backgroundColor: rs.dot }]}>
+                <Text style={s.avatarInitial}>{String(item.full_name || '?').charAt(0).toUpperCase()}</Text>
+              </View>
+            )}
+            <View style={{ flex: 1 }}>
+              <View style={s.nameRow}>
+                <Text style={s.userName}>{String(item.full_name || '') || t('noName')}</Text>
+                {isOnLeave && (
+                  <View style={s.leavePill}>
+                    <Ionicons name="home-outline" size={10} color="#FFF" />
+                    <Text style={s.leavePillText}> {t('onLeave')}</Text>
+                  </View>
+                )}
+                {item.role === 'STAFF' && !isOnLeave && (
+                  <View style={s.onDutyPill}>
+                    <Ionicons name="checkmark-circle" size={10} color="#FFF" />
+                    <Text style={s.onDutyPillText}> {t('onDuty')}</Text>
+                  </View>
+                )}
+              </View>
+              <Text style={s.userEmail}>{String(item.email || '')}</Text>
+              {item.staff_details?.employee_id ? <Text style={s.userMeta}>ID: {String(item.staff_details.employee_id)}</Text> : null}
+              {item.staff_details?.designation ? <Text style={[s.userMeta, { color: ACTIVE }]}>{String(item.staff_details.designation)}</Text> : null}
             </View>
-          )}
-          <View style={{ flex: 1 }}>
-            <View style={s.nameRow}>
-              <Text style={s.userName}>{item.full_name || t('noName')}</Text>
-              {item.availability?.is_on_leave && (
-                <View style={s.leavePill}>
-                  <Ionicons name="home-outline" size={10} color="#FFF" />
-                  <Text style={s.leavePillText}> {t('onLeave')}</Text>
-                </View>
-              )}
-              {item.role === 'STAFF' && !item.availability?.is_on_leave && (
-                <View style={s.onDutyPill}>
-                  <Ionicons name="checkmark-circle" size={10} color="#FFF" />
-                  <Text style={s.onDutyPillText}> {t('onDuty')}</Text>
-                </View>
-              )}
+          </Pressable>
+
+          {/* Right: role badge + toggle button (not part of navigation press) */}
+          <View style={s.cardRight}>
+            <View style={[s.roleBadge, { backgroundColor: rs.bg }]}>
+              {getRoleIcon(item.role)}
+              <Text style={[s.roleText, { color: rs.text }]}> {item.role}</Text>
             </View>
-            <Text style={s.userEmail}>{item.email}</Text>
-            {item.staff_details?.employee_id && <Text style={s.userMeta}>ID: {item.staff_details.employee_id}</Text>}
-            {item.staff_details?.designation && <Text style={[s.userMeta, { color: ACTIVE }]}>{item.staff_details.designation}</Text>}
-          </View>
-          <View style={[s.roleBadge, { backgroundColor: rs.bg }]}>
-            {ROLE_ICONS[item.role]}
-            <Text style={[s.roleText, { color: rs.text }]}> {item.role}</Text>
+            {item.role === 'STAFF' && (
+              <Pressable
+                style={[s.inlineToggleBtn, isOnLeave ? s.inlineToggleBtnAvail : s.inlineToggleBtnLeave]}
+                onPress={() => toggleAvailability(userId, isOnLeave, item.full_name || item.email)}
+                android_ripple={{ color: isOnLeave ? '#C8E6C9' : '#FFCCBC', borderless: false }}
+              >
+                <Ionicons
+                  name={isOnLeave ? 'checkmark-circle-outline' : 'home-outline'}
+                  size={11}
+                  color={isOnLeave ? '#2E7D32' : '#E65100'}
+                />
+                <Text style={[s.inlineToggleText, isOnLeave ? s.inlineToggleTextAvail : s.inlineToggleTextLeave]}>
+                  {isOnLeave ? ` ${t('markAvailable')}` : ` ${t('markOnLeave')}`}
+                </Text>
+              </Pressable>
+            )}
           </View>
         </View>
-        {item.role === 'STAFF' && (
-          <TouchableOpacity
-            style={[s.actionBtn, item.availability?.is_on_leave ? s.actionBtnAvail : s.actionBtnLeave]}
-            onPress={() => toggleAvailability(item.id, item.availability?.is_on_leave, item.full_name || item.email)}
-            activeOpacity={0.85}
-          >
-            <Ionicons
-              name={item.availability?.is_on_leave ? 'checkmark-circle-outline' : 'home-outline'}
-              size={15}
-              color={item.availability?.is_on_leave ? '#2E7D32' : '#E65100'}
-            />
-            <Text style={[
-              s.actionBtnText,
-              item.availability?.is_on_leave ? s.actionBtnTextAvail : s.actionBtnTextLeave,
-            ]}>
-              {item.availability?.is_on_leave ? `  ${t('markAvailable')}` : `  ${t('markOnLeave')}`}
-            </Text>
-          </TouchableOpacity>
-        )}
-      </TouchableOpacity>
+      </View>
     );
   };
 
@@ -329,8 +350,9 @@ export default function ManageUsers({ route }) {
 
       <FlatList
         data={filtered}
-        keyExtractor={item => item.id}
+        keyExtractor={(item, index) => item?._id?.toString() || item?.id?.toString() || String(index)}
         renderItem={renderUser}
+        extraData={users}
         contentContainerStyle={filtered.length === 0 ? { flex: 1 } : { paddingBottom: 140 }}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={fetchUsers} tintColor={ACTIVE} />}
@@ -499,12 +521,13 @@ const s = StyleSheet.create({
   modalCloseBtn: { marginTop: 12, paddingVertical: 14, borderRadius: 12, backgroundColor: '#F2F6F8', alignItems: 'center' },
   modalCloseBtnText: { fontSize: 15, fontWeight: '600', color: TEXT_SEC },
   card: {
-    backgroundColor: CARD_BG, borderRadius: 14, marginBottom: 12, overflow: 'hidden',
+    backgroundColor: CARD_BG, borderRadius: 14, marginBottom: 12,
     shadowColor: '#A0BDD0', shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.12, shadowRadius: 8, elevation: 3,
   },
   cardOnLeave: { borderLeftWidth: 4, borderLeftColor: '#FF9800' },
   cardRow: { flexDirection: 'row', alignItems: 'center', padding: 14 },
+  cardRight: { alignItems: 'flex-end', gap: 6, marginLeft: 10 },
   avatar: { width: 50, height: 50, borderRadius: 25, marginRight: 12 },
   avatarFallback: {
     width: 50, height: 50, borderRadius: 25, alignItems: 'center',
@@ -527,15 +550,15 @@ const s = StyleSheet.create({
   userMeta: { fontSize: 11, color: TEXT_MUT, marginTop: 2 },
   roleBadge: { borderRadius: 10, paddingHorizontal: 10, paddingVertical: 5, flexDirection: 'row', alignItems: 'center' },
   roleText: { fontSize: 11, fontWeight: '700' },
-  actionBtn: {
-    paddingVertical: 11, borderTopWidth: 1, borderTopColor: '#EEF4F8',
-    alignItems: 'center', flexDirection: 'row', justifyContent: 'center',
+  inlineToggleBtn: {
+    flexDirection: 'row', alignItems: 'center', borderRadius: 8,
+    paddingHorizontal: 8, paddingVertical: 5, borderWidth: 1,
   },
-  actionBtnLeave: { backgroundColor: '#FFF8F0' },
-  actionBtnAvail: { backgroundColor: '#F0FBF5' },
-  actionBtnText: { fontSize: 13, fontWeight: '600' },
-  actionBtnTextLeave: { color: '#E65100' },
-  actionBtnTextAvail: { color: '#2E7D32' },
+  inlineToggleBtnLeave: { backgroundColor: '#FFF8F0', borderColor: '#FFCCBC' },
+  inlineToggleBtnAvail: { backgroundColor: '#F0FBF5', borderColor: '#C8E6C9' },
+  inlineToggleText: { fontSize: 10, fontWeight: '700' },
+  inlineToggleTextLeave: { color: '#E65100' },
+  inlineToggleTextAvail: { color: '#2E7D32' },
   empty: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40, gap: 12 },
   emptyTitle: { fontSize: 16, fontWeight: '700', color: TEXT_SEC },
   emptyText: { color: TEXT_MUT, fontSize: 13, textAlign: 'center' },

@@ -53,7 +53,7 @@ export default function LodgeComplaint({ navigation }) {
     if (!photo) return null;
     setUploadingPhoto(true);
     try {
-      const res = await uploadAPI.complaintPhoto(photo.uri);
+      const res = await uploadAPI.complaintPhoto(photo);
       return res.data?.data?.photo_url || res.data?.data?.url || null;
     } finally { setUploadingPhoto(false); }
   };

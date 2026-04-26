@@ -40,6 +40,7 @@ export default function AddUser({ navigation }) {
   // Designation picker state
   const [showDesignationModal, setShowDesignationModal] = useState(false);
   const [existingDesignations, setExistingDesignations] = useState([]);
+  const [predefinedDesignations, setPredefinedDesignations] = useState([]);
   const [isAddingCustomDesignation, setIsAddingCustomDesignation] = useState(false);
   const [customDesignation, setCustomDesignation] = useState('');
 
@@ -65,6 +66,7 @@ export default function AddUser({ navigation }) {
       const response = await usersAPI.getDesignations();
       if (response.data.success) {
         setExistingDesignations(response.data.data || []);
+        setPredefinedDesignations(response.data.predefined || []);
       }
     } catch (error) {
       console.error('Error fetching designations:', error);
@@ -74,16 +76,18 @@ export default function AddUser({ navigation }) {
 
   const handleAddCustomDesignation = () => {
     const trimmed = customDesignation.trim().toUpperCase();
-    if (!trimmed) { 
-      Alert.alert(t('error'), t('enterDesignation')); 
-      return; 
+    if (!trimmed) {
+      Alert.alert(t('error'), t('enterDesignation'));
+      return;
     }
-    if (trimmed.length < 2) { 
-      Alert.alert(t('error'), t('designationMin')); 
-      return; 
+    if (trimmed.length < 2) {
+      Alert.alert(t('error'), t('designationMin'));
+      return;
     }
-    if (existingDesignations.includes(trimmed)) {
-      setDesignation(trimmed);
+    const existing = existingDesignations.find(d => d.toLowerCase() === trimmed.toLowerCase());
+    if (existing) {
+      Alert.alert(t('error'), `"${existing}" already exists. It has been selected.`);
+      setDesignation(existing);
       setCustomDesignation('');
       setIsAddingCustomDesignation(false);
       setShowDesignationModal(false);
@@ -94,6 +98,31 @@ export default function AddUser({ navigation }) {
     setCustomDesignation('');
     setIsAddingCustomDesignation(false);
     setShowDesignationModal(false);
+  };
+
+  const handleDeleteDesignation = (name) => {
+    Alert.alert(
+      'Delete Designation',
+      `Delete "${name}"? This will remove it from all staff who have this designation.`,
+      [
+        { text: t('cancel'), style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const r = await usersAPI.deleteDesignation(name);
+              if (r.data.success) {
+                setExistingDesignations(prev => prev.filter(d => d !== name));
+                if (designation === name) setDesignation('');
+              }
+            } catch (e) {
+              Alert.alert(t('error'), e.message || 'Failed to delete designation');
+            }
+          },
+        },
+      ]
+    );
   };
 
   const handlePhotoOptionPress = (option) => {
@@ -905,26 +934,41 @@ export default function AddUser({ navigation }) {
               keyExtractor={(item) => item}
               style={{ maxHeight: 220 }}
               showsVerticalScrollIndicator={false}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={[s.desigOption, designation === item && s.desigOptionActive]}
-                  onPress={() => {
-                    setDesignation(item);
-                    setShowDesignationModal(false);
-                  }}
-                >
-                  <View style={[
-                    s.desigOptionIcon,
-                    { backgroundColor: designation === item ? `${colors.active}15` : colors.pageBg },
-                  ]}>
-                    <Ionicons name="briefcase-outline" size={18} color={designation === item ? colors.active : colors.textMut} />
+              renderItem={({ item }) => {
+                const isPredefined = predefinedDesignations.includes(item.toLowerCase());
+                return (
+                  <View style={[s.desigOption, designation === item && s.desigOptionActive]}>
+                    <TouchableOpacity
+                      style={{ flexDirection: 'row', alignItems: 'center', flex: 1, gap: 12 }}
+                      onPress={() => {
+                        setDesignation(item);
+                        setShowDesignationModal(false);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <View style={[
+                        s.desigOptionIcon,
+                        { backgroundColor: designation === item ? `${colors.active}15` : colors.pageBg },
+                      ]}>
+                        <Ionicons name="briefcase-outline" size={18} color={designation === item ? colors.active : colors.textMut} />
+                      </View>
+                      <Text style={[s.desigOptionLabel, designation === item && { fontWeight: '700', color: colors.active }]}>
+                        {item}
+                      </Text>
+                      {designation === item && <Ionicons name="checkmark-circle" size={20} color={colors.active} />}
+                    </TouchableOpacity>
+                    {!isPredefined && (
+                      <TouchableOpacity
+                        onPress={() => handleDeleteDesignation(item)}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        style={{ paddingLeft: 8 }}
+                      >
+                        <Ionicons name="trash-outline" size={16} color="#E53935" />
+                      </TouchableOpacity>
+                    )}
                   </View>
-                  <Text style={[s.desigOptionLabel, designation === item && { fontWeight: '700', color: colors.active }]}>
-                    {item}
-                  </Text>
-                  {designation === item && <Ionicons name="checkmark-circle" size={20} color={colors.active} />}
-                </TouchableOpacity>
-              )}
+                );
+              }}
             />
 
             <View style={s.desigDivider} />

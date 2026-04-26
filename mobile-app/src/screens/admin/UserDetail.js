@@ -66,6 +66,7 @@ export default function UserDetail({ route, navigation }) {
   // Designation picker state
   const [showDesignationModal, setShowDesignationModal] = useState(false);
   const [existingDesignations, setExistingDesignations] = useState([]);
+  const [predefinedDesignations, setPredefinedDesignations] = useState([]);
   const [isAddingCustomDesignation, setIsAddingCustomDesignation] = useState(false);
   const [customDesignation, setCustomDesignation] = useState('');
 
@@ -82,19 +83,15 @@ export default function UserDetail({ route, navigation }) {
   const fetchDesignations = async () => {
     try {
       const response = await usersAPI.getDesignations();
-      console.log('Designations API response', response.data);
       if (response.data.success) {
         const designations = response.data.data || [];
-        // Ensure current designation is in the list (case-insensitive check)
         if (designation && !designations.some(d => d.toLowerCase() === designation.toLowerCase())) {
           designations.push(designation);
         }
-        // Normalize current designation to match canonical casing from the list
         const canonical = designations.find(d => d.toLowerCase() === designation.toLowerCase());
-        if (canonical && canonical !== designation) {
-          setDesignation(canonical);
-        }
+        if (canonical && canonical !== designation) setDesignation(canonical);
         setExistingDesignations(designations.sort());
+        setPredefinedDesignations(response.data.predefined || []);
       }
     } catch (error) {
       console.error('Error fetching designations:', error);
@@ -112,8 +109,10 @@ export default function UserDetail({ route, navigation }) {
       Alert.alert(t('error'), t('designationMin'));
       return;
     }
-    if (existingDesignations.includes(trimmed)) {
-      setDesignation(trimmed);
+    const existing = existingDesignations.find(d => d.toLowerCase() === trimmed.toLowerCase());
+    if (existing) {
+      Alert.alert(t('error'), `"${existing}" already exists. It has been selected.`);
+      setDesignation(existing);
       setCustomDesignation('');
       setIsAddingCustomDesignation(false);
       setShowDesignationModal(false);
@@ -124,6 +123,31 @@ export default function UserDetail({ route, navigation }) {
     setCustomDesignation('');
     setIsAddingCustomDesignation(false);
     setShowDesignationModal(false);
+  };
+
+  const handleDeleteDesignation = (name) => {
+    Alert.alert(
+      'Delete Designation',
+      `Delete "${name}"? This will remove it from all staff who have this designation.`,
+      [
+        { text: t('cancel'), style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const r = await usersAPI.deleteDesignation(name);
+              if (r.data.success) {
+                setExistingDesignations(prev => prev.filter(d => d !== name));
+                if (designation === name) setDesignation('');
+              }
+            } catch (e) {
+              Alert.alert(t('error'), e.message || 'Failed to delete designation');
+            }
+          },
+        },
+      ]
+    );
   };
 
   const toggleLeaveStatus = async () => {
@@ -473,38 +497,43 @@ export default function UserDetail({ route, navigation }) {
               keyExtractor={(item) => item}
               style={s.desigList}
               showsVerticalScrollIndicator={false}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={[s.desigOption, designation === item && s.desigOptionActive]}
-                  onPress={() => {
-                    setDesignation(item);
-                    setShowDesignationModal(false);
-                    setIsAddingCustomDesignation(false);
-                    setCustomDesignation('');
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <View style={[
-                    s.desigOptionIcon,
-                    { backgroundColor: designation === item ? `${ACTIVE}15` : '#F2F6F8' },
-                  ]}>
-                    <Ionicons
-                      name="briefcase-outline"
-                      size={18}
-                      color={designation === item ? ACTIVE : TEXT_MUT}
-                    />
+              renderItem={({ item }) => {
+                const isPredefined = predefinedDesignations.includes(item.toLowerCase());
+                return (
+                  <View style={[s.desigOption, designation === item && s.desigOptionActive]}>
+                    <TouchableOpacity
+                      style={{ flexDirection: 'row', alignItems: 'center', flex: 1, gap: 12 }}
+                      onPress={() => {
+                        setDesignation(item);
+                        setShowDesignationModal(false);
+                        setIsAddingCustomDesignation(false);
+                        setCustomDesignation('');
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <View style={[
+                        s.desigOptionIcon,
+                        { backgroundColor: designation === item ? `${ACTIVE}15` : '#F2F6F8' },
+                      ]}>
+                        <Ionicons name="briefcase-outline" size={18} color={designation === item ? ACTIVE : TEXT_MUT} />
+                      </View>
+                      <Text style={[s.desigOptionLabel, designation === item && { fontWeight: '700', color: ACTIVE }]}>
+                        {item}
+                      </Text>
+                      {designation === item && <Ionicons name="checkmark-circle" size={20} color={ACTIVE} />}
+                    </TouchableOpacity>
+                    {!isPredefined && (
+                      <TouchableOpacity
+                        onPress={() => handleDeleteDesignation(item)}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        style={{ paddingLeft: 8 }}
+                      >
+                        <Ionicons name="trash-outline" size={16} color="#E53935" />
+                      </TouchableOpacity>
+                    )}
                   </View>
-                  <Text style={[
-                    s.desigOptionLabel,
-                    designation === item && { fontWeight: '700', color: ACTIVE },
-                  ]}>
-                    {item}
-                  </Text>
-                  {designation === item && (
-                    <Ionicons name="checkmark-circle" size={20} color={ACTIVE} />
-                  )}
-                </TouchableOpacity>
-              )}
+                );
+              }}
             />
 
             {/* Divider */}

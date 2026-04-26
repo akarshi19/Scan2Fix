@@ -1,0 +1,102 @@
+name: Mobile — Build APK + Create Release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'mobile-app/**'
+      - '.github/workflows/mobile.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build Android APK via EAS
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write   # needed to create GitHub Releases
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: mobile-app/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./mobile-app
+        run: npm ci
+
+      - name: Setup EAS CLI + authenticate
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      # Builds the APK on Expo's servers and waits for it to finish.
+      # --wait    : block until build completes (takes ~10-20 min)
+      # --json    : output build info as JSON so we can parse the APK URL
+      # --no-wait : remove this flag if you don't want to block the action
+      - name: Build Android APK (preview)
+        id: eas_build
+        working-directory: ./mobile-app
+        run: |
+          echo "Starting EAS build..."
+          BUILD_OUTPUT=$(eas build \
+            --platform android \
+            --profile preview \
+            --non-interactive \
+            --wait \
+            --json 2>/dev/null)
+
+          echo "Build output received"
+          echo "$BUILD_OUTPUT" > /tmp/build_output.json
+
+          APK_URL=$(echo "$BUILD_OUTPUT" | jq -r '.[0].artifacts.buildUrl // empty')
+          BUILD_ID=$(echo "$BUILD_OUTPUT" | jq -r '.[0].id // empty')
+          BUILD_STATUS=$(echo "$BUILD_OUTPUT" | jq -r '.[0].status // empty')
+
+          echo "apk_url=$APK_URL"       >> $GITHUB_OUTPUT
+          echo "build_id=$BUILD_ID"     >> $GITHUB_OUTPUT
+          echo "build_status=$BUILD_STATUS" >> $GITHUB_OUTPUT
+
+          echo "✅ Build Status : $BUILD_STATUS"
+          echo "📦 APK URL      : $APK_URL"
+          echo "🆔 Build ID     : $BUILD_ID"
+
+      - name: Create GitHub Release with APK link
+        if: steps.eas_build.outputs.build_status == 'FINISHED'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: apk-${{ github.run_number }}
+          name: "Android APK — Build #${{ github.run_number }}"
+          body: |
+            ## Android APK Build #${{ github.run_number }}
+
+            **Branch:** `${{ github.ref_name }}`
+            **Commit:** `${{ github.sha }}`
+            **EAS Build ID:** `${{ steps.eas_build.outputs.build_id }}`
+
+            ### Download APK
+            👉 [${{ steps.eas_build.outputs.apk_url }}](${{ steps.eas_build.outputs.apk_url }})
+
+            ### Install on Android
+            1. Download the APK link above
+            2. On the Android device: Settings → Install unknown apps → allow your browser
+            3. Open the downloaded APK and install
+
+            > This is the **preview** build (internal distribution).
+            > For production Play Store release, trigger the `production` profile manually.
+          draft: false
+          prerelease: false
+
+      - name: Build failed notification
+        if: steps.eas_build.outputs.build_status != 'FINISHED'
+        run: |
+          echo "❌ Build did not finish. Status: ${{ steps.eas_build.outputs.build_status }}"
+          echo "Check EAS dashboard: https://expo.dev"
+          exit 1

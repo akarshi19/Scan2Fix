@@ -2,17 +2,25 @@ const nodemailer = require('nodemailer');
 
 // Configure email transporter
 const transporter = nodemailer.createTransport({
-  service: 'gmail', // or your email service
+  service: 'gmail',
   auth: {
-    user: process.env.EMAIL_USER, 
+    user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASSWORD,
   },
+});
+
+transporter.verify((error) => {
+  if (error) {
+    console.error('❌ Email transporter error:', error.message);
+  } else {
+    console.log('✅ Email transporter ready');
+  }
 });
 
 // Send verification code
 exports.sendVerificationCode = async (email, code, userName) => {
   const mailOptions = {
-    from: process.env.EMAIL_USER,
+    from: `"${process.env.EMAIL_FROM_NAME || 'Scan2Fix Support'}" <${process.env.EMAIL_USER}>`,
     to: email,
     subject: 'Email Verification - Scan2Fix',
     html: `
@@ -48,7 +56,7 @@ exports.sendVerificationCode = async (email, code, userName) => {
 // Send OTP for complaint closure
 exports.sendComplaintOTP = async (email, otp, complaintNumber, userName, assetId) => {
   const mailOptions = {
-    from: process.env.EMAIL_USER,
+    from: `"${process.env.EMAIL_FROM_NAME || 'Scan2Fix Support'}" <${process.env.EMAIL_USER}>`,
     to: email,
     subject: `Complaint Closure OTP - ${complaintNumber} - Scan2Fix`,
     html: `
@@ -90,7 +98,43 @@ exports.sendComplaintOTP = async (email, otp, complaintNumber, userName, assetId
     await transporter.sendMail(mailOptions);
     return true;
   } catch (error) {
-    console.error('Complaint OTP email send error:', error);
+    console.error('❌ Complaint OTP email send error:', error.message);
+    throw error;
+  }
+};
+
+// Send password reset code
+exports.sendPasswordReset = async (email, resetCode, userName) => {
+  const mailOptions = {
+    from: `"${process.env.EMAIL_FROM_NAME || 'Scan2Fix Support'}" <${process.env.EMAIL_USER}>`,
+    to: email,
+    subject: 'Password Reset - Scan2Fix',
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="background: linear-gradient(135deg, #7dd3fc 0%, #004e68 100%); padding: 30px; text-align: center;">
+          <h1 style="color: white; margin: 0;">Scan2Fix</h1>
+        </div>
+        <div style="padding: 30px; background: #f5f5f5;">
+          <h2 style="color: #333;">Password Reset Request</h2>
+          <p style="color: #666; font-size: 16px;">Hi ${userName || 'there'},</p>
+          <p style="color: #666; font-size: 16px;">Your password reset code is:</p>
+          <div style="background: white; padding: 20px; text-align: center; margin: 20px 0; border-radius: 8px;">
+            <h1 style="color: #004e68; font-size: 36px; letter-spacing: 8px; margin: 0;">${resetCode}</h1>
+          </div>
+          <p style="color: #666; font-size: 14px;">This code will expire in <strong>15 minutes</strong>.</p>
+          <p style="color: #999; font-size: 12px; margin-top: 30px;">
+            If you didn't request a password reset, please ignore this email.
+          </p>
+        </div>
+      </div>
+    `,
+  };
+
+  try {
+    await transporter.sendMail(mailOptions);
+    return true;
+  } catch (error) {
+    console.error('❌ Password reset email send error:', error.message);
     return false;
   }
 };

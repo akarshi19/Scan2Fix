@@ -1,0 +1,93 @@
+name: Server — Build Docker Image + Create Release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'server/**'
+      - '.github/workflows/server.yml'
+  workflow_dispatch:
+
+env:
+  REGISTRY:   ghcr.io
+  IMAGE_NAME: akarshi19/scan2fix-server
+
+jobs:
+  build-and-push:
+    name: Build Docker image → push to ghcr.io → create release
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write    # create GitHub Releases
+      packages: write    # push to ghcr.io
+
+    outputs:
+      image_tag: ${{ steps.meta.outputs.version }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract image metadata (tags + labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,prefix=sha-
+            type=raw,value=latest
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push Docker image
+        id: push
+        uses: docker/build-push-action@v5
+        with:
+          context: ./server
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Get short SHA
+        id: sha
+        run: echo "short=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: server-${{ github.run_number }}
+          name: "Server Build #${{ github.run_number }}"
+          body: |
+            ## Server Build #${{ github.run_number }}
+
+            **Branch:** `${{ github.ref_name }}`
+            **Commit:** `${{ github.sha }}`
+            **Image Digest:** `${{ steps.push.outputs.digest }}`
+
+            ### Docker Image
+            ```
+            ghcr.io/akarshi19/scan2fix-server:latest
+            ghcr.io/akarshi19/scan2fix-server:sha-${{ steps.sha.outputs.short }}
+            ```
+
+            ### Update the office server
+            Run `update-server.ps1` in `deployment\runners\` on the Windows server.
+
+            Or if using Docker:
+            ```powershell
+            docker pull ghcr.io/akarshi19/scan2fix-server:latest
+            docker stop scan2fix-api && docker rm scan2fix-api
+            docker run -d --name scan2fix-api --env-file .env -p 5000:5000 ghcr.io/akarshi19/scan2fix-server:latest
+            ```
+          draft: false
+          prerelease: false

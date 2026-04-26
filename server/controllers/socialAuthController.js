@@ -62,8 +62,6 @@ exports.googleLogin = async (req, res) => {
       });
     }
 
-    console.log('Google user:', googleUser.email, googleUser.name);
-
     // Find or create user
     let user = await User.findOne({ email: googleUser.email.toLowerCase() });
 
@@ -82,7 +80,6 @@ exports.googleLogin = async (req, res) => {
         google_id: googleUser.id,
       });
 
-      console.log('Created new user from Google:', user.email);
     }
 
     // Generate JWT

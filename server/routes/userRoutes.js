@@ -13,6 +13,7 @@ const {
   toggleSelfLeave,
   getLeaveStatus,
   getDesignations,
+  deleteDesignation,
 } = require('../controllers/userController');
 
 // ── Self routes (staff managing their own leave) ──
@@ -24,6 +25,7 @@ router.get('/staff', protect, authorize('ADMIN'), getStaffList);
 
 // ── Designations ──
 router.get('/designations', protect, authorize('ADMIN'), getDesignations);
+router.delete('/designations/:name', protect, authorize('ADMIN'), deleteDesignation);
 
 // ── Admin routes ──
 router.get('/', protect, authorize('ADMIN'), getAllUsers);

@@ -121,6 +121,7 @@ export default function AdminDashboard({ navigation }) {
       case 'ASSIGNED': return colors.assigned;
       case 'IN_PROGRESS': return colors.inProgress;
       case 'CLOSED': return colors.closed;
+      case 'FINISHING': return colors.finishing;
       default: return colors.totalAssets;
     }
   };
@@ -238,12 +239,12 @@ export default function AdminDashboard({ navigation }) {
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[s.actionBtn, { backgroundColor: '#7C3AED' }]}
+          style={[s.actionBtn, { backgroundColor: colors.button }]}
           onPress={() => navigation.navigate('ComplaintsAnalysis')}
           activeOpacity={0.85}
         >
-          <Ionicons name="bar-chart-outline" size={22} color="#FFF" />
-          <Text style={s.actionBtnText}>Complaint{'\n'}Analysis</Text>
+          <Ionicons name="bar-chart-outline" size={22} color={colors.white} />
+          <Text style={s.actionBtnText}>{t('complaintAnalysis')}</Text>
         </TouchableOpacity>
       </View>
 

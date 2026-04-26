@@ -10,7 +10,6 @@ const express = require('express');
 const router = express.Router();
 const {
   googleLogin,
-  microsoftLogin,
   appleLogin,
 } = require('../controllers/socialAuthController');
 

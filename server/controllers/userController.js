@@ -2,8 +2,10 @@
 // Admin manages all users — create, edit, toggle leave, delete
 
 const User = require('../models/User_v2');
-const generateToken = require('../utils/generateToken');
 const dns = require('dns').promises;
+
+const MASTER_ADMIN_EMAIL    = 'adminscan2fix@gmail.com';
+const MASTER_ADMIN_USERNAME = 'Scan2fix_Admin';
 
 // Email verification helper
 const verifyEmailDomain = async (email) => {
@@ -133,7 +135,6 @@ exports.createUser = async (req, res) => {
     }
 
     // Verify email domain exists
-    const dns = require('dns').promises;
     try {
       const domain = email.split('@')[1];
       const addresses = await dns.resolveMx(domain);
@@ -350,9 +351,6 @@ exports.deleteUser = async (req, res) => {
       });
     }
 
-    const MASTER_ADMIN_EMAIL = 'adminscan2fix@gmail.com';
-    const MASTER_ADMIN_USERNAME = 'Scan2fix_Admin';
-
     // Check if target user is master admin
     if (user.email === MASTER_ADMIN_EMAIL || user.full_name === MASTER_ADMIN_USERNAME) {
       return res.status(403).json({
@@ -489,13 +487,12 @@ exports.getLeaveStatus = async (req, res) => {
 exports.getDesignations = async (req, res) => {
   try {
     const { DESIGNATIONS } = require('../config/constants');
-    const predefined = Object.values(DESIGNATIONS); // ['Sr.Tech', 'Tech-I', ...]
+    const predefined = Object.values(DESIGNATIONS);
 
     const fromDB = await User.distinct('staff_details.designation', {
       'staff_details.designation': { $exists: true, $ne: null, $ne: '' },
     });
 
-    // Merge: start with predefined, add DB values only if not already present (case-insensitive)
     const merged = [...predefined];
     const lowerSet = new Set(predefined.map(d => d.toLowerCase()));
     for (const d of fromDB.filter(Boolean)) {
@@ -509,12 +506,37 @@ exports.getDesignations = async (req, res) => {
     res.status(200).json({
       success: true,
       data: merged,
+      predefined: predefined.map(d => d.toLowerCase()),
     });
   } catch (error) {
     console.error('Get designations error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error fetching designations',
+    res.status(500).json({ success: false, message: 'Server error fetching designations' });
+  }
+};
+
+// DELETE /api/users/designations/:name
+exports.deleteDesignation = async (req, res) => {
+  try {
+    const { DESIGNATIONS } = require('../config/constants');
+    const predefinedLower = new Set(Object.values(DESIGNATIONS).map(d => d.toLowerCase()));
+    const name = req.params.name;
+
+    if (predefinedLower.has(name.toLowerCase())) {
+      return res.status(400).json({ success: false, message: 'Cannot delete a predefined designation' });
+    }
+
+    const result = await User.updateMany(
+      { 'staff_details.designation': name },
+      { $set: { 'staff_details.designation': null } }
+    );
+
+    res.status(200).json({
+      success: true,
+      message: `Designation "${name}" deleted`,
+      affected: result.modifiedCount,
     });
+  } catch (error) {
+    console.error('Delete designation error:', error);
+    res.status(500).json({ success: false, message: 'Server error deleting designation' });
   }
 };

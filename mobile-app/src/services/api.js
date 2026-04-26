@@ -7,8 +7,6 @@ import Constants from 'expo-constants';
 // Base URL from app.config.js
 const API_URL = Constants.expoConfig?.extra?.apiUrl || 'http://localhost:5000/api';
 
-console.log('🌐 API URL:', API_URL);
-
 // Create Axios Instance
 const api = axios.create({
   baseURL: API_URL,
@@ -133,12 +131,8 @@ export const authAPI = {
   changePassword: (current_password, new_password) =>
     api.put('/auth/change-password', { current_password, new_password }),
 
-  // Social login — ADD THESE
   googleLogin: (access_token) =>
     api.post('/auth/google', { access_token }),
-
-  microsoftLogin: (access_token) =>
-    api.post('/auth/microsoft', { access_token }),
 
   appleLogin: (email, full_name, identity_token) =>
     api.post('/auth/apple', { email, full_name, identity_token }),
@@ -155,6 +149,9 @@ export const authAPI = {
   // Verify email code
   verifyEmailCode: (email, code) =>
     api.post('/auth/verify-email-code', { email, code }),
+
+  savePushToken: (push_token) =>
+    api.put('/auth/push-token', { push_token }),
 };
 
 // ════════════════════════════════════════
@@ -191,11 +188,15 @@ export const complaintsAPI = {
   updateStatus: (complaintId, status) =>
     api.put(`/complaints/${complaintId}/status`, { status }),
 
-  // Generate OTP — staff (JobDetails.js)
+  // Send OTP email to complainant — called by STAFF before entering OTP
+  sendOTP: (complaintId) =>
+    api.post(`/complaints/${complaintId}/send-otp`),
+
+  // Generate OTP — USER only (MyComplaints.js, app-submitted complaints)
   generateOTP: (complaintId) =>
     api.post(`/complaints/${complaintId}/generate-otp`),
 
-  // Verify OTP — user (VerifyOTPScreen.js)
+  // Verify OTP — staff (JobDetails.js)
   verifyOTP: (complaintId, otp) =>
     api.post(`/complaints/${complaintId}/verify-otp`, { otp }),
 
@@ -243,10 +244,13 @@ export const usersAPI = {
   toggleSelfLeave: () =>
     api.put('/users/self/toggle-leave'),
 
-   getDesignations: () =>
+  getDesignations: () =>
     api.get('/users/designations'),
-  
-   // Delete user (admin only)
+
+  deleteDesignation: (name) =>
+    api.delete(`/users/designations/${encodeURIComponent(name)}`),
+
+  // Delete user (admin only)
   deleteUser: (userId) =>
     api.delete(`/users/${userId}`),
 };
@@ -270,17 +274,18 @@ export const uploadAPI = {
     });
   },
 
-  // Upload complaint photo (LodgeComplaint.js)
-  complaintPhoto: async (photoUri) => {
-    const formData = new FormData();
-    const filename = photoUri.split('/').pop();
-    const ext = filename.split('.').pop();
+  // Upload complaint photo (LodgeComplaint.js, JobDetails.js)
+  // asset: string URI  OR  expo-image-picker asset object { uri, mimeType?, fileName? }
+  complaintPhoto: async (asset) => {
+    const uri      = typeof asset === 'string' ? asset : asset.uri;
+    const mimeType = (typeof asset === 'object' && asset.mimeType) ? asset.mimeType : null;
+    const rawName  = uri.split('/').pop().split('?')[0]; // strip query params
+    const ext      = rawName.includes('.') ? rawName.split('.').pop().toLowerCase() : 'jpg';
+    const filename = rawName.includes('.') ? rawName : `photo_${Date.now()}.jpg`;
+    const type     = mimeType || (ext === 'png' ? 'image/png' : ext === 'heic' ? 'image/heic' : 'image/jpeg');
 
-    formData.append('photo', {
-      uri: photoUri,
-      name: filename,
-      type: `image/${ext}`,
-    });
+    const formData = new FormData();
+    formData.append('photo', { uri, name: filename, type });
 
     return api.post('/upload/complaint-photo', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
@@ -299,7 +304,9 @@ export const uploadAPI = {
 // REPORTS API
 export const reportsAPI = {
   overview: ()      => api.get('/reports/overview'),
-  weekly:   ()      => api.get('/reports/weekly'),
+  weekly:   (weekEnd) => weekEnd
+    ? api.get('/reports/weekly', { params: { weekEnd } })
+    : api.get('/reports/weekly'),
   monthly:  (year)  => api.get('/reports/monthly', { params: { year } }),
   yearly:   ()      => api.get('/reports/yearly'),
   staff:    ()      => api.get('/reports/staff'),
