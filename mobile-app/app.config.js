@@ -17,7 +17,6 @@ export default {
         "https://*.scan2fix.com/",
       ],
       config: {
-        // Route for complaints from QR scans
         complaint: "complaint/:assetId",
         screens: {
           complaint: "complaint/:assetId",
@@ -30,18 +29,21 @@ export default {
     ios: {
       supportsTablet: true,
       bundleIdentifier: "com.scan2fix.app",
-      // iOS uses the scheme automatically, no extra config needed
     },
 
     android: {
       package: "com.scan2fix.app",
-      versionCode: 2,  // Bump this since you're rebuilding
+      versionCode: 3,
       adaptiveIcon: {
         backgroundColor: "#ffffff",
         foregroundImage: "./assets/images/splash-icon.png",
       },
       edgeToEdgeEnabled: true,
       predictiveBackGestureEnabled: false,
+
+      //  Reduce size + optimize
+      enableProguardInReleaseBuilds: true,
+
       permissions: [
         "CAMERA",
         "READ_EXTERNAL_STORAGE",
@@ -82,28 +84,30 @@ export default {
           isAccessMediaLocationEnabled: true
         }
       ],
-       [
+      [
         "expo-image-picker",
         {
-          "photosPermission": "The app needs access to your photos to upload profile pictures.",
-          "cameraPermission": "The app needs access to your camera to take profile pictures."
+          photosPermission: "The app needs access to your photos to upload profile pictures.",
+          cameraPermission: "The app needs access to your camera to take profile pictures."
         }
       ],
       [
         "expo-notifications",
         {
-          "icon": "./assets/images/splash-icon.png",
-          "color": "#ffffff",
-          "sounds": [],
-          "androidMode": "default",
-          "androidCollapsedTitle": "Scan2Fix"
+          icon: "./assets/images/splash-icon.png",
+          color: "#ffffff",
+          sounds: [],
+          androidMode: "default",
+          androidCollapsedTitle: "Scan2Fix"
         }
       ],
     ],
 
+    // ✅ Important (Expo + New Arch)
     experiments: {
       typedRoutes: true,
       reactCompiler: true,
+      newArchEnabled: true,
     },
 
     extra: {
