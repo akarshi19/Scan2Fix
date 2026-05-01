@@ -9,7 +9,7 @@ export default {
     icon: "./assets/images/splash-icon.png",
     scheme: "scan2fix",
     userInterfaceStyle: "automatic",
-    newArchEnabled: false,
+    newArchEnabled: true,
 
     ios: {
       supportsTablet: true,
