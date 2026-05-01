@@ -840,10 +840,10 @@ export default function SignupScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#ffffff' },
-  keyboardView: { flex: 1 },
+  keyboardView: { flex: 1, zIndex: 1 },
   scrollContent: { flexGrow: 1, paddingBottom: 40 },
 
-  topDecoration: { position: 'absolute', top: 0, left: 0, right: 0, height: 200, overflow: 'hidden', zIndex: 1 },
+  topDecoration: { position: 'absolute', top: 0, left: 0, right: 0, height: 200, overflow: 'hidden', zIndex: 0 },
   shapeBack: {
     position: 'absolute', width: width * 0.85, height: 180, top: -80, left: width * 0.25,
     transform: [{ rotate: '15deg' }], borderRadius: 24, overflow: 'hidden',
