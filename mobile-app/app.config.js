@@ -8,23 +8,8 @@ export default {
     orientation: "portrait",
     icon: "./assets/images/splash-icon.png",
     scheme: "scan2fix",
-    // Deep linking configuration for QR code scanning
-    deepLinking: {
-      enabled: true,
-      prefixes: [
-        "scan2fix://",
-        "https://scan2fix.com/",
-        "https://*.scan2fix.com/",
-      ],
-      config: {
-        complaint: "complaint/:assetId",
-        screens: {
-          complaint: "complaint/:assetId",
-        },
-      },
-    },
     userInterfaceStyle: "automatic",
-    newArchEnabled: true,
+    newArchEnabled: false,
 
     ios: {
       supportsTablet: true,
@@ -33,15 +18,13 @@ export default {
 
     android: {
       package: "com.scan2fix.app",
-      versionCode: 3,
+      versionCode: 4,
       adaptiveIcon: {
-        backgroundColor: "#ffffff",
+        backgroundColor: "#000000",
         foregroundImage: "./assets/images/splash-icon.png",
       },
       edgeToEdgeEnabled: true,
       predictiveBackGestureEnabled: false,
-
-      //  Reduce size + optimize
       enableProguardInReleaseBuilds: true,
 
       permissions: [
@@ -57,14 +40,13 @@ export default {
     },
 
     plugins: [
-      "expo-router",
       [
         "expo-splash-screen",
         {
           image: "./assets/images/splash-icon.png",
           imageWidth: 200,
           resizeMode: "contain",
-          backgroundColor: "#ffffff",
+          backgroundColor: "#000000",
           dark: {
             backgroundColor: "#000000",
           },
@@ -102,13 +84,6 @@ export default {
         }
       ],
     ],
-
-    // ✅ Important (Expo + New Arch)
-    experiments: {
-      typedRoutes: true,
-      reactCompiler: true,
-      newArchEnabled: true,
-    },
 
     extra: {
       apiUrl: process.env.API_URL,
