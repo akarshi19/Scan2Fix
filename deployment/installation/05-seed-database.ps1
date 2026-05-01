@@ -8,9 +8,9 @@ $ROOT        = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 $SERVER_PATH = Join-Path $ROOT "server"
 
 Write-Host ""
-Write-Host "═══════════════════════════════════════" -ForegroundColor Cyan
+Write-Host "" -ForegroundColor Cyan
 Write-Host "  Create Admin Account" -ForegroundColor Cyan
-Write-Host "═══════════════════════════════════════" -ForegroundColor Cyan
+Write-Host "" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "  This will create the master admin account." -ForegroundColor White
 Write-Host "  The server must be running (run 04-setup-pm2.ps1 first)." -ForegroundColor Yellow
@@ -25,9 +25,9 @@ if ($confirm -ne 'y') {
 # Check server is running
 try {
     Invoke-RestMethod -Uri "http://localhost:5000/api/health" -TimeoutSec 5 | Out-Null
-    Write-Host "✅ Server is running" -ForegroundColor Green
+    Write-Host "OK: Server is running" -ForegroundColor Green
 } catch {
-    Write-Host "❌ Server is not responding at http://localhost:5000" -ForegroundColor Red
+    Write-Host "ERROR: Server is not responding at http://localhost:5000" -ForegroundColor Red
     Write-Host "   Start the server first: run 04-setup-pm2.ps1" -ForegroundColor Yellow
     pause
     exit
@@ -40,7 +40,7 @@ $adminName  = Read-Host "  Admin full name"
 $adminPhone = Read-Host "  Admin phone (10 digits)"
 
 if (-not $adminEmail -or -not $adminName -or -not $adminPhone) {
-    Write-Host "❌ All fields are required." -ForegroundColor Red
+    Write-Host "ERROR: All fields are required." -ForegroundColor Red
     pause
     exit
 }
@@ -52,9 +52,9 @@ try {
     $verifyBody = @{ email = $adminEmail; full_name = $adminName } | ConvertTo-Json
     Invoke-RestMethod -Uri "http://localhost:5000/api/auth/send-verification-code" `
         -Method POST -ContentType "application/json" -Body $verifyBody -TimeoutSec 10 | Out-Null
-    Write-Host "✅ Verification code sent to $adminEmail" -ForegroundColor Green
+    Write-Host "OK: Verification code sent to $adminEmail" -ForegroundColor Green
 } catch {
-    Write-Host "⚠️  Could not send verification email." -ForegroundColor Yellow
+    Write-Host "WARNING:  Could not send verification email." -ForegroundColor Yellow
     Write-Host "   Check your .env EMAIL settings." -ForegroundColor Gray
 }
 
@@ -65,9 +65,9 @@ try {
     $codeBody = @{ email = $adminEmail; code = $verifyCode } | ConvertTo-Json
     Invoke-RestMethod -Uri "http://localhost:5000/api/auth/verify-email-code" `
         -Method POST -ContentType "application/json" -Body $codeBody -TimeoutSec 10 | Out-Null
-    Write-Host "✅ Email verified" -ForegroundColor Green
+    Write-Host "OK: Email verified" -ForegroundColor Green
 } catch {
-    Write-Host "❌ Verification failed. Check the code and try again." -ForegroundColor Red
+    Write-Host "ERROR: Verification failed. Check the code and try again." -ForegroundColor Red
     pause
     exit
 }
@@ -124,19 +124,19 @@ Pop-Location
 Remove-Item $tmpScript -Force
 
 if ($result -match "CREATED") {
-    Write-Host "✅ Admin account created!" -ForegroundColor Green
+    Write-Host "OK: Admin account created!" -ForegroundColor Green
 } elseif ($result -match "UPDATED_TO_ADMIN") {
-    Write-Host "✅ Existing account promoted to ADMIN!" -ForegroundColor Green
+    Write-Host "OK: Existing account promoted to ADMIN!" -ForegroundColor Green
 } elseif ($result -match "ALREADY_ADMIN") {
-    Write-Host "✅ Admin account already exists." -ForegroundColor Green
+    Write-Host "OK: Admin account already exists." -ForegroundColor Green
 } else {
-    Write-Host "⚠️  Result: $result" -ForegroundColor Yellow
+    Write-Host "WARNING:  Result: $result" -ForegroundColor Yellow
 }
 
 Write-Host ""
-Write-Host "═══════════════════════════════════════" -ForegroundColor Green
-Write-Host "  ✅ Admin Setup Complete!" -ForegroundColor Green
-Write-Host "═══════════════════════════════════════" -ForegroundColor Green
+Write-Host "" -ForegroundColor Green
+Write-Host "  OK: Admin Setup Complete!" -ForegroundColor Green
+Write-Host "" -ForegroundColor Green
 Write-Host ""
 Write-Host "  Login: $adminEmail" -ForegroundColor Cyan
 Write-Host "  URL:   http://localhost:5000/api/health" -ForegroundColor Cyan

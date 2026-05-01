@@ -8,15 +8,15 @@ $ROOT        = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 $SERVER_PATH = Join-Path $ROOT "server"
 
 Write-Host ""
-Write-Host "═══════════════════════════════════════" -ForegroundColor Cyan
+Write-Host "" -ForegroundColor Cyan
 Write-Host "  Scan2Fix — Server Update" -ForegroundColor Cyan
 Write-Host "  $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
-Write-Host "═══════════════════════════════════════" -ForegroundColor Cyan
+Write-Host "" -ForegroundColor Cyan
 Write-Host ""
 
 # ── Check server path ──────────────────────────────────────────────
 if (-not (Test-Path $SERVER_PATH)) {
-    Write-Host "❌ Server path not found: $SERVER_PATH" -ForegroundColor Red
+    Write-Host "ERROR: Server path not found: $SERVER_PATH" -ForegroundColor Red
     pause; exit
 }
 
@@ -28,10 +28,10 @@ $pullResult = git pull origin main 2>&1
 Write-Host "  $pullResult" -ForegroundColor Gray
 
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "❌ git pull failed. Check your internet connection or repo access." -ForegroundColor Red
+    Write-Host "ERROR: git pull failed. Check your internet connection or repo access." -ForegroundColor Red
     Pop-Location; pause; exit
 }
-Write-Host "  ✅ Code updated" -ForegroundColor Green
+Write-Host "  OK: Code updated" -ForegroundColor Green
 
 # ── Step 2: Install / update dependencies ─────────────────────────
 Write-Host ""
@@ -39,9 +39,9 @@ Write-Host "[2/4] Installing server dependencies..." -ForegroundColor Yellow
 Push-Location $SERVER_PATH
 npm install --only=production --silent
 if ($LASTEXITCODE -eq 0) {
-    Write-Host "  ✅ Dependencies installed" -ForegroundColor Green
+    Write-Host "  OK: Dependencies installed" -ForegroundColor Green
 } else {
-    Write-Host "  ⚠️ npm install had warnings. Check logs." -ForegroundColor Yellow
+    Write-Host "  WARNING: npm install had warnings. Check logs." -ForegroundColor Yellow
 }
 Pop-Location
 
@@ -52,14 +52,14 @@ $pm2Running = pm2 jlist 2>$null | ConvertFrom-Json | Where-Object { $_.name -eq 
 
 if ($pm2Running) {
     pm2 restart scan2fix
-    Write-Host "  ✅ Server restarted" -ForegroundColor Green
+    Write-Host "  OK: Server restarted" -ForegroundColor Green
 } else {
     Write-Host "  PM2 process not found, starting fresh..." -ForegroundColor Yellow
     Push-Location $SERVER_PATH
     pm2 start ecosystem.config.js
     pm2 save
     Pop-Location
-    Write-Host "  ✅ Server started" -ForegroundColor Green
+    Write-Host "  OK: Server started" -ForegroundColor Green
 }
 
 # ── Step 4: Health check ───────────────────────────────────────────
@@ -69,18 +69,18 @@ Start-Sleep -Seconds 3
 
 try {
     $health = Invoke-RestMethod -Uri "http://localhost:5000/api/health" -TimeoutSec 10
-    Write-Host "  ✅ $($health.message)" -ForegroundColor Green
+    Write-Host "  OK: $($health.message)" -ForegroundColor Green
     Write-Host "  Version: $($health.version)" -ForegroundColor Gray
 } catch {
-    Write-Host "  ⚠️ Server not responding yet. Check:" -ForegroundColor Yellow
+    Write-Host "  WARNING: Server not responding yet. Check:" -ForegroundColor Yellow
     Write-Host "     pm2 logs scan2fix" -ForegroundColor Cyan
 }
 
 Pop-Location
 
 Write-Host ""
-Write-Host "═══════════════════════════════════════" -ForegroundColor Green
-Write-Host "  ✅ Update Complete!" -ForegroundColor Green
-Write-Host "═══════════════════════════════════════" -ForegroundColor Green
+Write-Host "" -ForegroundColor Green
+Write-Host "  OK: Update Complete!" -ForegroundColor Green
+Write-Host "" -ForegroundColor Green
 Write-Host ""
 pause

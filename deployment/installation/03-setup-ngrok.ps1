@@ -1,59 +1,59 @@
-# ============================================
-# SCAN2FIX — ngrok Setup (Free Static Domain)
-# This creates a permanent public URL for the
-# office server so the app works from anywhere.
-# ============================================
+# ============================================================
+# SCAN2FIX -- ngrok Setup (Free Static Domain)
+# Creates a permanent public URL so the app works anywhere.
+# ============================================================
 
 $ROOT        = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 $DOMAIN_FILE = Join-Path (Split-Path $PSScriptRoot -Parent) "ngrok-domain.txt"
 
 Write-Host ""
-Write-Host "═══════════════════════════════════════" -ForegroundColor Cyan
+Write-Host "=======================================" -ForegroundColor Cyan
 Write-Host "  ngrok Setup" -ForegroundColor Cyan
-Write-Host "═══════════════════════════════════════" -ForegroundColor Cyan
+Write-Host "=======================================" -ForegroundColor Cyan
 Write-Host ""
 
 # Check ngrok installed
 try {
     $version = ngrok version 2>$null
-    Write-Host "✅ ngrok installed: $version" -ForegroundColor Green
+    Write-Host "OK: ngrok installed: $version" -ForegroundColor Green
 } catch {
-    Write-Host "❌ ngrok not installed. Run 01-install-all.ps1 first." -ForegroundColor Red
+    Write-Host "ERROR: ngrok not installed. Run 01-install-all.ps1 first." -ForegroundColor Red
     pause
     exit
 }
 
-# ── Step 1: Auth token ─────────────────────────────────────────────
+# -- Step 1: Auth token ----------------------------------------
 Write-Host ""
 Write-Host "Step 1: ngrok Authentication" -ForegroundColor Yellow
 Write-Host ""
-Write-Host "  Get your auth token from: https://dashboard.ngrok.com/get-started/your-authtoken" -ForegroundColor Cyan
+Write-Host "  Get your auth token from:" -ForegroundColor Cyan
+Write-Host "  https://dashboard.ngrok.com/get-started/your-authtoken" -ForegroundColor Cyan
 Write-Host ""
 
 $hasToken = Read-Host "Have you already added your auth token? (y/n)"
-if ($hasToken -ne 'y') {
+if ($hasToken -ne "y") {
     $token = Read-Host "Paste your ngrok auth token"
     if ($token) {
         ngrok config add-authtoken $token
-        Write-Host "✅ Auth token saved" -ForegroundColor Green
+        Write-Host "OK: Auth token saved" -ForegroundColor Green
     } else {
-        Write-Host "❌ No token provided." -ForegroundColor Red
+        Write-Host "ERROR: No token provided." -ForegroundColor Red
         pause
         exit
     }
 }
 
-# ── Step 2: Static domain ──────────────────────────────────────────
+# -- Step 2: Static domain ------------------------------------
 Write-Host ""
 Write-Host "Step 2: Free Static Domain" -ForegroundColor Yellow
 Write-Host ""
 Write-Host "  1. Go to: https://dashboard.ngrok.com/domains" -ForegroundColor Cyan
-Write-Host "  2. Click 'New Domain' (1 free domain per account)" -ForegroundColor Cyan
-Write-Host "  3. Copy the domain (e.g. something-random.ngrok-free.app)" -ForegroundColor Cyan
+Write-Host "  2. Click New Domain (1 free domain per account)" -ForegroundColor Cyan
+Write-Host "  3. Copy the domain e.g. something-random.ngrok-free.app" -ForegroundColor Cyan
 Write-Host ""
 
 $openDomains = Read-Host "Open ngrok domains page now? (y/n)"
-if ($openDomains -eq 'y') {
+if ($openDomains -eq "y") {
     Start-Process "https://dashboard.ngrok.com/domains"
     Write-Host ""
     Write-Host "Create your free domain, then come back here..." -ForegroundColor Yellow
@@ -62,7 +62,7 @@ if ($openDomains -eq 'y') {
 
 $domain = Read-Host "Enter your ngrok static domain"
 if (-not $domain) {
-    Write-Host "❌ No domain provided. Run this script again when ready." -ForegroundColor Red
+    Write-Host "ERROR: No domain provided. Run this script again when ready." -ForegroundColor Red
     pause
     exit
 }
@@ -70,10 +70,10 @@ if (-not $domain) {
 # Clean up URL if user pasted full https://
 $domain = $domain -replace "https://", "" -replace "http://", "" -replace "/.*", ""
 
-# Save domain to config file (start-all.bat reads from here)
+# Save domain to config file
 $domain | Out-File -FilePath $DOMAIN_FILE -Encoding UTF8 -NoNewline
 Write-Host ""
-Write-Host "✅ Domain saved: $domain" -ForegroundColor Green
+Write-Host "OK: Domain saved: $domain" -ForegroundColor Green
 Write-Host "   Config file: $DOMAIN_FILE" -ForegroundColor Gray
 Write-Host ""
 Write-Host "   Your API will be available at:" -ForegroundColor White
@@ -82,12 +82,12 @@ Write-Host ""
 Write-Host "   Update your mobile app .env with:" -ForegroundColor White
 Write-Host "   API_URL=https://$domain/api" -ForegroundColor Cyan
 
-# ── Step 3: Test ───────────────────────────────────────────────────
+# -- Step 3: Test ---------------------------------------------
 Write-Host ""
 Write-Host "Step 3: Test Connection" -ForegroundColor Yellow
 Write-Host ""
-$testNow = Read-Host "Start ngrok now to test? (server must already be running) (y/n)"
-if ($testNow -eq 'y') {
+$testNow = Read-Host "Start ngrok now to test? Server must already be running. (y/n)"
+if ($testNow -eq "y") {
     Write-Host ""
     Write-Host "Starting ngrok... (Ctrl+C to stop)" -ForegroundColor Yellow
     Write-Host "Test in browser: https://$domain/api/health" -ForegroundColor Cyan
@@ -96,9 +96,9 @@ if ($testNow -eq 'y') {
 }
 
 Write-Host ""
-Write-Host "═══════════════════════════════════════" -ForegroundColor Green
-Write-Host "  ✅ ngrok Setup Complete!" -ForegroundColor Green
+Write-Host "=======================================" -ForegroundColor Green
+Write-Host "  ngrok Setup Complete!" -ForegroundColor Green
 Write-Host "  Domain: https://$domain" -ForegroundColor White
-Write-Host "═══════════════════════════════════════" -ForegroundColor Green
+Write-Host "=======================================" -ForegroundColor Green
 Write-Host ""
 pause

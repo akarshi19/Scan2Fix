@@ -8,15 +8,15 @@ $ROOT        = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 $SERVER_PATH = Join-Path $ROOT "server"
 
 Write-Host ""
-Write-Host "═══════════════════════════════════════" -ForegroundColor Cyan
+Write-Host "" -ForegroundColor Cyan
 Write-Host "  PM2 Auto-Start Setup" -ForegroundColor Cyan
-Write-Host "═══════════════════════════════════════" -ForegroundColor Cyan
+Write-Host "" -ForegroundColor Cyan
 Write-Host ""
 
 # Check PM2
 try {
     $version = pm2 --version 2>$null
-    Write-Host "✅ PM2 installed: v$version" -ForegroundColor Green
+    Write-Host "OK: PM2 installed: v$version" -ForegroundColor Green
 } catch {
     Write-Host "  Installing PM2..." -ForegroundColor Cyan
     npm install -g pm2
@@ -25,7 +25,7 @@ try {
 
 # Check server path
 if (-not (Test-Path $SERVER_PATH)) {
-    Write-Host "❌ Server folder not found: $SERVER_PATH" -ForegroundColor Red
+    Write-Host "ERROR: Server folder not found: $SERVER_PATH" -ForegroundColor Red
     pause
     exit
 }
@@ -33,7 +33,7 @@ if (-not (Test-Path $SERVER_PATH)) {
 # Check .env
 $envFile = Join-Path $SERVER_PATH ".env"
 if (-not (Test-Path $envFile)) {
-    Write-Host "⚠️  WARNING: .env file not found at $envFile" -ForegroundColor Yellow
+    Write-Host "WARNING:  WARNING: .env file not found at $envFile" -ForegroundColor Yellow
     Write-Host "   The server needs a .env file to connect to MongoDB." -ForegroundColor Yellow
     $cont = Read-Host "   Continue anyway? (y/n)"
     if ($cont -ne 'y') { exit }
@@ -57,17 +57,17 @@ Start-Sleep -Seconds 3
 
 try {
     $health = Invoke-RestMethod -Uri "http://localhost:5000/api/health" -TimeoutSec 5
-    Write-Host "✅ Server responding: $($health.message)" -ForegroundColor Green
+    Write-Host "OK: Server responding: $($health.message)" -ForegroundColor Green
 } catch {
-    Write-Host "⚠️  Server may still be starting. Check:" -ForegroundColor Yellow
+    Write-Host "WARNING:  Server may still be starting. Check:" -ForegroundColor Yellow
     Write-Host "   pm2 logs scan2fix" -ForegroundColor Cyan
     Write-Host "   http://localhost:5000/api/health" -ForegroundColor Cyan
 }
 
 Write-Host ""
-Write-Host "═══════════════════════════════════════" -ForegroundColor Green
-Write-Host "  ✅ PM2 Setup Complete!" -ForegroundColor Green
-Write-Host "═══════════════════════════════════════" -ForegroundColor Green
+Write-Host "" -ForegroundColor Green
+Write-Host "  OK: PM2 Setup Complete!" -ForegroundColor Green
+Write-Host "" -ForegroundColor Green
 Write-Host ""
 Write-Host "  PM2 commands:" -ForegroundColor White
 Write-Host "  pm2 status              - Check status" -ForegroundColor Gray
