@@ -12,6 +12,9 @@ Write-Host "  ngrok Setup" -ForegroundColor Cyan
 Write-Host "=======================================" -ForegroundColor Cyan
 Write-Host ""
 
+# Refresh PATH so winget-installed tools are visible in current session
+$env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+
 # Check ngrok installed
 try {
     $version = ngrok version 2>$null
