@@ -20,7 +20,6 @@ import { useLanguage } from '../../context/LanguageContext';
 
 const { width } = Dimensions.get('window');
 
-
 export default function LoginScreen({ navigation }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -67,26 +66,39 @@ export default function LoginScreen({ navigation }) {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
-      {/* Decorative Top Shapes */}
-      <View style={styles.topDecoration}>
-        <View style={styles.shapeBack}>
-          <LinearGradient
-            colors={['#004e68', '#004e68']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.shapeGradient}
-          />
+      {/* Fixed header — shapes + logo + welcome never scroll */}
+      <View style={styles.fixedHeader}>
+        <View style={styles.topDecoration}>
+          <View style={styles.shapeBack}>
+            <LinearGradient
+              colors={['#004e68', '#004e68']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.shapeGradient}
+            />
+          </View>
+          <View style={styles.shapeFront}>
+            <LinearGradient
+              colors={['#8CD6F7', '#8CD6F7']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.shapeGradient}
+            />
+          </View>
         </View>
-        <View style={styles.shapeFront}>
-          <LinearGradient
-            colors={['#8CD6F7', '#8CD6F7']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.shapeGradient}
-          />
+        <View style={styles.logoSection}>
+          <View style={styles.logoRow}>
+            <Text style={styles.logoText}>Scan</Text>
+            <Text style={styles.logoText2}>2Fix</Text>
+          </View>
+        </View>
+        <View style={styles.welcomeSection}>
+          <Text style={styles.welcomeTitle}>{t('welcomeBack')}</Text>
+          <Text style={styles.welcomeSubtitle}>{t('loginSubtitle')}</Text>
         </View>
       </View>
 
+      {/* Scrollable form — keyboard avoidance applies here */}
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
@@ -96,20 +108,6 @@ export default function LoginScreen({ navigation }) {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Logo */}
-          <View style={styles.logoSection}>
-            <View style={styles.logoRow}>
-              <Text style={styles.logoText}>Scan</Text>
-              <Text style={styles.logoText2}>2Fix</Text>
-            </View>
-          </View>
-
-          {/* Welcome */}
-          <View style={styles.welcomeSection}>
-            <Text style={styles.welcomeTitle}>{t('welcomeBack')}</Text>
-            <Text style={styles.welcomeSubtitle}>{t('loginSubtitle')}</Text>
-          </View>
-
           {/* Form */}
           <View style={styles.formSection}>
             {/* Email */}
@@ -192,7 +190,7 @@ export default function LoginScreen({ navigation }) {
             <View style={styles.dividerLine} />
           </View>
 
-          {/* Sign Up */}
+          {/* Sign Up Link */}
           <View style={styles.signupSection}>
             <Text style={styles.signupText}>{t('noAccount')} </Text>
             <TouchableOpacity onPress={() => navigation.navigate('Signup')}>
@@ -207,10 +205,10 @@ export default function LoginScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#ffffff' },
-  keyboardView: { flex: 1, zIndex: 1 },
-  scrollContent: { flexGrow: 1, paddingBottom: 40 },
 
-  topDecoration: { position: 'absolute', top: 0, left: 0, right: 0, height: 200, overflow: 'hidden', zIndex: 0 },
+  /* Fixed header — height sized to contain shapes + logo + welcome exactly */
+  fixedHeader: { height: 278, overflow: 'hidden' },
+  topDecoration: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, overflow: 'hidden' },
   shapeBack: {
     position: 'absolute', width: width * 0.85, height: 180, top: -80, left: width * 0.25,
     transform: [{ rotate: '15deg' }], borderRadius: 24, overflow: 'hidden',
@@ -223,15 +221,17 @@ const styles = StyleSheet.create({
   },
   shapeGradient: { flex: 1, borderRadius: 24 },
 
-  logoSection: { alignItems: 'center', marginTop: 160, marginBottom: 10 },
+  logoSection: { alignItems: 'center', marginTop: 160, zIndex: 2 },
   logoRow: { flexDirection: 'row', alignItems: 'center' },
   logoText: { fontSize: 52, fontWeight: '300', color: '#8CD6F7', letterSpacing: 2 },
   logoText2: { fontSize: 52, fontWeight: '700', color: '#004e68', letterSpacing: 2 },
-  logoUnderline: { width: 60, height: 3, backgroundColor: '#004e68', borderRadius: 2, marginTop: 5 },
 
-  welcomeSection: { alignItems: 'center', marginTop: 20, marginBottom: 30 },
+  welcomeSection: { alignItems: 'center', marginTop: 12, zIndex: 2 },
   welcomeTitle: { fontSize: 24, fontWeight: 'bold', color: '#1e293b', letterSpacing: 0.5 },
-  welcomeSubtitle: { fontSize: 14, color: '#6b7280', marginTop: 8 },
+  welcomeSubtitle: { fontSize: 14, color: '#6b7280', marginTop: 4 },
+
+  keyboardView: { flex: 1 },
+  scrollContent: { paddingTop: 20, paddingBottom: 24 },
 
   formSection: { paddingHorizontal: 36 },
   inputContainer: {
@@ -258,16 +258,6 @@ const styles = StyleSheet.create({
 
   dividerSection: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 50, marginTop: 28, marginBottom: 20 },
   dividerLine: { flex: 1, height: 1, backgroundColor: '#e5e7eb' },
-  dividerText: { marginHorizontal: 12, fontSize: 13, color: '#6b7280' },
-
-  socialSection: { flexDirection: 'row', justifyContent: 'center', gap: 20, marginBottom: 30 },
-  socialButton: {
-    width: 52, height: 52, borderRadius: 26, backgroundColor: '#fafaf9',
-    justifyContent: 'center', alignItems: 'center',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 4,
-    elevation: 3, borderWidth: 1, borderColor: '#f0f0f0',
-  },
-  socialButtonActive: { borderColor: '#7dd3fc', backgroundColor: '#f0f9ff' },
 
   signupSection: { flexDirection: 'row', justifyContent: 'center', marginBottom: 20 },
   signupText: { fontSize: 15, color: '#6b7280' },

@@ -16,7 +16,7 @@ import {
   Modal,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons, AntDesign } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { authAPI, uploadAPI, saveToken, saveUserData } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
@@ -69,7 +69,6 @@ export default function SignupScreen({ navigation }) {
   const [codeFocused, setCodeFocused] = useState(false);
   const [empIdFocused, setEmpIdFocused] = useState(false);
 
-  // Countdown timer for resend
   React.useEffect(() => {
     if (countdown > 0) {
       const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
@@ -86,10 +85,7 @@ export default function SignupScreen({ navigation }) {
     const mediaPermission = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
     if (cameraPermission.status !== 'granted' || mediaPermission.status !== 'granted') {
-      Alert.alert(
-        t('permissionsRequired'),
-        t('cameraPermissionMsg'),
-      );
+      Alert.alert(t('permissionsRequired'), t('cameraPermissionMsg'));
     }
   };
 
@@ -269,7 +265,6 @@ export default function SignupScreen({ navigation }) {
       return;
     }
 
-    // Phone validation
     if (phone) {
       const phoneDigits = phone.replace(/\D/g, '');
       if (phoneDigits.length !== 10) {
@@ -282,7 +277,6 @@ export default function SignupScreen({ navigation }) {
       }
     }
 
-    // Staff-specific validations
     if (role === 'STAFF') {
       if (!employeeId.trim()) {
         Alert.alert(t('error'), t('employeeIdRequiredSignup'));
@@ -342,26 +336,41 @@ export default function SignupScreen({ navigation }) {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
-      {/* Decorative Top Shapes */}
-      <View style={styles.topDecoration}>
-        <View style={styles.shapeBack}>
-          <LinearGradient
-            colors={['#004e68', '#004e68']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.shapeGradient}
-          />
+      {/* Fixed header — shapes + logo + welcome never scroll */}
+      <View style={styles.fixedHeader}>
+        <View style={styles.topDecoration}>
+          <View style={styles.shapeBack}>
+            <LinearGradient
+              colors={['#004e68', '#004e68']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.shapeGradient}
+            />
+          </View>
+          <View style={styles.shapeFront}>
+            <LinearGradient
+              colors={['#8CD6F7', '#8CD6F7']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.shapeGradient}
+            />
+          </View>
         </View>
-        <View style={styles.shapeFront}>
-          <LinearGradient
-            colors={['#8CD6F7', '#8CD6F7']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.shapeGradient}
-          />
+        <View style={styles.logoSection}>
+          <View style={styles.logoRow}>
+            <Text style={styles.logoText}>Scan</Text>
+            <Text style={styles.logoText2}>2Fix</Text>
+          </View>
+        </View>
+        <View style={styles.welcomeSection}>
+          <Text style={styles.welcomeTitle}>{t('createAccount')}</Text>
+          <Text style={styles.welcomeSubtitle}>
+            {t('joinScan2Fix')} {role === 'STAFF' ? t('fixIssues') : t('reportIssues')}
+          </Text>
         </View>
       </View>
 
+      {/* Scrollable form */}
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
@@ -371,22 +380,6 @@ export default function SignupScreen({ navigation }) {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Logo */}
-          <View style={styles.logoSection}>
-            <View style={styles.logoRow}>
-              <Text style={styles.logoText}>Scan</Text>
-              <Text style={styles.logoText2}>2Fix</Text>
-            </View>
-          </View>
-
-          {/* Welcome Text */}
-          <View style={styles.welcomeSection}>
-            <Text style={styles.welcomeTitle}>{t('createAccount')}</Text>
-            <Text style={styles.welcomeSubtitle}>
-              {t('joinScan2Fix')} {role === 'STAFF' ? t('fixIssues') : t('reportIssues')}
-            </Text>
-          </View>
-
           {/* Form */}
           <View style={styles.formSection}>
             {/* Role Selection */}
@@ -406,7 +399,7 @@ export default function SignupScreen({ navigation }) {
               <Ionicons name="chevron-down" size={20} color="#9ca3af" />
             </TouchableOpacity>
 
-            {/* Photo Upload - Show for STAFF */}
+            {/* Photo Upload — STAFF only */}
             {role === 'STAFF' && (
               <View style={styles.photoSection}>
                 <View style={styles.photoHeader}>
@@ -465,7 +458,7 @@ export default function SignupScreen({ navigation }) {
               />
             </View>
 
-            {/* Employee ID - Only for STAFF */}
+            {/* Employee ID — STAFF only */}
             {role === 'STAFF' && (
               <View style={[styles.inputContainer, empIdFocused && styles.inputContainerFocused]}>
                 <View style={styles.inputIconContainer}>
@@ -505,7 +498,7 @@ export default function SignupScreen({ navigation }) {
               )}
             </View>
 
-            {/* Email Verification Button */}
+            {/* Send Verification Code */}
             {!isEmailVerified && (
               <TouchableOpacity
                 style={[styles.verifyButton, (sendingCode || countdown > 0) && styles.verifyButtonDisabled]}
@@ -533,9 +526,7 @@ export default function SignupScreen({ navigation }) {
             {showVerification && !isEmailVerified && (
               <View style={styles.verificationBox}>
                 <Text style={styles.verificationTitle}>{t('enterVerificationCodePrompt')}</Text>
-                <Text style={styles.verificationSubtitle}>
-                  {t('checkEmailCode')}
-                </Text>
+                <Text style={styles.verificationSubtitle}>{t('checkEmailCode')}</Text>
                 <View style={[styles.inputContainer, codeFocused && styles.inputContainerFocused, { marginTop: 12 }]}>
                   <View style={styles.inputIconContainer}>
                     <Ionicons name="key-outline" size={20} color={codeFocused ? '#38bdf8' : '#9ca3af'} />
@@ -547,9 +538,7 @@ export default function SignupScreen({ navigation }) {
                     value={verificationCode}
                     onChangeText={(text) => {
                       const digits = text.replace(/\D/g, '');
-                      if (digits.length <= 6) {
-                        setVerificationCode(digits);
-                      }
+                      if (digits.length <= 6) setVerificationCode(digits);
                     }}
                     keyboardType="number-pad"
                     maxLength={6}
@@ -593,9 +582,7 @@ export default function SignupScreen({ navigation }) {
                 value={phone}
                 onChangeText={(text) => {
                   const digits = text.replace(/\D/g, '');
-                  if (digits.length <= 10) {
-                    setPhone(digits);
-                  }
+                  if (digits.length <= 10) setPhone(digits);
                 }}
                 keyboardType="phone-pad"
                 maxLength={10}
@@ -614,14 +601,10 @@ export default function SignupScreen({ navigation }) {
             </View>
 
             {phone.length > 0 && phone.length < 10 && (
-              <Text style={styles.phoneHint}>
-                {phone.length}/10 {t('digitsCount')}
-              </Text>
+              <Text style={styles.phoneHint}>{phone.length}/10 {t('digitsCount')}</Text>
             )}
             {phone.length > 0 && phone.length === 10 && !/^[6-9]/.test(phone) && (
-              <Text style={styles.phoneError}>
-                {t('phoneStart')}
-              </Text>
+              <Text style={styles.phoneError}>{t('phoneStart')}</Text>
             )}
 
             {/* Password */}
@@ -716,9 +699,7 @@ export default function SignupScreen({ navigation }) {
               end={{ x: 0, y: 1 }}
               style={styles.loginButton}
             >
-              {loading ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : null}
+              {loading ? <ActivityIndicator size="small" color="#fff" /> : null}
               <Text style={styles.loginButtonText}>
                 {loading ? `  ${t('creatingBtn')}` : t('signUpBtn')}
               </Text>
@@ -840,10 +821,10 @@ export default function SignupScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#ffffff' },
-  keyboardView: { flex: 1, zIndex: 1 },
-  scrollContent: { flexGrow: 1, paddingBottom: 40 },
 
-  topDecoration: { position: 'absolute', top: 0, left: 0, right: 0, height: 200, overflow: 'hidden', zIndex: 0 },
+  /* Fixed header — height sized to contain shapes + logo + welcome exactly */
+  fixedHeader: { height: 252, overflow: 'hidden' },
+  topDecoration: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, overflow: 'hidden' },
   shapeBack: {
     position: 'absolute', width: width * 0.85, height: 180, top: -80, left: width * 0.25,
     transform: [{ rotate: '15deg' }], borderRadius: 24, overflow: 'hidden',
@@ -856,14 +837,17 @@ const styles = StyleSheet.create({
   },
   shapeGradient: { flex: 1, borderRadius: 24 },
 
-  logoSection: { alignItems: 'center', marginTop: 140, marginBottom: 5 },
+  logoSection: { alignItems: 'center', marginTop: 140, zIndex: 2 },
   logoRow: { flexDirection: 'row', alignItems: 'center' },
   logoText: { fontSize: 44, fontWeight: '300', color: '#8CD6F7', letterSpacing: 2 },
   logoText2: { fontSize: 44, fontWeight: '700', color: '#004e68', letterSpacing: 2 },
 
-  welcomeSection: { alignItems: 'center', marginTop: 15, marginBottom: 25 },
+  welcomeSection: { alignItems: 'center', marginTop: 12, zIndex: 2 },
   welcomeTitle: { fontSize: 22, fontWeight: 'bold', color: '#1e293b' },
-  welcomeSubtitle: { fontSize: 14, color: '#6b7280', marginTop: 6 },
+  welcomeSubtitle: { fontSize: 14, color: '#6b7280', marginTop: 4 },
+
+  keyboardView: { flex: 1 },
+  scrollContent: { paddingTop: 16, paddingBottom: 40 },
 
   formSection: { paddingHorizontal: 36 },
   sectionLabel: { fontSize: 13, fontWeight: '600', color: '#1e293b', marginBottom: 8 },
@@ -880,19 +864,14 @@ const styles = StyleSheet.create({
   roleSelectorDesc: { fontSize: 12, color: '#6b7280', marginTop: 2 },
 
   photoSection: { marginBottom: 18 },
-  photoHeader: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    marginBottom: 12,
-  },
+  photoHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
   requiredBadge: {
     fontSize: 10, fontWeight: '600', color: '#F44336',
-    backgroundColor: '#FFEBEE', paddingHorizontal: 8, paddingVertical: 3,
-    borderRadius: 8,
+    backgroundColor: '#FFEBEE', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8,
   },
   photoPlaceholder: {
     height: 160, borderRadius: 12, borderWidth: 2, borderStyle: 'dashed',
-    borderColor: '#e5e7eb', justifyContent: 'center', alignItems: 'center',
-    backgroundColor: '#f9fafb',
+    borderColor: '#e5e7eb', justifyContent: 'center', alignItems: 'center', backgroundColor: '#f9fafb',
   },
   photoPlaceholderText: { fontSize: 14, color: '#6b7280', marginTop: 8, fontWeight: '500' },
   photoPlaceholderSubtext: { fontSize: 11, color: '#9ca3af', marginTop: 2 },
@@ -905,9 +884,8 @@ const styles = StyleSheet.create({
   },
   uploadingText: { color: '#fff', fontSize: 13, marginTop: 10, fontWeight: '600' },
   photoRemoveBtn: {
-    position: 'absolute', top: -8, right: -8,
-    backgroundColor: '#fff', borderRadius: 16, shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4, elevation: 5,
+    position: 'absolute', top: -8, right: -8, backgroundColor: '#fff', borderRadius: 16,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4, elevation: 5,
   },
 
   inputContainer: {
@@ -922,9 +900,8 @@ const styles = StyleSheet.create({
 
   verifyButton: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    backgroundColor: '#2196F3', borderRadius: 8, paddingVertical: 12,
-    marginBottom: 14, shadowColor: '#2196F3', shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.25, shadowRadius: 5, elevation: 4,
+    backgroundColor: '#2196F3', borderRadius: 8, paddingVertical: 12, marginBottom: 14,
+    shadowColor: '#2196F3', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.25, shadowRadius: 5, elevation: 4,
   },
   verifyButtonDisabled: { backgroundColor: '#90CAF9', shadowOpacity: 0 },
   verifyButtonText: { color: '#fff', fontSize: 14, fontWeight: '600' },
@@ -938,8 +915,7 @@ const styles = StyleSheet.create({
   verifyCodeButton: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     backgroundColor: '#4CAF50', borderRadius: 8, paddingVertical: 12, marginTop: 12,
-    shadowColor: '#4CAF50', shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.25, shadowRadius: 5, elevation: 4,
+    shadowColor: '#4CAF50', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.25, shadowRadius: 5, elevation: 4,
   },
   verifyCodeButtonDisabled: { backgroundColor: '#A5D6A7', shadowOpacity: 0 },
   verifyCodeButtonText: { color: '#fff', fontSize: 14, fontWeight: '600' },
@@ -962,7 +938,7 @@ const styles = StyleSheet.create({
   loginButton: { height: 50, borderRadius: 8, flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
   loginButtonText: { color: '#ffffff', fontSize: 16, fontWeight: 'bold', letterSpacing: 1.5 },
 
-  signupSection: { flexDirection: 'row', justifyContent: 'center', marginTop: 25, marginBottom: 20 },
+  signupSection: { flexDirection: 'row', justifyContent: 'center', marginTop: 20, marginBottom: 20 },
   signupText: { fontSize: 15, color: '#6b7280' },
   signupLink: { fontSize: 15, fontWeight: 'bold', color: '#1e293b' },
 
@@ -971,8 +947,7 @@ const styles = StyleSheet.create({
     alignItems: 'center', padding: 20,
   },
   modalContent: {
-    width: '100%', maxWidth: 360, backgroundColor: '#fff',
-    borderRadius: 20, padding: 20, elevation: 10,
+    width: '100%', maxWidth: 360, backgroundColor: '#fff', borderRadius: 20, padding: 20, elevation: 10,
   },
   modalTitle: { fontSize: 18, fontWeight: '800', textAlign: 'center', marginBottom: 20, color: '#1e293b' },
   roleOption: {
@@ -980,30 +955,23 @@ const styles = StyleSheet.create({
     borderRadius: 12, marginBottom: 12, borderWidth: 2, borderColor: '#e5e7eb',
   },
   roleOptionIcon: {
-    width: 52, height: 52, borderRadius: 14, alignItems: 'center',
-    justifyContent: 'center', marginRight: 14,
+    width: 52, height: 52, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginRight: 14,
   },
   roleOptionLabel: { fontSize: 16, fontWeight: '700', color: '#1e293b' },
   roleOptionDesc: { fontSize: 12, color: '#6b7280', marginTop: 2 },
 
   photoOptionsContent: {
-    width: '100%', maxWidth: 360, backgroundColor: '#fff',
-    borderRadius: 20, padding: 20, elevation: 10,
+    width: '100%', maxWidth: 360, backgroundColor: '#fff', borderRadius: 20, padding: 20, elevation: 10,
   },
   photoOptionBtn: {
     flexDirection: 'row', alignItems: 'center', padding: 16,
-    borderRadius: 12, marginBottom: 12, backgroundColor: '#f9fafb',
-    borderWidth: 1, borderColor: '#e5e7eb',
+    borderRadius: 12, marginBottom: 12, backgroundColor: '#f9fafb', borderWidth: 1, borderColor: '#e5e7eb',
   },
   photoOptionIcon: {
-    width: 52, height: 52, borderRadius: 14, alignItems: 'center',
-    justifyContent: 'center', marginRight: 14,
+    width: 52, height: 52, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginRight: 14,
   },
   photoOptionLabel: { fontSize: 15, fontWeight: '700', color: '#1e293b' },
   photoOptionDesc: { fontSize: 12, color: '#6b7280', marginTop: 2 },
-  photoCancelBtn: {
-    marginTop: 8, paddingVertical: 14, borderRadius: 12,
-    backgroundColor: '#f4f4f5', alignItems: 'center',
-  },
+  photoCancelBtn: { marginTop: 8, paddingVertical: 14, borderRadius: 12, backgroundColor: '#f4f4f5', alignItems: 'center' },
   photoCancelText: { fontSize: 15, fontWeight: '600', color: '#6b7280' },
 });
