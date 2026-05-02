@@ -12,18 +12,31 @@ Write-Host "  ngrok Setup" -ForegroundColor Cyan
 Write-Host "=======================================" -ForegroundColor Cyan
 Write-Host ""
 
-# Refresh PATH so winget-installed tools are visible in current session
+# Refresh PATH from registry (picks up winget installs done in the same session)
 $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
 
-# Check ngrok installed
-try {
-    $version = ngrok version 2>$null
-    Write-Host "OK: ngrok installed: $version" -ForegroundColor Green
-} catch {
-    Write-Host "ERROR: ngrok not installed. Run 01-install-all.ps1 first." -ForegroundColor Red
+# WinGet sometimes installs to a Links folder not yet in the registry PATH — add it explicitly
+$wingetLinks = "$env:LOCALAPPDATA\Microsoft\WinGet\Links"
+if (Test-Path $wingetLinks) { $env:Path += ";$wingetLinks" }
+
+# Also search WinGet packages folder for ngrok.exe in case symlink wasn't created
+$ngrokExe = Get-ChildItem "$env:LOCALAPPDATA\Microsoft\WinGet\Packages" -Filter "ngrok.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+if ($ngrokExe) { $env:Path += ";$($ngrokExe.DirectoryName)" }
+
+# Check ngrok is now reachable
+$ngrokCmd = Get-Command ngrok -ErrorAction SilentlyContinue
+if (-not $ngrokCmd) {
+    Write-Host "ERROR: ngrok not found in PATH." -ForegroundColor Red
+    Write-Host ""
+    Write-Host "Fix options:" -ForegroundColor Yellow
+    Write-Host "  1. Close this window, open a NEW PowerShell as Admin, run this script again." -ForegroundColor White
+    Write-Host "  2. Or install manually: winget install Ngrok.Ngrok" -ForegroundColor White
     pause
     exit
 }
+
+$version = ngrok version 2>$null
+Write-Host "OK: ngrok installed: $version" -ForegroundColor Green
 
 # -- Step 1: Auth token ----------------------------------------
 Write-Host ""
