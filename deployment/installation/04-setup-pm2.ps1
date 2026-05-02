@@ -39,6 +39,14 @@ if (-not (Test-Path $envFile)) {
     if ($cont -ne 'y') { exit }
 }
 
+# Install Windows startup helper (pm2 startup does not work on Windows)
+$pm2WinStartup = npm list -g pm2-windows-startup 2>$null
+if (-not ($pm2WinStartup -match "pm2-windows-startup")) {
+    Write-Host "Installing pm2-windows-startup..." -ForegroundColor Cyan
+    npm install -g pm2-windows-startup
+}
+pm2-windows-startup install
+
 # Start with PM2
 Write-Host ""
 Write-Host "Starting server with PM2..." -ForegroundColor Yellow

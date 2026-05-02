@@ -34,6 +34,9 @@ Open PowerShell **as Administrator** inside the `deployment\installation\` folde
 .\05-seed-database.ps1
 ```
 
+**Note:** `pm2 startup` does not work on Windows. Step 4 uses `pm2-windows-startup` instead,
+which creates a Task Scheduler entry so PM2 auto-starts on reboot.
+
 After Step 3 you will have a URL like `https://something.ngrok-free.app`.
 Update the mobile app `.env`:
 ```
