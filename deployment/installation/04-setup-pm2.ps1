@@ -45,7 +45,9 @@ if (-not ($pm2WinStartup -match "pm2-windows-startup")) {
     Write-Host "Installing pm2-windows-startup..." -ForegroundColor Cyan
     npm install -g pm2-windows-startup
 }
-pm2-windows-startup install
+# Use npx so the binary is found regardless of PATH state
+npx pm2-windows-startup install
+Write-Host "OK: Windows startup entry registered" -ForegroundColor Green
 
 # Start with PM2
 Write-Host ""
