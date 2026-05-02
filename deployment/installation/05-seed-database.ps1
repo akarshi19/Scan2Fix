@@ -115,13 +115,11 @@ async function main() {
 main().catch(e => { console.error(e.message); process.exit(1); });
 "@
 
-$tmpScript = Join-Path $env:TEMP "create-admin.js"
+$tmpScript = Join-Path $SERVER_PATH "_create-admin.js"
 $createScript | Out-File -FilePath $tmpScript -Encoding UTF8
 
-Push-Location $SERVER_PATH
 $result = node $tmpScript 2>&1
-Pop-Location
-Remove-Item $tmpScript -Force
+Remove-Item $tmpScript -Force -ErrorAction SilentlyContinue
 
 if ($result -match "CREATED") {
     Write-Host "OK: Admin account created!" -ForegroundColor Green
