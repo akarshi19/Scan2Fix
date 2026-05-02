@@ -19,7 +19,8 @@
       },
       "env": {
         "EXPO_NO_DEV_CLIENT": "1",
-        "NODE_ENV": "production"
+        "NODE_ENV": "production",
+        "API_URL": "https://61235678ffb23b.lhr.life/api"
       }
     },
     "production": {
