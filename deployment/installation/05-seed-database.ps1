@@ -118,7 +118,10 @@ main().catch(e => { console.error(e.message); process.exit(1); });
 $tmpScript = Join-Path $SERVER_PATH "_create-admin.js"
 $createScript | Out-File -FilePath $tmpScript -Encoding UTF8
 
+# Run from server folder so dotenv finds .env and require finds node_modules
+Push-Location $SERVER_PATH
 $result = node $tmpScript 2>&1
+Pop-Location
 Remove-Item $tmpScript -Force -ErrorAction SilentlyContinue
 
 if ($result -match "CREATED") {
