@@ -46,6 +46,8 @@ jobs:
       - name: Build Android APK (preview)
         id: eas_build
         working-directory: ./mobile-app
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
         run: |
           echo "Starting EAS build..."
           BUILD_OUTPUT=$(eas build \
@@ -53,7 +55,7 @@ jobs:
             --profile preview \
             --non-interactive \
             --wait \
-            --json 2>/dev/null)
+            --json 2>&1)
 
           echo "Build output received"
           echo "$BUILD_OUTPUT" > /tmp/build_output.json
