@@ -50,19 +50,22 @@ jobs:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
         run: |
           echo "Starting EAS build..."
-          BUILD_OUTPUT=$(eas build \
+          eas build \
             --platform android \
             --profile preview \
             --non-interactive \
             --wait \
-            --json 2>&1)
+            --json > /tmp/build_output.json 2>/tmp/eas_logs.txt || true
 
-          echo "Build output received"
-          echo "$BUILD_OUTPUT" > /tmp/build_output.json
+          echo "--- EAS logs ---"
+          cat /tmp/eas_logs.txt
 
-          APK_URL=$(echo "$BUILD_OUTPUT" | jq -r '.[0].artifacts.buildUrl // empty')
-          BUILD_ID=$(echo "$BUILD_OUTPUT" | jq -r '.[0].id // empty')
-          BUILD_STATUS=$(echo "$BUILD_OUTPUT" | jq -r '.[0].status // empty')
+          echo "--- Build JSON ---"
+          cat /tmp/build_output.json
+
+          APK_URL=$(jq -r '.[0].artifacts.buildUrl // empty' /tmp/build_output.json)
+          BUILD_ID=$(jq -r '.[0].id // empty' /tmp/build_output.json)
+          BUILD_STATUS=$(jq -r '.[0].status // empty' /tmp/build_output.json)
 
           echo "apk_url=$APK_URL"       >> $GITHUB_OUTPUT
           echo "build_id=$BUILD_ID"     >> $GITHUB_OUTPUT
