@@ -31,11 +31,13 @@ jobs:
         working-directory: ./mobile-app
         run: npm ci
 
-      - name: Setup EAS CLI + authenticate
-        uses: expo/expo-github-action@v8
-        with:
-          eas-version: latest
-          token: ${{ secrets.EXPO_TOKEN }}
+      - name: Install EAS CLI
+        run: npm install -g eas-cli@latest
+
+      - name: Authenticate with Expo
+        run: eas whoami
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
       # Builds the APK on Expo's servers and waits for it to finish.
       # --wait    : block until build completes (takes ~10-20 min)
